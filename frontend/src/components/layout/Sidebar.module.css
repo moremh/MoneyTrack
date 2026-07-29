@@ -1,17 +1,28 @@
 .sidebar {
-  width: 250px;
-  flex-shrink: 0;
-  min-height: calc(100vh - 72px);
   position: sticky;
   top: 72px;
-  background-color: #081631;
-  color: white;
+
+  width: 250px;
+  min-height: calc(100vh - 72px);
+  max-height: calc(100vh - 72px);
+
+  flex-shrink: 0;
+
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+
   padding: 20px 14px;
-  transition: width 0.3s ease;
-  overflow: hidden;
+
+  color: #ffffff;
+  background-color: #081631;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  transition:
+    width 0.3s ease,
+    transform 0.25s ease;
 }
 
 .sidebarCollapsed {
@@ -19,10 +30,14 @@
 }
 
 .logo {
+  position: relative;
+
   min-height: 44px;
+
   display: flex;
   align-items: center;
   gap: 12px;
+
   margin-bottom: 38px;
   padding: 0 12px;
 }
@@ -34,14 +49,23 @@
 
 .logo h2 {
   margin: 0;
+
+  color: #ffffff;
+
   font-size: 1.45rem;
   font-weight: 800;
+  line-height: 1;
+
   white-space: nowrap;
 }
 
 .sidebarCollapsed .logo {
   justify-content: center;
   padding: 0;
+}
+
+.mobileCloseButton {
+  display: none;
 }
 
 .nav {
@@ -52,35 +76,60 @@
 
 .link {
   min-height: 48px;
+
   display: flex;
   align-items: center;
   gap: 12px;
+
   padding: 12px 15px;
+
   color: #cbd5e1;
   border-radius: 12px;
+
   font-weight: 600;
+  text-decoration: none;
   white-space: nowrap;
+
   transition:
     color 0.2s ease,
-    background 0.2s ease;
+    background 0.2s ease,
+    transform 0.2s ease;
 }
 
 .link i {
   width: 22px;
   flex-shrink: 0;
+
   text-align: center;
   font-size: 1.05rem;
 }
 
 .link:hover {
-  color: white;
-  background: rgba(37, 99, 235, 0.16);
+  color: #ffffff;
+  background: rgba(
+    37,
+    99,
+    235,
+    0.16
+  );
+}
+
+.link:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
 }
 
 .active {
-  color: white;
+  color: #ffffff;
   background: #2563eb;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.32);
+  box-shadow:
+    0 4px 12px
+    rgba(
+      37,
+      99,
+      235,
+      0.32
+    );
 }
 
 .sidebarCollapsed .link {
@@ -95,10 +144,14 @@
 .footer {
   margin-top: 24px;
   padding: 18px 6px 0;
-  border-top: 1px solid #21314f;
+
+  border-top:
+    1px solid #21314f;
 }
 
 .user {
+  min-width: 0;
+
   display: flex;
   align-items: center;
   gap: 10px;
@@ -107,17 +160,22 @@
 .avatar {
   width: 38px;
   height: 38px;
+
   flex-shrink: 0;
+
   display: grid;
   place-items: center;
+
   color: #ffffff;
   background: #2563eb;
   border-radius: 50%;
+
   font-weight: 800;
 }
 
 .userInfo {
   min-width: 0;
+
   display: grid;
   gap: 2px;
 }
@@ -125,6 +183,7 @@
 .userInfo strong,
 .userInfo span {
   max-width: 165px;
+
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -142,25 +201,215 @@
 
 .role {
   display: inline-flex;
+
   margin-top: 12px;
   padding: 6px 9px;
+
   color: #cbd5e1;
-  background: rgba(148, 163, 184, 0.15);
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.15
+    );
+
   border-radius: 999px;
+
   font-size: 0.72rem;
   font-weight: 800;
 }
 
 .premiumRole {
   color: #fde68a;
-  background: rgba(245, 158, 11, 0.18);
+  background:
+    rgba(
+      245,
+      158,
+      11,
+      0.18
+    );
 }
 
 .sidebarCollapsed .footer {
-  padding-left: 0;
   padding-right: 0;
+  padding-left: 0;
 }
 
 .sidebarCollapsed .user {
   justify-content: center;
+}
+
+/*
+ * Sidebar móvil:
+ * sale del flujo normal y se convierte
+ * en un panel superpuesto.
+ */
+.mobileSidebar {
+  position: fixed;
+  z-index: 1050;
+
+  top: 72px;
+  bottom: 0;
+  left: 0;
+
+  width: min(76vw, 250px);
+  max-width: calc(100vw - 72px);
+
+  height: calc(100dvh - 72px);
+  min-height: 0;
+  max-height: none;
+
+  padding:
+    18px
+    12px
+    max(
+      18px,
+      env(
+        safe-area-inset-bottom
+      )
+    );
+
+  transform:
+    translateX(-105%);
+
+  visibility: hidden;
+  pointer-events: none;
+
+  box-shadow:
+    16px 0 36px
+    rgba(
+      2,
+      6,
+      23,
+      0.34
+    );
+
+  transition:
+    transform 0.25s ease,
+    visibility 0s linear 0.25s;
+}
+
+.mobileSidebarOpen {
+  transform: translateX(0);
+
+  visibility: visible;
+  pointer-events: auto;
+
+  transition:
+    transform 0.25s ease,
+    visibility 0s linear 0s;
+}
+
+.mobileSidebar .logo {
+  justify-content: flex-start;
+
+  margin-bottom: 24px;
+  padding:
+    0 44px
+    0 10px;
+}
+
+.mobileSidebar .mobileCloseButton {
+  position: absolute;
+  top: 50%;
+  right: 0;
+
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+
+  color: #cbd5e1;
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.12
+    );
+
+  border: 0;
+  border-radius: 10px;
+
+  transform:
+    translateY(-50%);
+
+  cursor: pointer;
+}
+
+.mobileSidebar
+.mobileCloseButton:hover {
+  color: #ffffff;
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.22
+    );
+}
+
+.mobileSidebar
+.mobileCloseButton
+i {
+  width: auto;
+  color: inherit;
+  font-size: 1rem;
+}
+
+.mobileSidebar .link {
+  width: 100%;
+  min-height: 46px;
+
+  padding: 11px 13px;
+
+  border-radius: 10px;
+}
+
+.mobileSidebar .footer {
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.mobileSidebar
+.userInfo strong,
+.mobileSidebar
+.userInfo span {
+  max-width: 155px;
+}
+
+@media (max-width: 360px) {
+  .mobileSidebar {
+    width: min(
+      76vw,
+      235px
+    );
+  }
+
+  .mobileSidebar .link {
+    padding:
+      10px
+      11px;
+  }
+
+  .mobileSidebar
+  .userInfo strong,
+  .mobileSidebar
+  .userInfo span {
+    max-width: 135px;
+  }
+}
+
+@media (
+  prefers-reduced-motion:
+  reduce
+) {
+  .sidebar,
+  .mobileSidebar {
+    transition: none;
+  }
 }
