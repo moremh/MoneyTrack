@@ -534,28 +534,53 @@ function Reports() {
             </div>
           ) : (
             <div className={styles.chartBox}>
-              <ResponsiveContainer width="100%" height={340}>
-                <PieChart>
-                  <Pie
-                    data={expenseCategoriesData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={110}
-                    label={({ name }) => name}
-                  >
-                    {expenseCategoriesData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => formatCurrency(value)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <ResponsiveContainer
+  width="100%"
+  height={340}
+>
+  <PieChart>
+    <Pie
+      data={
+        expenseCategoriesData
+      }
+      dataKey="value"
+      nameKey="name"
+      cx="50%"
+      cy="50%"
+      outerRadius={110}
+      label={false}
+      labelLine={false}
+    >
+      {expenseCategoriesData.map(
+        (entry, index) => (
+          <Cell
+            key={entry.name}
+            fill={
+              PIE_COLORS[
+                index %
+                  PIE_COLORS.length
+              ]
+            }
+          />
+        )
+      )}
+    </Pie>
+
+    <Tooltip
+      formatter={(
+        value,
+        name,
+        item
+      ) => [
+        formatCurrency(value),
+        item?.payload?.name ||
+          name,
+      ]}
+    />
+
+    <Legend />
+  </PieChart>
+</ResponsiveContainer>
             </div>
           )}
         </article>
