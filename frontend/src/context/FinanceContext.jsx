@@ -1,1063 +1,2260 @@
 import {
   createContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
+import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 
-export const FinanceContext = createContext();
+export const FinanceContext = createContext(null);
 
-export const FREE_LIMIT_ERROR_CODE = "FREE_LIMIT_REACHED";
+export const FREE_LIMIT_ERROR_CODE =
+  "FREE_LIMIT_REACHED";
+
 export const DEFAULT_FREE_MONTHLY_LIMIT = 100;
 
-const DEFAULT_INCOME_CATEGORIES = [
-  "Trabajo",
-  "Freelance",
-  "Inversiones",
-  "Regalos",
-  "Otros",
-];
-
-const DEFAULT_EXPENSE_CATEGORIES = [
-  "Comida",
-  "Transporte",
-  "Hogar",
-  "Servicios",
-  "Ocio",
-  "Salud",
-  "Otros",
-];
+const UNCATEGORIZED = "General";
 
 const DEFAULT_SETTINGS = {
   userName: "Usuario",
   theme: "light",
 };
 
-const UNCATEGORIZED = "General";
-
-const LEGACY_MIGRATION_KEY =
-  "moneytrack_legacy_data_migrated_to";
-
-const DATA_KEYS = {
-  incomes: "incomes",
-  expenses: "expenses",
-  goals: "goals",
-  settings: "settings",
-  incomeCategories: "incomeCategories",
-  expenseCategories: "expenseCategories",
-};
-
-function getUserStorageKey(userId, key) {
-  return `moneytrack_${userId}_${key}`;
-}
-
-function parseStorage(key, fallback) {
-  try {
-    const saved = localStorage.getItem(key);
-
-    if (saved === null) {
-      return fallback;
-    }
-
-    return JSON.parse(saved);
-  } catch (error) {
-    console.error(
-      `No se pudo leer la información guardada en ${key}:`,
-      error
-    );
-
-    return fallback;
-  }
-}
-
-function saveStorage(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(
-      `No se pudo guardar la información en ${key}:`,
-      error
-    );
-  }
-}
-
-function existsIgnoreCase(list, value) {
-  return list.some(
-    (item) =>
-      String(item).toLowerCase() ===
-      String(value).toLowerCase()
-  );
-}
-
-function normalizeCategories(savedList, fallbackList = []) {
-  const categories = Array.isArray(savedList)
-    ? savedList
-    : fallbackList;
-
-  const normalized = categories
-    .filter(
-      (category) =>
-        typeof category === "string" &&
-        category.trim() !== ""
-    )
-    .map((category) => {
-      const cleanCategory = category.trim();
-
-      return cleanCategory === "Sin categoría"
-        ? UNCATEGORIZED
-        : cleanCategory;
-    });
-
-  const unique = normalized.filter(
-    (category, index, array) =>
-      index ===
-      array.findIndex(
-        (item) =>
-          item.toLowerCase() === category.toLowerCase()
-      )
-  );
-
-  return existsIgnoreCase(unique, UNCATEGORIZED)
-    ? unique
-    : [UNCATEGORIZED, ...unique];
-}
-
-function getMovementDate(movement) {
-  const dateValue =
-    movement?.createdAt ||
-    movement?.date ||
-    movement?.movementDate;
-
-  if (!dateValue) {
-    return null;
-  }
-
-  if (
-    typeof dateValue === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
-  ) {
-    const [year, month, day] = dateValue
-      .split("-")
-      .map(Number);
-
-    return new Date(year, month - 1, day);
-  }
-
-  const parsedDate = new Date(dateValue);
-
-  return Number.isNaN(parsedDate.getTime())
-    ? null
-    : parsedDate;
-}
-
-function isMovementFromCurrentMonth(movement) {
-  const movementDate = getMovementDate(movement);
-
-  if (!movementDate) {
-    return false;
-  }
-
-  const currentDate = new Date();
-
-  return (
-    movementDate.getFullYear() ===
-      currentDate.getFullYear() &&
-    movementDate.getMonth() === currentDate.getMonth()
-  );
-}
-
-function hasLegacyData() {
-  return Object.values(DATA_KEYS).some(
-    (key) => localStorage.getItem(key) !== null
-  );
-}
-
-function hasUserData(userId) {
-  return Object.values(DATA_KEYS).some(
-    (key) =>
-      localStorage.getItem(
-        getUserStorageKey(userId, key)
-      ) !== null
-  );
-}
-
-function FinanceProvider({ children }) {
-  const {
-    currentUser,
-    updateCurrentUser,
-  } = useAuth();
-
-  const currentUserId = currentUser?.id || null;
-
-  const [loadedUserId, setLoadedUserId] =
-    useState(null);
-
-  const [incomes, setIncomes] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [goals, setGoals] = useState([]);
-
-  const [settings, setSettings] = useState(
-    DEFAULT_SETTINGS
-  );
-
-  const [
-    incomeCategories,
-    setIncomeCategories,
-  ] = useState(() =>
-    normalizeCategories(
-      DEFAULT_INCOME_CATEGORIES,
-      DEFAULT_INCOME_CATEGORIES
-    )
-  );
-
-  const [
-    expenseCategories,
-    setExpenseCategories,
-  ] = useState(() =>
-    normalizeCategories(
-      DEFAULT_EXPENSE_CATEGORIES,
-      DEFAULT_EXPENSE_CATEGORIES
-    )
-  );
-
-  /*
-   * Cargar los datos correspondientes al usuario
-   * que acaba de iniciar sesión.
-   */
-  useEffect(() => {
-    setLoadedUserId(null);
-
-    if (!currentUserId) {
-      setIncomes([]);
-      setExpenses([]);
-      setGoals([]);
-
-      setIncomeCategories(
-        normalizeCategories(
-          DEFAULT_INCOME_CATEGORIES,
-          DEFAULT_INCOME_CATEGORIES
-        )
-      );
-
-      setExpenseCategories(
-        normalizeCategories(
-          DEFAULT_EXPENSE_CATEGORIES,
-          DEFAULT_EXPENSE_CATEGORIES
-        )
-      );
-
-      setSettings(DEFAULT_SETTINGS);
-      return;
-    }
-
-    const userHasSavedData =
-      hasUserData(currentUserId);
-
-    const migrationOwner =
-      localStorage.getItem(
-        LEGACY_MIGRATION_KEY
-      );
-
-    const shouldMigrateLegacyData =
-      currentUser?.role !== "admin" &&
-      !userHasSavedData &&
-      !migrationOwner &&
-      hasLegacyData();
-
-    const getLoadKey = (key) =>
-      shouldMigrateLegacyData
-        ? key
-        : getUserStorageKey(currentUserId, key);
-
-    const userDefaultSettings = {
-      ...DEFAULT_SETTINGS,
-      userName:
-        currentUser?.name ||
-        DEFAULT_SETTINGS.userName,
-    };
-
-    const loadedIncomes = parseStorage(
-      getLoadKey(DATA_KEYS.incomes),
-      []
-    );
-
-    const loadedExpenses = parseStorage(
-      getLoadKey(DATA_KEYS.expenses),
-      []
-    );
-
-    const loadedGoals = parseStorage(
-      getLoadKey(DATA_KEYS.goals),
-      []
-    );
-
-    const loadedSettings = parseStorage(
-      getLoadKey(DATA_KEYS.settings),
-      userDefaultSettings
-    );
-
-    const loadedIncomeCategories =
-      normalizeCategories(
-        parseStorage(
-          getLoadKey(DATA_KEYS.incomeCategories),
-          DEFAULT_INCOME_CATEGORIES
-        ),
-        DEFAULT_INCOME_CATEGORIES
-      );
-
-    const loadedExpenseCategories =
-      normalizeCategories(
-        parseStorage(
-          getLoadKey(DATA_KEYS.expenseCategories),
-          DEFAULT_EXPENSE_CATEGORIES
-        ),
-        DEFAULT_EXPENSE_CATEGORIES
-      );
-
-    setIncomes(
-      Array.isArray(loadedIncomes)
-        ? loadedIncomes
-        : []
-    );
-
-    setExpenses(
-      Array.isArray(loadedExpenses)
-        ? loadedExpenses
-        : []
-    );
-
-    setGoals(
-      Array.isArray(loadedGoals)
-        ? loadedGoals
-        : []
-    );
-
-    setSettings({
-      ...userDefaultSettings,
-      ...(loadedSettings || {}),
-    });
-
-    setIncomeCategories(
-      loadedIncomeCategories
-    );
-
-    setExpenseCategories(
-      loadedExpenseCategories
-    );
-
-    if (shouldMigrateLegacyData) {
-      localStorage.setItem(
-        LEGACY_MIGRATION_KEY,
-        currentUserId
-      );
-    }
-
-    setLoadedUserId(currentUserId);
-  }, [currentUserId]);
-
-  const canPersist =
-    Boolean(currentUserId) &&
-    loadedUserId === currentUserId;
-
-  useEffect(() => {
-    if (!canPersist) {
-      return;
-    }
-
-    saveStorage(
-      getUserStorageKey(
-        currentUserId,
-        DATA_KEYS.incomes
-      ),
-      incomes
-    );
-  }, [
-    incomes,
-    canPersist,
-    currentUserId,
-  ]);
-
-  useEffect(() => {
-    if (!canPersist) {
-      return;
-    }
-
-    saveStorage(
-      getUserStorageKey(
-        currentUserId,
-        DATA_KEYS.expenses
-      ),
-      expenses
-    );
-  }, [
-    expenses,
-    canPersist,
-    currentUserId,
-  ]);
-
-  useEffect(() => {
-    if (!canPersist) {
-      return;
-    }
-
-    saveStorage(
-      getUserStorageKey(
-        currentUserId,
-        DATA_KEYS.goals
-      ),
-      goals
-    );
-  }, [
-    goals,
-    canPersist,
-    currentUserId,
-  ]);
-
-  useEffect(() => {
-    document.body.dataset.theme =
-      settings.theme || "light";
-
-    if (!canPersist) {
-      return;
-    }
-
-    saveStorage(
-      getUserStorageKey(
-        currentUserId,
-        DATA_KEYS.settings
-      ),
-      settings
-    );
-  }, [
-    settings,
-    canPersist,
-    currentUserId,
-  ]);
-
-  useEffect(() => {
-    if (!canPersist) {
-      return;
-    }
-
-    saveStorage(
-      getUserStorageKey(
-        currentUserId,
-        DATA_KEYS.incomeCategories
-      ),
-      incomeCategories
-    );
-  }, [
-    incomeCategories,
-    canPersist,
-    currentUserId,
-  ]);
-
-  useEffect(() => {
-    if (!canPersist) {
-      return;
-    }
-
-    saveStorage(
-      getUserStorageKey(
-        currentUserId,
-        DATA_KEYS.expenseCategories
-      ),
-      expenseCategories
-    );
-  }, [
-    expenseCategories,
-    canPersist,
-    currentUserId,
-  ]);
-
-  /*
-   * Cantidad de ingresos y gastos creados
-   * durante el mes actual.
-   */
-  const monthlyMovementCount = useMemo(() => {
-    const currentMonthIncomes =
-      incomes.filter(
-        isMovementFromCurrentMonth
-      ).length;
-
-    const currentMonthExpenses =
-      expenses.filter(
-        isMovementFromCurrentMonth
-      ).length;
-
-    return (
-      currentMonthIncomes +
-      currentMonthExpenses
-    );
-  }, [incomes, expenses]);
-
-  /*
-   * El administrador y los usuarios Premium
-   * no tienen límite mensual.
-   */
-  const isPremium = useMemo(() => {
-    if (currentUser?.role === "admin") {
-      return true;
-    }
-
-    if (currentUser?.plan !== "premium") {
-      return false;
-    }
-
-    if (!currentUser?.premiumExpiresAt) {
-      return true;
-    }
-
-    return (
-      new Date(
-        currentUser.premiumExpiresAt
-      ).getTime() > Date.now()
-    );
-  }, [currentUser]);
-
-  const monthlyLimit = isPremium
+const TRANSACTION_FIELDS = `
+  id,
+  user_id,
+  type,
+  description,
+  amount,
+  category_id,
+  category_name,
+  date,
+  created_at,
+  updated_at
+`;
+
+const CATEGORY_FIELDS = `
+  id,
+  user_id,
+  name,
+  type,
+  color,
+  icon,
+  is_default,
+  created_at,
+  updated_at
+`;
+
+const GOAL_FIELDS = `
+  id,
+  user_id,
+  name,
+  description,
+  target_amount,
+  current_amount,
+  deadline,
+  status,
+  created_at,
+  updated_at
+`;
+
+const getDefaultMovementUsage = (currentUser) => {
+  const isPremium =
+    currentUser?.role === "admin" ||
+    currentUser?.plan === "premium";
+
+  const limit = isPremium
     ? null
     : Number(currentUser?.monthlyLimit) ||
       DEFAULT_FREE_MONTHLY_LIMIT;
 
-  const remainingMovements = isPremium
+  return {
+    used: 0,
+    limit,
+    remaining: isPremium ? null : limit,
+    percentage: 0,
+    isPremium,
+    hasReachedLimit: false,
+    canAddMovement: true,
+  };
+};
+
+const normalizeTheme = (theme) => {
+  if (
+    theme === "dark" ||
+    theme === "light" ||
+    theme === "system"
+  ) {
+    return theme;
+  }
+
+  return "light";
+};
+
+const mapTransaction = (transaction) => ({
+  id: transaction.id,
+  userId: transaction.user_id,
+  type: transaction.type,
+  description: transaction.description,
+  amount: Number(transaction.amount) || 0,
+  categoryId: transaction.category_id || null,
+  category:
+    transaction.category_name || UNCATEGORIZED,
+  date: transaction.date,
+  createdAt: transaction.created_at,
+  updatedAt: transaction.updated_at,
+});
+
+const mapCategory = (category) => ({
+  id: category.id,
+  userId: category.user_id,
+  name: category.name,
+  type: category.type,
+  color: category.color || null,
+  icon: category.icon || null,
+  isDefault: Boolean(category.is_default),
+  createdAt: category.created_at,
+  updatedAt: category.updated_at,
+});
+
+const mapGoal = (goal) => {
+  const targetAmount =
+    Number(goal.target_amount) || 0;
+
+  const currentAmount =
+    Number(goal.current_amount) || 0;
+
+  return {
+    id: goal.id,
+    userId: goal.user_id,
+
+    name: goal.name,
+    title: goal.name,
+
+    description: goal.description || "",
+
+    targetAmount,
+    target: targetAmount,
+    amount: targetAmount,
+
+    currentAmount,
+    savedAmount: currentAmount,
+    saved: currentAmount,
+
+    deadline: goal.deadline || "",
+    date: goal.deadline || "",
+
+    status: goal.status || "active",
+
+    createdAt: goal.created_at,
+    updatedAt: goal.updated_at,
+  };
+};
+
+const mapMovementUsage = (
+  data,
+  currentUser
+) => {
+  const row = Array.isArray(data)
+    ? data[0]
+    : data;
+
+  if (!row) {
+    return getDefaultMovementUsage(
+      currentUser
+    );
+  }
+
+  const isPremium = Boolean(
+    row.is_premium
+  );
+
+  const limit = isPremium
+    ? null
+    : Number(row.movement_limit) ||
+      DEFAULT_FREE_MONTHLY_LIMIT;
+
+  const used = Number(row.used) || 0;
+
+  const remaining = isPremium
     ? null
     : Math.max(
-        monthlyLimit -
-          monthlyMovementCount,
+        Number(row.remaining) || 0,
         0
       );
 
-  const hasReachedMonthlyLimit =
-    !isPremium &&
-    monthlyMovementCount >= monthlyLimit;
-
-  const monthlyUsagePercentage = isPremium
+  const percentage = isPremium
     ? 0
     : Math.min(
-        Math.round(
-          (monthlyMovementCount /
-            monthlyLimit) *
-            100
+        Math.max(
+          Number(row.percentage) || 0,
+          0
         ),
         100
       );
 
-  const validateMovementLimit = () => {
-    if (!currentUser) {
-      return {
-        success: false,
-        code: "NOT_AUTHENTICATED",
-        message:
-          "Debés iniciar sesión para registrar movimientos.",
-      };
-    }
+  const hasReachedLimit =
+    !isPremium &&
+    Boolean(row.has_reached_limit);
 
-    if (hasReachedMonthlyLimit) {
-      return {
-        success: false,
-        code: FREE_LIMIT_ERROR_CODE,
-        message: `Llegaste al límite de ${monthlyLimit} movimientos mensuales del plan gratuito.`,
-      };
-    }
-
-    return {
-      success: true,
-    };
-  };
-
-  const addIncome = (income) => {
-    const validation =
-      validateMovementLimit();
-
-    if (!validation.success) {
-      return validation;
-    }
-
-    const newIncome = {
-      ...income,
-      createdAt:
-        income.createdAt ||
-        new Date().toISOString(),
-    };
-
-    setIncomes((previousIncomes) => [
-      newIncome,
-      ...previousIncomes,
-    ]);
-
-    return {
-      success: true,
-      movement: newIncome,
-    };
-  };
-
-  const deleteIncome = (id) => {
-    setIncomes((previousIncomes) =>
-      previousIncomes.filter(
-        (item) => item.id !== id
-      )
-    );
-  };
-
-  const updateIncome = (updatedIncome) => {
-    setIncomes((previousIncomes) =>
-      previousIncomes.map((item) =>
-        item.id === updatedIncome.id
-          ? {
-              ...item,
-              ...updatedIncome,
-              createdAt:
-                item.createdAt ||
-                updatedIncome.createdAt ||
-                new Date().toISOString(),
-            }
-          : item
-      )
-    );
-
-    return {
-      success: true,
-    };
-  };
-
-  const addExpense = (expense) => {
-    const validation =
-      validateMovementLimit();
-
-    if (!validation.success) {
-      return validation;
-    }
-
-    const newExpense = {
-      ...expense,
-      createdAt:
-        expense.createdAt ||
-        new Date().toISOString(),
-    };
-
-    setExpenses((previousExpenses) => [
-      newExpense,
-      ...previousExpenses,
-    ]);
-
-    return {
-      success: true,
-      movement: newExpense,
-    };
-  };
-
-  const deleteExpense = (id) => {
-    setExpenses((previousExpenses) =>
-      previousExpenses.filter(
-        (item) => item.id !== id
-      )
-    );
-  };
-
-  const updateExpense = (
-    updatedExpense
-  ) => {
-    setExpenses((previousExpenses) =>
-      previousExpenses.map((item) =>
-        item.id === updatedExpense.id
-          ? {
-              ...item,
-              ...updatedExpense,
-              createdAt:
-                item.createdAt ||
-                updatedExpense.createdAt ||
-                new Date().toISOString(),
-            }
-          : item
-      )
-    );
-
-    return {
-      success: true,
-    };
-  };
-
-  const addGoal = (goal) => {
-    setGoals((previousGoals) => [
-      goal,
-      ...previousGoals,
-    ]);
-  };
-
-  const deleteGoal = (id) => {
-    setGoals((previousGoals) =>
-      previousGoals.filter(
-        (goal) => goal.id !== id
-      )
-    );
-  };
-
-  const updateGoal = (updatedGoal) => {
-    setGoals((previousGoals) =>
-      previousGoals.map((goal) =>
-        goal.id === updatedGoal.id
-          ? updatedGoal
-          : goal
-      )
-    );
-  };
-
-  const addIncomeCategory = (
-    category
-  ) => {
-    const cleanCategory =
-      category.trim();
-
-    if (!cleanCategory) {
-      return;
-    }
-
-    setIncomeCategories(
-      (previousCategories) =>
-        existsIgnoreCase(
-          previousCategories,
-          cleanCategory
-        )
-          ? previousCategories
-          : [
-              ...previousCategories,
-              cleanCategory,
-            ]
-    );
-  };
-
-  const deleteIncomeCategory = (
-    categoryToDelete
-  ) => {
-    if (
-      categoryToDelete === UNCATEGORIZED
-    ) {
-      return;
-    }
-
-    setIncomeCategories(
-      (previousCategories) => {
-        const filteredCategories =
-          previousCategories.filter(
-            (category) =>
-              category !==
-              categoryToDelete
-          );
-
-        return existsIgnoreCase(
-          filteredCategories,
-          UNCATEGORIZED
-        )
-          ? filteredCategories
-          : [
-              UNCATEGORIZED,
-              ...filteredCategories,
-            ];
-      }
-    );
-
-    setIncomes((previousIncomes) =>
-      previousIncomes.map((item) =>
-        item.category ===
-        categoryToDelete
-          ? {
-              ...item,
-              category: UNCATEGORIZED,
-            }
-          : item
-      )
-    );
-  };
-
-  const updateIncomeCategory = (
-    oldName,
-    newName
-  ) => {
-    const cleanName = newName.trim();
-
-    if (
-      !cleanName ||
-      oldName === UNCATEGORIZED
-    ) {
-      return;
-    }
-
-    setIncomeCategories(
-      (previousCategories) => {
-        if (
-          oldName.toLowerCase() !==
-            cleanName.toLowerCase() &&
-          existsIgnoreCase(
-            previousCategories,
-            cleanName
-          )
-        ) {
-          return previousCategories;
-        }
-
-        return previousCategories.map(
-          (category) =>
-            category === oldName
-              ? cleanName
-              : category
-        );
-      }
-    );
-
-    setIncomes((previousIncomes) =>
-      previousIncomes.map((item) =>
-        item.category === oldName
-          ? {
-              ...item,
-              category: cleanName,
-            }
-          : item
-      )
-    );
-  };
-
-  const addExpenseCategory = (
-    category
-  ) => {
-    const cleanCategory =
-      category.trim();
-
-    if (!cleanCategory) {
-      return;
-    }
-
-    setExpenseCategories(
-      (previousCategories) =>
-        existsIgnoreCase(
-          previousCategories,
-          cleanCategory
-        )
-          ? previousCategories
-          : [
-              ...previousCategories,
-              cleanCategory,
-            ]
-    );
-  };
-
-  const deleteExpenseCategory = (
-    categoryToDelete
-  ) => {
-    if (
-      categoryToDelete === UNCATEGORIZED
-    ) {
-      return;
-    }
-
-    setExpenseCategories(
-      (previousCategories) => {
-        const filteredCategories =
-          previousCategories.filter(
-            (category) =>
-              category !==
-              categoryToDelete
-          );
-
-        return existsIgnoreCase(
-          filteredCategories,
-          UNCATEGORIZED
-        )
-          ? filteredCategories
-          : [
-              UNCATEGORIZED,
-              ...filteredCategories,
-            ];
-      }
-    );
-
-    setExpenses((previousExpenses) =>
-      previousExpenses.map((item) =>
-        item.category ===
-        categoryToDelete
-          ? {
-              ...item,
-              category: UNCATEGORIZED,
-            }
-          : item
-      )
-    );
-  };
-
-  const updateExpenseCategory = (
-    oldName,
-    newName
-  ) => {
-    const cleanName = newName.trim();
-
-    if (
-      !cleanName ||
-      oldName === UNCATEGORIZED
-    ) {
-      return;
-    }
-
-    setExpenseCategories(
-      (previousCategories) => {
-        if (
-          oldName.toLowerCase() !==
-            cleanName.toLowerCase() &&
-          existsIgnoreCase(
-            previousCategories,
-            cleanName
-          )
-        ) {
-          return previousCategories;
-        }
-
-        return previousCategories.map(
-          (category) =>
-            category === oldName
-              ? cleanName
-              : category
-        );
-      }
-    );
-
-    setExpenses((previousExpenses) =>
-      previousExpenses.map((item) =>
-        item.category === oldName
-          ? {
-              ...item,
-              category: cleanName,
-            }
-          : item
-      )
-    );
-  };
-
-  const updateSettings = (
-    newSettings
-  ) => {
-    const cleanUserName =
-      typeof newSettings.userName ===
-      "string"
-        ? newSettings.userName.trim()
-        : "";
-
-    setSettings(
-      (previousSettings) => ({
-        ...previousSettings,
-        ...newSettings,
-        ...(cleanUserName
-          ? {
-              userName: cleanUserName,
-            }
-          : {}),
-      })
-    );
-
-    if (
-      cleanUserName &&
-      cleanUserName !== currentUser?.name
-    ) {
-      updateCurrentUser({
-        name: cleanUserName,
-      });
-    }
-  };
-
-  const clearIncomes = () =>
-    setIncomes([]);
-
-  const clearExpenses = () =>
-    setExpenses([]);
-
-  const clearGoals = () =>
-    setGoals([]);
-
-  const resetAppData = () => {
-    setIncomes([]);
-    setExpenses([]);
-    setGoals([]);
-
-    setIncomeCategories(
-      normalizeCategories(
-        DEFAULT_INCOME_CATEGORIES,
-        DEFAULT_INCOME_CATEGORIES
-      )
-    );
-
-    setExpenseCategories(
-      normalizeCategories(
-        DEFAULT_EXPENSE_CATEGORIES,
-        DEFAULT_EXPENSE_CATEGORIES
-      )
-    );
-
-    setSettings({
-      ...DEFAULT_SETTINGS,
-      userName:
-        currentUser?.name ||
-        DEFAULT_SETTINGS.userName,
-    });
-  };
-
-  const movementUsage = {
-    used: monthlyMovementCount,
-    limit: monthlyLimit,
-    remaining: remainingMovements,
-    percentage: monthlyUsagePercentage,
+  return {
+    used,
+    limit,
+    remaining,
+    percentage,
     isPremium,
-    hasReachedLimit:
-      hasReachedMonthlyLimit,
+    hasReachedLimit,
     canAddMovement:
-      isPremium ||
-      !hasReachedMonthlyLimit,
+      isPremium || !hasReachedLimit,
   };
+};
+
+const getErrorContent = (error) => {
+  return [
+    error?.message,
+    error?.details,
+    error?.hint,
+    error?.code,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+};
+
+const isFreeLimitError = (error) => {
+  return getErrorContent(error).includes(
+    FREE_LIMIT_ERROR_CODE
+  );
+};
+
+const getDatabaseErrorMessage = (
+  error,
+  fallbackMessage
+) => {
+  const errorContent =
+    getErrorContent(error);
+
+  if (
+    errorContent.includes(
+      FREE_LIMIT_ERROR_CODE
+    )
+  ) {
+    return "Llegaste al límite mensual de movimientos del plan gratuito.";
+  }
+
+  if (
+    errorContent.includes(
+      "ACCOUNT_BLOCKED"
+    )
+  ) {
+    return "Esta cuenta se encuentra bloqueada.";
+  }
+
+  if (
+    errorContent.includes(
+      "CATEGORY_TYPE_MISMATCH"
+    )
+  ) {
+    return "La categoría seleccionada no corresponde al tipo de movimiento.";
+  }
+
+  if (
+    errorContent.includes(
+      "CATEGORY_NOT_OWNED_BY_USER"
+    )
+  ) {
+    return "No tenés permiso para utilizar esa categoría.";
+  }
+
+  if (error?.code === "23505") {
+    return "Ya existe un registro con esos datos.";
+  }
+
+  console.error(
+    fallbackMessage,
+    error
+  );
+
+  return fallbackMessage;
+};
+
+const getGoalPayload = (goal) => {
+  const name = String(
+    goal?.name ||
+      goal?.title ||
+      ""
+  ).trim();
+
+  const description = String(
+    goal?.description || ""
+  ).trim();
+
+  const targetAmount = Number(
+    goal?.targetAmount ??
+      goal?.target_amount ??
+      goal?.target ??
+      goal?.amount
+  );
+
+  const currentAmount = Number(
+    goal?.currentAmount ??
+      goal?.current_amount ??
+      goal?.savedAmount ??
+      goal?.saved ??
+      0
+  );
+
+  const deadline =
+    goal?.deadline ||
+    goal?.date ||
+    null;
+
+  let status =
+    goal?.status || "active";
+
+  if (
+    Number.isFinite(targetAmount) &&
+    Number.isFinite(currentAmount) &&
+    targetAmount > 0 &&
+    currentAmount >= targetAmount
+  ) {
+    status = "completed";
+  }
+
+  return {
+    name,
+    description:
+      description || null,
+    target_amount: targetAmount,
+    current_amount: currentAmount,
+    deadline: deadline || null,
+    status,
+  };
+};
+
+function FinanceProvider({ children }) {
+  const {
+    currentUser,
+    refreshCurrentUser,
+  } = useAuth();
+
+  const [incomes, setIncomes] =
+    useState([]);
+
+  const [expenses, setExpenses] =
+    useState([]);
+
+  const [goals, setGoals] =
+    useState([]);
+
+  const [
+    categoryRecords,
+    setCategoryRecords,
+  ] = useState([]);
+
+  const [settings, setSettings] =
+    useState(DEFAULT_SETTINGS);
+
+  const [
+    movementUsage,
+    setMovementUsage,
+  ] = useState(
+    getDefaultMovementUsage(null)
+  );
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const currentUserId =
+    currentUser?.id || null;
+
+  const incomeCategories =
+    useMemo(() => {
+      const names = categoryRecords
+        .filter(
+          (category) =>
+            category.type === "income"
+        )
+        .map(
+          (category) =>
+            category.name
+        );
+
+      return [
+        UNCATEGORIZED,
+        ...names.filter(
+          (name) =>
+            name.toLowerCase() !==
+            UNCATEGORIZED.toLowerCase()
+        ),
+      ];
+    }, [categoryRecords]);
+
+  const expenseCategories =
+    useMemo(() => {
+      const names = categoryRecords
+        .filter(
+          (category) =>
+            category.type === "expense"
+        )
+        .map(
+          (category) =>
+            category.name
+        );
+
+      return [
+        UNCATEGORIZED,
+        ...names.filter(
+          (name) =>
+            name.toLowerCase() !==
+            UNCATEGORIZED.toLowerCase()
+        ),
+      ];
+    }, [categoryRecords]);
+
+  const resetLocalState =
+    useCallback(() => {
+      setIncomes([]);
+      setExpenses([]);
+      setGoals([]);
+      setCategoryRecords([]);
+
+      setSettings(
+        DEFAULT_SETTINGS
+      );
+
+      setMovementUsage(
+        getDefaultMovementUsage(null)
+      );
+
+      setErrorMessage("");
+      setLoading(false);
+    }, []);
+
+  const refreshMovementUsage =
+    useCallback(async () => {
+      if (!currentUserId) {
+        const emptyUsage =
+          getDefaultMovementUsage(null);
+
+        setMovementUsage(emptyUsage);
+
+        return {
+          success: false,
+          usage: emptyUsage,
+          message:
+            "No hay una sesión activa.",
+        };
+      }
+
+      const { data, error } =
+        await supabase.rpc(
+          "get_my_movement_usage"
+        );
+
+      if (error) {
+        const fallbackUsage =
+          getDefaultMovementUsage(
+            currentUser
+          );
+
+        setMovementUsage(
+          fallbackUsage
+        );
+
+        return {
+          success: false,
+          usage: fallbackUsage,
+          message:
+            "No se pudo actualizar el uso mensual.",
+        };
+      }
+
+      const mappedUsage =
+        mapMovementUsage(
+          data,
+          currentUser
+        );
+
+      setMovementUsage(
+        mappedUsage
+      );
+
+      return {
+        success: true,
+        usage: mappedUsage,
+      };
+    }, [
+      currentUser,
+      currentUserId,
+    ]);
+
+  const loadFinanceData =
+    useCallback(async () => {
+      if (!currentUserId) {
+        resetLocalState();
+        return {
+          success: false,
+          message:
+            "No hay una sesión activa.",
+        };
+      }
+
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        const [
+          transactionsResult,
+          categoriesResult,
+          goalsResult,
+          usageResult,
+        ] = await Promise.all([
+          supabase
+            .from("transactions")
+            .select(
+              TRANSACTION_FIELDS
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .order("created_at", {
+              ascending: false,
+            }),
+
+          supabase
+            .from("categories")
+            .select(CATEGORY_FIELDS)
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .order("created_at", {
+              ascending: true,
+            }),
+
+          supabase
+            .from("goals")
+            .select(GOAL_FIELDS)
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .order("created_at", {
+              ascending: false,
+            }),
+
+          supabase.rpc(
+            "get_my_movement_usage"
+          ),
+        ]);
+
+        if (
+          transactionsResult.error
+        ) {
+          throw transactionsResult.error;
+        }
+
+        if (categoriesResult.error) {
+          throw categoriesResult.error;
+        }
+
+        if (goalsResult.error) {
+          throw goalsResult.error;
+        }
+
+        const transactions = (
+          transactionsResult.data || []
+        ).map(mapTransaction);
+
+        setIncomes(
+          transactions.filter(
+            (transaction) =>
+              transaction.type ===
+              "income"
+          )
+        );
+
+        setExpenses(
+          transactions.filter(
+            (transaction) =>
+              transaction.type ===
+              "expense"
+          )
+        );
+
+        setCategoryRecords(
+          (
+            categoriesResult.data || []
+          ).map(mapCategory)
+        );
+
+        setGoals(
+          (goalsResult.data || []).map(
+            mapGoal
+          )
+        );
+
+        setSettings({
+          userName:
+            currentUser?.name ||
+            DEFAULT_SETTINGS.userName,
+
+          theme: normalizeTheme(
+            currentUser?.theme ||
+              DEFAULT_SETTINGS.theme
+          ),
+        });
+
+        if (usageResult.error) {
+          console.error(
+            "No se pudo cargar el uso mensual:",
+            usageResult.error
+          );
+
+          setMovementUsage(
+            getDefaultMovementUsage(
+              currentUser
+            )
+          );
+        } else {
+          setMovementUsage(
+            mapMovementUsage(
+              usageResult.data,
+              currentUser
+            )
+          );
+        }
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        const message =
+          getDatabaseErrorMessage(
+            error,
+            "No se pudieron cargar los datos financieros."
+          );
+
+        setErrorMessage(message);
+
+        return {
+          success: false,
+          message,
+        };
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      currentUser,
+      currentUserId,
+      resetLocalState,
+    ]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      resetLocalState();
+      return;
+    }
+
+    void loadFinanceData();
+  }, [
+    currentUserId,
+    loadFinanceData,
+    resetLocalState,
+  ]);
+
+  useEffect(() => {
+    const applyTheme = () => {
+      const selectedTheme =
+        settings.theme || "light";
+
+      const resolvedTheme =
+        selectedTheme === "system"
+          ? window.matchMedia(
+              "(prefers-color-scheme: dark)"
+            ).matches
+            ? "dark"
+            : "light"
+          : selectedTheme;
+
+      document.body.dataset.theme =
+        resolvedTheme;
+    };
+
+    applyTheme();
+
+    if (
+      settings.theme !== "system"
+    ) {
+      return undefined;
+    }
+
+    const mediaQuery =
+      window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      );
+
+    mediaQuery.addEventListener?.(
+      "change",
+      applyTheme
+    );
+
+    return () => {
+      mediaQuery.removeEventListener?.(
+        "change",
+        applyTheme
+      );
+    };
+  }, [settings.theme]);
+
+  const findCategoryRecord =
+    useCallback(
+      (categoryName, type) => {
+        if (
+          !categoryName ||
+          categoryName.toLowerCase() ===
+            UNCATEGORIZED.toLowerCase()
+        ) {
+          return null;
+        }
+
+        return (
+          categoryRecords.find(
+            (category) =>
+              category.type === type &&
+              category.name.toLowerCase() ===
+                categoryName
+                  .trim()
+                  .toLowerCase()
+          ) || null
+        );
+      },
+      [categoryRecords]
+    );
+
+  const validateMovement =
+    useCallback(
+      (movement) => {
+        if (!currentUserId) {
+          return {
+            success: false,
+            code:
+              "NOT_AUTHENTICATED",
+            message:
+              "Debés iniciar sesión para registrar movimientos.",
+          };
+        }
+
+        const description = String(
+          movement?.description || ""
+        ).trim();
+
+        const amount = Number(
+          movement?.amount
+        );
+
+        if (!description) {
+          return {
+            success: false,
+            message:
+              "La descripción es obligatoria.",
+          };
+        }
+
+        if (
+          !Number.isFinite(amount) ||
+          amount <= 0
+        ) {
+          return {
+            success: false,
+            message:
+              "El monto debe ser mayor a 0.",
+          };
+        }
+
+        if (!movement?.date) {
+          return {
+            success: false,
+            message:
+              "La fecha es obligatoria.",
+          };
+        }
+
+        return {
+          success: true,
+        };
+      },
+      [currentUserId]
+    );
+
+  const addMovement = useCallback(
+    async (movement, type) => {
+      const validation =
+        validateMovement(movement);
+
+      if (!validation.success) {
+        return validation;
+      }
+
+      if (
+        movementUsage.hasReachedLimit &&
+        !movementUsage.isPremium
+      ) {
+        return {
+          success: false,
+          code:
+            FREE_LIMIT_ERROR_CODE,
+          message: `Llegaste al límite de ${movementUsage.limit} movimientos mensuales del plan gratuito.`,
+        };
+      }
+
+      const cleanCategory =
+        String(
+          movement.category ||
+            UNCATEGORIZED
+        ).trim() || UNCATEGORIZED;
+
+      const categoryRecord =
+        findCategoryRecord(
+          cleanCategory,
+          type
+        );
+
+      const payload = {
+        user_id: currentUserId,
+        type,
+
+        description:
+          movement.description.trim(),
+
+        amount:
+          Number(movement.amount),
+
+        category_id:
+          categoryRecord?.id || null,
+
+        category_name:
+          cleanCategory,
+
+        date: movement.date,
+      };
+
+      const { data, error } =
+        await supabase
+          .from("transactions")
+          .insert(payload)
+          .select(
+            TRANSACTION_FIELDS
+          )
+          .single();
+
+      if (error) {
+        if (
+          isFreeLimitError(error)
+        ) {
+          await refreshMovementUsage();
+
+          return {
+            success: false,
+            code:
+              FREE_LIMIT_ERROR_CODE,
+            message:
+              "Llegaste al límite mensual de movimientos del plan gratuito.",
+          };
+        }
+
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo registrar el movimiento."
+            ),
+        };
+      }
+
+      const newMovement =
+        mapTransaction(data);
+
+      if (type === "income") {
+        setIncomes(
+          (currentIncomes) => [
+            newMovement,
+            ...currentIncomes,
+          ]
+        );
+      } else {
+        setExpenses(
+          (currentExpenses) => [
+            newMovement,
+            ...currentExpenses,
+          ]
+        );
+      }
+
+      await refreshMovementUsage();
+
+      return {
+        success: true,
+        movement: newMovement,
+      };
+    },
+    [
+      currentUserId,
+      findCategoryRecord,
+      movementUsage,
+      refreshMovementUsage,
+      validateMovement,
+    ]
+  );
+
+  const updateMovement =
+    useCallback(
+      async (
+        updatedMovement,
+        type
+      ) => {
+        const validation =
+          validateMovement(
+            updatedMovement
+          );
+
+        if (!validation.success) {
+          return validation;
+        }
+
+        if (!updatedMovement?.id) {
+          return {
+            success: false,
+            message:
+              "No se encontró el movimiento que deseas editar.",
+          };
+        }
+
+        const cleanCategory =
+          String(
+            updatedMovement.category ||
+              UNCATEGORIZED
+          ).trim() || UNCATEGORIZED;
+
+        const categoryRecord =
+          findCategoryRecord(
+            cleanCategory,
+            type
+          );
+
+        const payload = {
+          type,
+
+          description:
+            updatedMovement.description.trim(),
+
+          amount: Number(
+            updatedMovement.amount
+          ),
+
+          category_id:
+            categoryRecord?.id || null,
+
+          category_name:
+            cleanCategory,
+
+          date: updatedMovement.date,
+        };
+
+        const { data, error } =
+          await supabase
+            .from("transactions")
+            .update(payload)
+            .eq(
+              "id",
+              updatedMovement.id
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .select(
+              TRANSACTION_FIELDS
+            )
+            .single();
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo actualizar el movimiento."
+              ),
+          };
+        }
+
+        const mappedMovement =
+          mapTransaction(data);
+
+        if (type === "income") {
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.map(
+                (income) =>
+                  income.id ===
+                  mappedMovement.id
+                    ? mappedMovement
+                    : income
+              )
+          );
+        } else {
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.map(
+                (expense) =>
+                  expense.id ===
+                  mappedMovement.id
+                    ? mappedMovement
+                    : expense
+              )
+          );
+        }
+
+        return {
+          success: true,
+          movement:
+            mappedMovement,
+        };
+      },
+      [
+        currentUserId,
+        findCategoryRecord,
+        validateMovement,
+      ]
+    );
+
+  const deleteMovement =
+    useCallback(
+      async (id, type) => {
+        if (!currentUserId || !id) {
+          return {
+            success: false,
+            message:
+              "No se encontró el movimiento.",
+          };
+        }
+
+        const { error } =
+          await supabase
+            .from("transactions")
+            .delete()
+            .eq("id", id)
+            .eq(
+              "user_id",
+              currentUserId
+            );
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo eliminar el movimiento."
+              ),
+          };
+        }
+
+        if (type === "income") {
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.filter(
+                (income) =>
+                  income.id !== id
+              )
+          );
+        } else {
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.filter(
+                (expense) =>
+                  expense.id !== id
+              )
+          );
+        }
+
+        await refreshMovementUsage();
+
+        return {
+          success: true,
+        };
+      },
+      [
+        currentUserId,
+        refreshMovementUsage,
+      ]
+    );
+
+  const addIncome = useCallback(
+    (income) =>
+      addMovement(
+        income,
+        "income"
+      ),
+    [addMovement]
+  );
+
+  const updateIncome =
+    useCallback(
+      (income) =>
+        updateMovement(
+          income,
+          "income"
+        ),
+      [updateMovement]
+    );
+
+  const deleteIncome =
+    useCallback(
+      (id) =>
+        deleteMovement(
+          id,
+          "income"
+        ),
+      [deleteMovement]
+    );
+
+  const addExpense = useCallback(
+    (expense) =>
+      addMovement(
+        expense,
+        "expense"
+      ),
+    [addMovement]
+  );
+
+  const updateExpense =
+    useCallback(
+      (expense) =>
+        updateMovement(
+          expense,
+          "expense"
+        ),
+      [updateMovement]
+    );
+
+  const deleteExpense =
+    useCallback(
+      (id) =>
+        deleteMovement(
+          id,
+          "expense"
+        ),
+      [deleteMovement]
+    );
+
+  const addCategory =
+    useCallback(
+      async (
+        categoryName,
+        type
+      ) => {
+        if (!currentUserId) {
+          return {
+            success: false,
+            message:
+              "No hay una sesión activa.",
+          };
+        }
+
+        const cleanName =
+          String(
+            categoryName || ""
+          ).trim();
+
+        if (!cleanName) {
+          return {
+            success: false,
+            message:
+              "El nombre de la categoría es obligatorio.",
+          };
+        }
+
+        if (
+          cleanName.toLowerCase() ===
+          UNCATEGORIZED.toLowerCase()
+        ) {
+          return {
+            success: false,
+            message:
+              "La categoría General ya existe.",
+          };
+        }
+
+        const duplicated =
+          categoryRecords.some(
+            (category) =>
+              category.type === type &&
+              category.name.toLowerCase() ===
+                cleanName.toLowerCase()
+          );
+
+        if (duplicated) {
+          return {
+            success: false,
+            message:
+              "La categoría ya existe.",
+          };
+        }
+
+        const { data, error } =
+          await supabase
+            .from("categories")
+            .insert({
+              user_id:
+                currentUserId,
+              name: cleanName,
+              type,
+              color: null,
+              icon: null,
+              is_default: false,
+            })
+            .select(
+              CATEGORY_FIELDS
+            )
+            .single();
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo crear la categoría."
+              ),
+          };
+        }
+
+        const mappedCategory =
+          mapCategory(data);
+
+        setCategoryRecords(
+          (currentCategories) => [
+            ...currentCategories,
+            mappedCategory,
+          ]
+        );
+
+        return {
+          success: true,
+          category:
+            mappedCategory,
+        };
+      },
+      [
+        categoryRecords,
+        currentUserId,
+      ]
+    );
+
+  const deleteCategory =
+    useCallback(
+      async (
+        categoryName,
+        type
+      ) => {
+        if (
+          !categoryName ||
+          categoryName.toLowerCase() ===
+            UNCATEGORIZED.toLowerCase()
+        ) {
+          return {
+            success: false,
+            message:
+              "La categoría General no se puede eliminar.",
+          };
+        }
+
+        const category =
+          findCategoryRecord(
+            categoryName,
+            type
+          );
+
+        if (!category) {
+          return {
+            success: false,
+            message:
+              "No se encontró la categoría.",
+          };
+        }
+
+        const {
+          error:
+            transactionsError,
+        } = await supabase
+          .from("transactions")
+          .update({
+            category_id: null,
+            category_name:
+              UNCATEGORIZED,
+          })
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .eq(
+            "category_id",
+            category.id
+          );
+
+        if (transactionsError) {
+          return {
+            success: false,
+            message:
+              "No se pudieron actualizar los movimientos asociados.",
+          };
+        }
+
+        const { error } =
+          await supabase
+            .from("categories")
+            .delete()
+            .eq(
+              "id",
+              category.id
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            );
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo eliminar la categoría."
+              ),
+          };
+        }
+
+        setCategoryRecords(
+          (currentCategories) =>
+            currentCategories.filter(
+              (currentCategory) =>
+                currentCategory.id !==
+                category.id
+            )
+        );
+
+        const replaceCategory = (
+          movement
+        ) =>
+          movement.categoryId ===
+          category.id
+            ? {
+                ...movement,
+                categoryId: null,
+                category:
+                  UNCATEGORIZED,
+              }
+            : movement;
+
+        if (type === "income") {
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.map(
+                replaceCategory
+              )
+          );
+        } else {
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.map(
+                replaceCategory
+              )
+          );
+        }
+
+        return {
+          success: true,
+        };
+      },
+      [
+        currentUserId,
+        findCategoryRecord,
+      ]
+    );
+
+  const updateCategory =
+    useCallback(
+      async (
+        oldName,
+        newName,
+        type
+      ) => {
+        const cleanName =
+          String(
+            newName || ""
+          ).trim();
+
+        if (!cleanName) {
+          return {
+            success: false,
+            message:
+              "El nuevo nombre es obligatorio.",
+          };
+        }
+
+        if (
+          oldName.toLowerCase() ===
+          UNCATEGORIZED.toLowerCase()
+        ) {
+          return {
+            success: false,
+            message:
+              "La categoría General no se puede modificar.",
+          };
+        }
+
+        const category =
+          findCategoryRecord(
+            oldName,
+            type
+          );
+
+        if (!category) {
+          return {
+            success: false,
+            message:
+              "No se encontró la categoría.",
+          };
+        }
+
+        const duplicated =
+          categoryRecords.some(
+            (currentCategory) =>
+              currentCategory.id !==
+                category.id &&
+              currentCategory.type ===
+                type &&
+              currentCategory.name.toLowerCase() ===
+                cleanName.toLowerCase()
+          );
+
+        if (duplicated) {
+          return {
+            success: false,
+            message:
+              "Ya existe una categoría con ese nombre.",
+          };
+        }
+
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("categories")
+          .update({
+            name: cleanName,
+          })
+          .eq(
+            "id",
+            category.id
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .select(
+            CATEGORY_FIELDS
+          )
+          .single();
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo modificar la categoría."
+              ),
+          };
+        }
+
+        const {
+          error:
+            transactionsError,
+        } = await supabase
+          .from("transactions")
+          .update({
+            category_name:
+              cleanName,
+          })
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .eq(
+            "category_id",
+            category.id
+          );
+
+        if (transactionsError) {
+          await loadFinanceData();
+
+          return {
+            success: false,
+            message:
+              "La categoría fue modificada, pero no se pudieron actualizar todos sus movimientos.",
+          };
+        }
+
+        const mappedCategory =
+          mapCategory(data);
+
+        setCategoryRecords(
+          (currentCategories) =>
+            currentCategories.map(
+              (currentCategory) =>
+                currentCategory.id ===
+                category.id
+                  ? mappedCategory
+                  : currentCategory
+            )
+        );
+
+        const replaceCategory = (
+          movement
+        ) =>
+          movement.categoryId ===
+          category.id
+            ? {
+                ...movement,
+                category:
+                  cleanName,
+              }
+            : movement;
+
+        if (type === "income") {
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.map(
+                replaceCategory
+              )
+          );
+        } else {
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.map(
+                replaceCategory
+              )
+          );
+        }
+
+        return {
+          success: true,
+          category:
+            mappedCategory,
+        };
+      },
+      [
+        categoryRecords,
+        currentUserId,
+        findCategoryRecord,
+        loadFinanceData,
+      ]
+    );
+
+  const addIncomeCategory =
+    useCallback(
+      (category) =>
+        addCategory(
+          category,
+          "income"
+        ),
+      [addCategory]
+    );
+
+  const deleteIncomeCategory =
+    useCallback(
+      (category) =>
+        deleteCategory(
+          category,
+          "income"
+        ),
+      [deleteCategory]
+    );
+
+  const updateIncomeCategory =
+    useCallback(
+      (oldName, newName) =>
+        updateCategory(
+          oldName,
+          newName,
+          "income"
+        ),
+      [updateCategory]
+    );
+
+  const addExpenseCategory =
+    useCallback(
+      (category) =>
+        addCategory(
+          category,
+          "expense"
+        ),
+      [addCategory]
+    );
+
+  const deleteExpenseCategory =
+    useCallback(
+      (category) =>
+        deleteCategory(
+          category,
+          "expense"
+        ),
+      [deleteCategory]
+    );
+
+  const updateExpenseCategory =
+    useCallback(
+      (oldName, newName) =>
+        updateCategory(
+          oldName,
+          newName,
+          "expense"
+        ),
+      [updateCategory]
+    );
+
+  const addGoal = useCallback(
+    async (goal) => {
+      if (!currentUserId) {
+        return {
+          success: false,
+          message:
+            "No hay una sesión activa.",
+        };
+      }
+
+      const payload =
+        getGoalPayload(goal);
+
+      if (!payload.name) {
+        return {
+          success: false,
+          message:
+            "El nombre del objetivo es obligatorio.",
+        };
+      }
+
+      if (
+        !Number.isFinite(
+          payload.target_amount
+        ) ||
+        payload.target_amount <= 0
+      ) {
+        return {
+          success: false,
+          message:
+            "El monto objetivo debe ser mayor a 0.",
+        };
+      }
+
+      if (
+        !Number.isFinite(
+          payload.current_amount
+        ) ||
+        payload.current_amount < 0
+      ) {
+        return {
+          success: false,
+          message:
+            "El monto actual no puede ser negativo.",
+        };
+      }
+
+      const { data, error } =
+        await supabase
+          .from("goals")
+          .insert({
+            user_id:
+              currentUserId,
+            ...payload,
+          })
+          .select(GOAL_FIELDS)
+          .single();
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo crear el objetivo."
+            ),
+        };
+      }
+
+      const mappedGoal =
+        mapGoal(data);
+
+      setGoals(
+        (currentGoals) => [
+          mappedGoal,
+          ...currentGoals,
+        ]
+      );
+
+      return {
+        success: true,
+        goal: mappedGoal,
+      };
+    },
+    [currentUserId]
+  );
+
+  const updateGoal = useCallback(
+    async (updatedGoal) => {
+      if (
+        !currentUserId ||
+        !updatedGoal?.id
+      ) {
+        return {
+          success: false,
+          message:
+            "No se encontró el objetivo.",
+        };
+      }
+
+      const payload =
+        getGoalPayload(
+          updatedGoal
+        );
+
+      if (!payload.name) {
+        return {
+          success: false,
+          message:
+            "El nombre del objetivo es obligatorio.",
+        };
+      }
+
+      if (
+        !Number.isFinite(
+          payload.target_amount
+        ) ||
+        payload.target_amount <= 0
+      ) {
+        return {
+          success: false,
+          message:
+            "El monto objetivo debe ser mayor a 0.",
+        };
+      }
+
+      const { data, error } =
+        await supabase
+          .from("goals")
+          .update(payload)
+          .eq(
+            "id",
+            updatedGoal.id
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .select(GOAL_FIELDS)
+          .single();
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo modificar el objetivo."
+            ),
+        };
+      }
+
+      const mappedGoal =
+        mapGoal(data);
+
+      setGoals(
+        (currentGoals) =>
+          currentGoals.map(
+            (goal) =>
+              goal.id ===
+              mappedGoal.id
+                ? mappedGoal
+                : goal
+          )
+      );
+
+      return {
+        success: true,
+        goal: mappedGoal,
+      };
+    },
+    [currentUserId]
+  );
+
+  const deleteGoal = useCallback(
+    async (id) => {
+      if (!currentUserId || !id) {
+        return {
+          success: false,
+          message:
+            "No se encontró el objetivo.",
+        };
+      }
+
+      const { error } =
+        await supabase
+          .from("goals")
+          .delete()
+          .eq("id", id)
+          .eq(
+            "user_id",
+            currentUserId
+          );
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo eliminar el objetivo."
+            ),
+        };
+      }
+
+      setGoals(
+        (currentGoals) =>
+          currentGoals.filter(
+            (goal) =>
+              goal.id !== id
+          )
+      );
+
+      return {
+        success: true,
+      };
+    },
+    [currentUserId]
+  );
+
+  const updateSettings =
+    useCallback(
+      async (newSettings) => {
+        if (!currentUserId) {
+          return {
+            success: false,
+            message:
+              "No hay una sesión activa.",
+          };
+        }
+
+        const nextUserName =
+          typeof newSettings
+            ?.userName ===
+          "string"
+            ? newSettings.userName.trim()
+            : settings.userName;
+
+        const nextTheme =
+          normalizeTheme(
+            newSettings?.theme ??
+              settings.theme
+          );
+
+        if (!nextUserName) {
+          return {
+            success: false,
+            message:
+              "El nombre no puede estar vacío.",
+          };
+        }
+
+        const { error } =
+          await supabase
+            .from("profiles")
+            .update({
+              name: nextUserName,
+              theme: nextTheme,
+            })
+            .eq(
+              "id",
+              currentUserId
+            );
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo actualizar la configuración."
+              ),
+          };
+        }
+
+        setSettings({
+          userName:
+            nextUserName,
+          theme: nextTheme,
+        });
+
+        if (
+          typeof refreshCurrentUser ===
+          "function"
+        ) {
+          await refreshCurrentUser();
+        }
+
+        return {
+          success: true,
+          message:
+            "Configuración actualizada correctamente.",
+        };
+      },
+      [
+        currentUserId,
+        refreshCurrentUser,
+        settings.theme,
+        settings.userName,
+      ]
+    );
+
+  const clearIncomes =
+    useCallback(async () => {
+      if (!currentUserId) {
+        return {
+          success: false,
+        };
+      }
+
+      const { error } =
+        await supabase
+          .from("transactions")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .eq(
+            "type",
+            "income"
+          );
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            "No se pudieron eliminar los ingresos.",
+        };
+      }
+
+      setIncomes([]);
+      await refreshMovementUsage();
+
+      return {
+        success: true,
+      };
+    }, [
+      currentUserId,
+      refreshMovementUsage,
+    ]);
+
+  const clearExpenses =
+    useCallback(async () => {
+      if (!currentUserId) {
+        return {
+          success: false,
+        };
+      }
+
+      const { error } =
+        await supabase
+          .from("transactions")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .eq(
+            "type",
+            "expense"
+          );
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            "No se pudieron eliminar los gastos.",
+        };
+      }
+
+      setExpenses([]);
+      await refreshMovementUsage();
+
+      return {
+        success: true,
+      };
+    }, [
+      currentUserId,
+      refreshMovementUsage,
+    ]);
+
+  const clearGoals =
+    useCallback(async () => {
+      if (!currentUserId) {
+        return {
+          success: false,
+        };
+      }
+
+      const { error } =
+        await supabase
+          .from("goals")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          );
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            "No se pudieron eliminar los objetivos.",
+        };
+      }
+
+      setGoals([]);
+
+      return {
+        success: true,
+      };
+    }, [currentUserId]);
+
+  const resetAppData =
+    useCallback(async () => {
+      if (!currentUserId) {
+        return {
+          success: false,
+          message:
+            "No hay una sesión activa.",
+        };
+      }
+
+      const [
+        transactionsResult,
+        goalsResult,
+        categoriesResult,
+        profileResult,
+      ] = await Promise.all([
+        supabase
+          .from("transactions")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          ),
+
+        supabase
+          .from("goals")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          ),
+
+        supabase
+          .from("categories")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .eq(
+            "is_default",
+            false
+          ),
+
+        supabase
+          .from("profiles")
+          .update({
+            theme: "light",
+          })
+          .eq(
+            "id",
+            currentUserId
+          ),
+      ]);
+
+      const firstError =
+        transactionsResult.error ||
+        goalsResult.error ||
+        categoriesResult.error ||
+        profileResult.error;
+
+      if (firstError) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              firstError,
+              "No se pudieron restablecer los datos."
+            ),
+        };
+      }
+
+      await loadFinanceData();
+
+      if (
+        typeof refreshCurrentUser ===
+        "function"
+      ) {
+        await refreshCurrentUser();
+      }
+
+      return {
+        success: true,
+        message:
+          "Los datos fueron restablecidos correctamente.",
+      };
+    },
+    [
+      currentUserId,
+      loadFinanceData,
+      refreshCurrentUser,
+    ]);
+
+  const monthlyMovementCount =
+    movementUsage.used;
+
+  const monthlyLimit =
+    movementUsage.limit;
+
+  const remainingMovements =
+    movementUsage.remaining;
+
+  const monthlyUsagePercentage =
+    movementUsage.percentage;
+
+  const hasReachedMonthlyLimit =
+    movementUsage.hasReachedLimit;
+
+  const isPremium =
+    movementUsage.isPremium;
+
+  const value = useMemo(
+    () => ({
+      incomes,
+      expenses,
+      goals,
+      settings,
+
+      incomeCategories,
+      expenseCategories,
+
+      loading,
+      errorMessage,
+
+      movementUsage,
+      monthlyMovementCount,
+      monthlyLimit,
+      remainingMovements,
+      monthlyUsagePercentage,
+      hasReachedMonthlyLimit,
+      isPremium,
+
+      loadFinanceData,
+      refreshMovementUsage,
+
+      addIncome,
+      deleteIncome,
+      updateIncome,
+
+      addExpense,
+      deleteExpense,
+      updateExpense,
+
+      addGoal,
+      deleteGoal,
+      updateGoal,
+
+      addIncomeCategory,
+      deleteIncomeCategory,
+      updateIncomeCategory,
+
+      addExpenseCategory,
+      deleteExpenseCategory,
+      updateExpenseCategory,
+
+      updateSettings,
+
+      clearIncomes,
+      clearExpenses,
+      clearGoals,
+      resetAppData,
+    }),
+    [
+      incomes,
+      expenses,
+      goals,
+      settings,
+      incomeCategories,
+      expenseCategories,
+      loading,
+      errorMessage,
+      movementUsage,
+      monthlyMovementCount,
+      monthlyLimit,
+      remainingMovements,
+      monthlyUsagePercentage,
+      hasReachedMonthlyLimit,
+      isPremium,
+      loadFinanceData,
+      refreshMovementUsage,
+      addIncome,
+      deleteIncome,
+      updateIncome,
+      addExpense,
+      deleteExpense,
+      updateExpense,
+      addGoal,
+      deleteGoal,
+      updateGoal,
+      addIncomeCategory,
+      deleteIncomeCategory,
+      updateIncomeCategory,
+      addExpenseCategory,
+      deleteExpenseCategory,
+      updateExpenseCategory,
+      updateSettings,
+      clearIncomes,
+      clearExpenses,
+      clearGoals,
+      resetAppData,
+    ]
+  );
 
   return (
     <FinanceContext.Provider
-      value={{
-        incomes,
-        expenses,
-        goals,
-        settings,
-        incomeCategories,
-        expenseCategories,
-
-        movementUsage,
-        monthlyMovementCount,
-        monthlyLimit,
-        remainingMovements,
-        monthlyUsagePercentage,
-        hasReachedMonthlyLimit,
-        isPremium,
-
-        addIncome,
-        deleteIncome,
-        updateIncome,
-
-        addExpense,
-        deleteExpense,
-        updateExpense,
-
-        addGoal,
-        deleteGoal,
-        updateGoal,
-
-        addIncomeCategory,
-        deleteIncomeCategory,
-        updateIncomeCategory,
-
-        addExpenseCategory,
-        deleteExpenseCategory,
-        updateExpenseCategory,
-
-        updateSettings,
-
-        clearIncomes,
-        clearExpenses,
-        clearGoals,
-        resetAppData,
-      }}
+      value={value}
     >
       {children}
     </FinanceContext.Provider>

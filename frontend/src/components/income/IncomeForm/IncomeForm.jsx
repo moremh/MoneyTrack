@@ -55,13 +55,19 @@ function IncomeForm({
     setSuccessMessage,
   ] = useState("");
 
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
+
   const availableCategories =
     category &&
     !categories.includes(category)
       ? [category, ...categories]
       : categories;
 
-  const isNewMovement = !initialData;
+  const isNewMovement =
+    !initialData;
 
   const isCreationBlocked =
     isNewMovement &&
@@ -98,10 +104,17 @@ function IncomeForm({
 
     setErrorMessage("");
     setSuccessMessage("");
+    setIsSubmitting(false);
   }, [initialData]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (
+    event
+  ) => {
     event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
 
     setErrorMessage("");
     setSuccessMessage("");
@@ -125,6 +138,7 @@ function IncomeForm({
       setErrorMessage(
         `La descripción del ${typeLabel} es obligatoria.`
       );
+
       return;
     }
 
@@ -136,6 +150,7 @@ function IncomeForm({
       setErrorMessage(
         `El monto del ${typeLabel} debe ser mayor a 0.`
       );
+
       return;
     }
 
@@ -143,6 +158,7 @@ function IncomeForm({
       setErrorMessage(
         `Debes seleccionar una categoría para el ${typeLabel}.`
       );
+
       return;
     }
 
@@ -150,53 +166,82 @@ function IncomeForm({
       setErrorMessage(
         `Debes seleccionar una fecha para el ${typeLabel}.`
       );
+
       return;
     }
 
-    const result = onAdd({
-      id: initialData?.id || Date.now(),
-      description: cleanDescription,
-      amount: numericAmount,
-      category,
-      date,
-    });
+    setIsSubmitting(true);
 
-    if (result?.success === false) {
-      setErrorMessage(
-        result.message ||
-          `No se pudo guardar el ${typeLabel}.`
-      );
+    try {
+      const result = await onAdd({
+        ...(initialData?.id
+          ? {
+              id: initialData.id,
+            }
+          : {}),
+
+        description:
+          cleanDescription,
+
+        amount:
+          numericAmount,
+
+        category,
+        date,
+      });
 
       if (
-        result.code ===
-        FREE_LIMIT_ERROR_CODE
+        result?.success === false
       ) {
-        onLimitReached?.();
+        setErrorMessage(
+          result.message ||
+            `No se pudo guardar el ${typeLabel}.`
+        );
+
+        if (
+          result.code ===
+          FREE_LIMIT_ERROR_CODE
+        ) {
+          onLimitReached?.();
+        }
+
+        return;
       }
 
-      return;
-    }
+      const capitalizedType =
+        typeLabel
+          .charAt(0)
+          .toUpperCase() +
+        typeLabel.slice(1);
 
-    const capitalizedType =
-      typeLabel.charAt(0).toUpperCase() +
-      typeLabel.slice(1);
-
-    setSuccessMessage(
-      initialData
-        ? `${capitalizedType} actualizado correctamente.`
-        : `${capitalizedType} agregado correctamente.`
-    );
-
-    if (!initialData) {
-      setDescription("");
-      setAmount("");
-      setCategory("");
-
-      setDate(
-        new Date()
-          .toISOString()
-          .split("T")[0]
+      setSuccessMessage(
+        initialData
+          ? `${capitalizedType} actualizado correctamente.`
+          : `${capitalizedType} agregado correctamente.`
       );
+
+      if (!initialData) {
+        setDescription("");
+        setAmount("");
+        setCategory("");
+
+        setDate(
+          new Date()
+            .toISOString()
+            .split("T")[0]
+        );
+      }
+    } catch (error) {
+      console.error(
+        `No se pudo guardar el ${typeLabel}:`,
+        error
+      );
+
+      setErrorMessage(
+        `No se pudo guardar el ${typeLabel}. Volvé a intentarlo.`
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -208,25 +253,36 @@ function IncomeForm({
       {errorMessage && (
         <div
           className={`${styles.message} ${styles.errorMessage}`}
+          role="alert"
         >
           <i className="bi bi-exclamation-circle"></i>
-          <span>{errorMessage}</span>
+
+          <span>
+            {errorMessage}
+          </span>
         </div>
       )}
 
       {successMessage && (
         <div
           className={`${styles.message} ${styles.successMessage}`}
+          role="status"
         >
           <i className="bi bi-check-circle"></i>
-          <span>{successMessage}</span>
+
+          <span>
+            {successMessage}
+          </span>
         </div>
       )}
 
       <div className={styles.group}>
-        <label>Descripción</label>
+        <label htmlFor={`${type}-description`}>
+          Descripción
+        </label>
 
         <input
+          id={`${type}-description`}
           className={styles.input}
           type="text"
           value={description}
@@ -240,29 +296,39 @@ function IncomeForm({
               ? "Ej: Supermercado"
               : "Ej: Sueldo"
           }
+          disabled={isSubmitting}
         />
       </div>
 
       <div className={styles.group}>
-        <label>Monto</label>
+        <label htmlFor={`${type}-amount`}>
+          Monto
+        </label>
 
         <input
+          id={`${type}-amount`}
           className={styles.input}
           type="number"
-          min="0"
+          min="0.01"
           step="0.01"
           value={amount}
           onChange={(event) =>
-            setAmount(event.target.value)
+            setAmount(
+              event.target.value
+            )
           }
           placeholder="Ej: 250000"
+          disabled={isSubmitting}
         />
       </div>
 
       <div className={styles.group}>
-        <label>Categoría</label>
+        <label htmlFor={`${type}-category`}>
+          Categoría
+        </label>
 
         <select
+          id={`${type}-category`}
           className={styles.input}
           value={category}
           onChange={(event) =>
@@ -270,6 +336,7 @@ function IncomeForm({
               event.target.value
             )
           }
+          disabled={isSubmitting}
         >
           <option value="">
             Seleccione...
@@ -289,29 +356,40 @@ function IncomeForm({
       </div>
 
       <div className={styles.group}>
-        <label>Fecha</label>
+        <label htmlFor={`${type}-date`}>
+          Fecha
+        </label>
 
         <input
+          id={`${type}-date`}
           className={styles.input}
           type="date"
           value={date}
           onChange={(event) =>
-            setDate(event.target.value)
+            setDate(
+              event.target.value
+            )
           }
+          disabled={isSubmitting}
         />
       </div>
 
       <button
         className={styles.button}
         type="submit"
+        disabled={isSubmitting}
       >
-        {isCreationBlocked
-          ? "Ver opciones Premium"
-          : initialData
-            ? "Guardar cambios"
-            : type === "expense"
-              ? "Agregar gasto"
-              : "Agregar ingreso"}
+        {isSubmitting
+          ? initialData
+            ? "Guardando cambios..."
+            : "Guardando..."
+          : isCreationBlocked
+            ? "Ver opciones Premium"
+            : initialData
+              ? "Guardar cambios"
+              : type === "expense"
+                ? "Agregar gasto"
+                : "Agregar ingreso"}
       </button>
     </form>
   );

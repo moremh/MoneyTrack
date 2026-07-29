@@ -25,11 +25,15 @@ function Expenses() {
     movementUsage,
   } = useContext(FinanceContext);
 
-  const [editingExpense, setEditingExpense] =
-    useState(null);
+  const [
+    editingExpense,
+    setEditingExpense,
+  ] = useState(null);
 
-  const [showPremiumModal, setShowPremiumModal] =
-    useState(false);
+  const [
+    showPremiumModal,
+    setShowPremiumModal,
+  ] = useState(false);
 
   const [fromDate, setFromDate] =
     useState("");
@@ -39,45 +43,76 @@ function Expenses() {
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((item) => {
-      if (fromDate && item.date < fromDate) {
+      if (
+        fromDate &&
+        item.date < fromDate
+      ) {
         return false;
       }
 
-      if (toDate && item.date > toDate) {
+      if (
+        toDate &&
+        item.date > toDate
+      ) {
         return false;
       }
 
       return true;
     });
-  }, [expenses, fromDate, toDate]);
+  }, [
+    expenses,
+    fromDate,
+    toDate,
+  ]);
 
   const clearFilters = () => {
     setFromDate("");
     setToDate("");
   };
 
-  const handleUpdateExpense = (updatedExpense) => {
+  const handleUpdateExpense = async (
+    updatedExpense
+  ) => {
     if (!editingExpense) {
       return {
         success: false,
-        message: "No se encontró el gasto que deseas editar.",
+        message:
+          "No se encontró el gasto que deseas editar.",
       };
     }
 
-    const result = updateExpense({
-      ...updatedExpense,
-      id: editingExpense.id,
-    });
+    try {
+      const result =
+        await updateExpense({
+          ...updatedExpense,
+          id: editingExpense.id,
+        });
 
-    if (result?.success === false) {
+      if (!result?.success) {
+        return (
+          result || {
+            success: false,
+            message:
+              "No se pudo actualizar el gasto.",
+          }
+        );
+      }
+
+      setEditingExpense(null);
+
       return result;
+    } catch (error) {
+      console.error(
+        "No se pudo actualizar el gasto:",
+        error
+      );
+
+      return {
+        success: false,
+        message:
+          "No se pudo actualizar el gasto. Volvé a intentarlo.",
+      };
     }
-
-    setEditingExpense(null);
-
-    return result || {
-      success: true,
-    };
   };
 
   return (
@@ -105,42 +140,64 @@ function Expenses() {
 
       <Card title="Lista de gastos">
         <div className={styles.filters}>
-          <div className={styles.filterGroup}>
+          <div
+            className={
+              styles.filterGroup
+            }
+          >
             <label htmlFor="expense-from-date">
               Desde
             </label>
 
             <input
               id="expense-from-date"
-              className={styles.filterInput}
+              className={
+                styles.filterInput
+              }
               type="date"
               value={fromDate}
               onChange={(event) =>
-                setFromDate(event.target.value)
+                setFromDate(
+                  event.target.value
+                )
               }
             />
           </div>
 
-          <div className={styles.filterGroup}>
+          <div
+            className={
+              styles.filterGroup
+            }
+          >
             <label htmlFor="expense-to-date">
               Hasta
             </label>
 
             <input
               id="expense-to-date"
-              className={styles.filterInput}
+              className={
+                styles.filterInput
+              }
               type="date"
               value={toDate}
               onChange={(event) =>
-                setToDate(event.target.value)
+                setToDate(
+                  event.target.value
+                )
               }
             />
           </div>
 
-          <div className={styles.filterActions}>
+          <div
+            className={
+              styles.filterActions
+            }
+          >
             <button
               type="button"
-              className={styles.clearButton}
+              className={
+                styles.clearButton
+              }
               onClick={clearFilters}
             >
               Limpiar filtros
@@ -149,7 +206,8 @@ function Expenses() {
         </div>
 
         <p className={styles.results}>
-          Mostrando {filteredExpenses.length} de{" "}
+          Mostrando{" "}
+          {filteredExpenses.length} de{" "}
           {expenses.length} gastos
         </p>
 
@@ -162,16 +220,26 @@ function Expenses() {
 
       {editingExpense && (
         <Modal
-          onClose={() => setEditingExpense(null)}
+          onClose={() =>
+            setEditingExpense(null)
+          }
         >
-          <h2 className={styles.modalTitle}>
+          <h2
+            className={
+              styles.modalTitle
+            }
+          >
             Editar gasto
           </h2>
 
           <IncomeForm
-            initialData={editingExpense}
+            initialData={
+              editingExpense
+            }
             type="expense"
-            onAdd={handleUpdateExpense}
+            onAdd={
+              handleUpdateExpense
+            }
           />
         </Modal>
       )}

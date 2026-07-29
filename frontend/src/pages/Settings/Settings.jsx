@@ -1,5 +1,11 @@
-import { useContext, useEffect, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
 import { FinanceContext } from "../../context/FinanceContext";
+
 import styles from "./Settings.module.css";
 
 function Settings() {
@@ -12,177 +18,498 @@ function Settings() {
     resetAppData,
   } = useContext(FinanceContext);
 
-  const [userName, setUserName] = useState(settings.userName);
-  const [theme, setTheme] = useState(settings.theme);
+  const [userName, setUserName] =
+    useState(
+      settings?.userName || "Usuario"
+    );
 
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [theme, setTheme] =
+    useState(
+      settings?.theme || "light"
+    );
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState("");
+
+  const [
+    activeAction,
+    setActiveAction,
+  ] = useState("");
+
+  const isBusy =
+    Boolean(activeAction);
 
   useEffect(() => {
-    setUserName(settings.userName);
-    setTheme(settings.theme);
+    setUserName(
+      settings?.userName || "Usuario"
+    );
+
+    setTheme(
+      settings?.theme || "light"
+    );
   }, [settings]);
 
-  const handleSave = (e) => {
-    e.preventDefault();
-
+  const clearMessages = () => {
     setErrorMessage("");
     setSuccessMessage("");
+  };
 
-    const cleanName = userName.trim();
+  const showResult = (
+    result,
+    successText,
+    errorText
+  ) => {
+    if (!result?.success) {
+      setErrorMessage(
+        result?.message || errorText
+      );
 
-    if (!cleanName) {
-      setErrorMessage("El nombre de usuario no puede estar vacío.");
+      return false;
+    }
+
+    setSuccessMessage(
+      result?.message || successText
+    );
+
+    return true;
+  };
+
+  const handleSave = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (isBusy) {
       return;
     }
 
-    updateSettings({
-      userName: cleanName,
-      theme,
-    });
+    clearMessages();
 
-    setSuccessMessage("Configuración guardada correctamente.");
-  };
+    const cleanName =
+      userName.trim();
 
-  const handleClearIncomes = () => {
-    const confirmed = window.confirm(
-      "¿Seguro que quieres eliminar todos los ingresos?"
+    if (!cleanName) {
+      setErrorMessage(
+        "El nombre de usuario no puede estar vacío."
+      );
+
+      return;
+    }
+
+    setActiveAction(
+      "save-settings"
     );
 
-    if (!confirmed) return;
+    try {
+      const result =
+        await updateSettings({
+          userName: cleanName,
+          theme,
+        });
 
-    clearIncomes();
-    setSuccessMessage("Se eliminaron todos los ingresos.");
-    setErrorMessage("");
+      showResult(
+        result,
+        "Configuración guardada correctamente.",
+        "No se pudo guardar la configuración."
+      );
+    } catch (error) {
+      console.error(
+        "No se pudo guardar la configuración:",
+        error
+      );
+
+      setErrorMessage(
+        "No se pudo guardar la configuración. Volvé a intentarlo."
+      );
+    } finally {
+      setActiveAction("");
+    }
   };
 
-  const handleClearExpenses = () => {
-    const confirmed = window.confirm(
-      "¿Seguro que quieres eliminar todos los gastos?"
-    );
+  const handleClearIncomes =
+    async () => {
+      if (isBusy) {
+        return;
+      }
 
-    if (!confirmed) return;
+      const confirmed =
+        window.confirm(
+          "¿Seguro que querés eliminar todos los ingresos? Esta acción no se puede deshacer."
+        );
 
-    clearExpenses();
-    setSuccessMessage("Se eliminaron todos los gastos.");
-    setErrorMessage("");
-  };
+      if (!confirmed) {
+        return;
+      }
 
-  const handleClearGoals = () => {
-    const confirmed = window.confirm(
-      "¿Seguro que quieres eliminar todos los objetivos?"
-    );
+      clearMessages();
 
-    if (!confirmed) return;
+      setActiveAction(
+        "clear-incomes"
+      );
 
-    clearGoals();
-    setSuccessMessage("Se eliminaron todos los objetivos.");
-    setErrorMessage("");
-  };
+      try {
+        const result =
+          await clearIncomes();
 
-  const handleResetApp = () => {
-    const confirmed = window.confirm(
-      "Esto reiniciará toda la app. ¿Deseas continuar?"
-    );
+        showResult(
+          result,
+          "Se eliminaron todos los ingresos.",
+          "No se pudieron eliminar los ingresos."
+        );
+      } catch (error) {
+        console.error(
+          "No se pudieron eliminar los ingresos:",
+          error
+        );
 
-    if (!confirmed) return;
+        setErrorMessage(
+          "No se pudieron eliminar los ingresos. Volvé a intentarlo."
+        );
+      } finally {
+        setActiveAction("");
+      }
+    };
 
-    resetAppData();
-    setSuccessMessage("La app fue reiniciada correctamente.");
-    setErrorMessage("");
-  };
+  const handleClearExpenses =
+    async () => {
+      if (isBusy) {
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "¿Seguro que querés eliminar todos los gastos? Esta acción no se puede deshacer."
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      clearMessages();
+
+      setActiveAction(
+        "clear-expenses"
+      );
+
+      try {
+        const result =
+          await clearExpenses();
+
+        showResult(
+          result,
+          "Se eliminaron todos los gastos.",
+          "No se pudieron eliminar los gastos."
+        );
+      } catch (error) {
+        console.error(
+          "No se pudieron eliminar los gastos:",
+          error
+        );
+
+        setErrorMessage(
+          "No se pudieron eliminar los gastos. Volvé a intentarlo."
+        );
+      } finally {
+        setActiveAction("");
+      }
+    };
+
+  const handleClearGoals =
+    async () => {
+      if (isBusy) {
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "¿Seguro que querés eliminar todos los objetivos? Esta acción no se puede deshacer."
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      clearMessages();
+
+      setActiveAction(
+        "clear-goals"
+      );
+
+      try {
+        const result =
+          await clearGoals();
+
+        showResult(
+          result,
+          "Se eliminaron todos los objetivos.",
+          "No se pudieron eliminar los objetivos."
+        );
+      } catch (error) {
+        console.error(
+          "No se pudieron eliminar los objetivos:",
+          error
+        );
+
+        setErrorMessage(
+          "No se pudieron eliminar los objetivos. Volvé a intentarlo."
+        );
+      } finally {
+        setActiveAction("");
+      }
+    };
+
+  const handleResetApp =
+    async () => {
+      if (isBusy) {
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "Esto eliminará tus ingresos, gastos, objetivos y categorías personalizadas. ¿Deseás continuar?"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      clearMessages();
+
+      setActiveAction(
+        "reset-app"
+      );
+
+      try {
+        const result =
+          await resetAppData();
+
+        showResult(
+          result,
+          "La aplicación fue reiniciada correctamente.",
+          "No se pudieron restablecer los datos."
+        );
+      } catch (error) {
+        console.error(
+          "No se pudieron restablecer los datos:",
+          error
+        );
+
+        setErrorMessage(
+          "No se pudieron restablecer los datos. Volvé a intentarlo."
+        );
+      } finally {
+        setActiveAction("");
+      }
+    };
 
   return (
-    <div className={styles.page}>
+    <div
+      className={styles.page}
+      aria-busy={isBusy}
+    >
       <div className={styles.header}>
-        <h1 className={styles.title}>Configuración</h1>
+        <h1 className={styles.title}>
+          Configuración
+        </h1>
+
         <p className={styles.subtitle}>
-          Personaliza tu experiencia y administra los datos de la app.
+          Personalizá tu experiencia y
+          administrá los datos de la
+          aplicación.
         </p>
       </div>
 
-      {(errorMessage || successMessage) && (
+      {(errorMessage ||
+        successMessage) && (
         <div
           className={`${styles.message} ${
-            errorMessage ? styles.errorMessage : styles.successMessage
+            errorMessage
+              ? styles.errorMessage
+              : styles.successMessage
           }`}
+          role={
+            errorMessage
+              ? "alert"
+              : "status"
+          }
         >
           <i
             className={`bi ${
-              errorMessage ? "bi-exclamation-circle" : "bi-check-circle"
+              errorMessage
+                ? "bi-exclamation-circle"
+                : "bi-check-circle"
             }`}
           ></i>
-          <span>{errorMessage || successMessage}</span>
+
+          <span>
+            {errorMessage ||
+              successMessage}
+          </span>
         </div>
       )}
 
       <section className={styles.card}>
-        <h2 className={styles.cardTitle}>Perfil y apariencia</h2>
+        <h2
+          className={styles.cardTitle}
+        >
+          Perfil y apariencia
+        </h2>
 
-        <form className={styles.form} onSubmit={handleSave}>
+        <form
+          className={styles.form}
+          onSubmit={handleSave}
+          noValidate
+        >
           <div className={styles.group}>
-            <label>Nombre visible</label>
+            <label htmlFor="settings-name">
+              Nombre visible
+            </label>
+
             <input
+              id="settings-name"
               className={styles.input}
               type="text"
               value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+              onChange={(event) => {
+                setUserName(
+                  event.target.value
+                );
+
+                clearMessages();
+              }}
               placeholder="Ej: More"
+              disabled={isBusy}
             />
           </div>
 
           <div className={styles.group}>
-            <label>Tema</label>
+            <label htmlFor="settings-theme">
+              Tema
+            </label>
+
             <select
+              id="settings-theme"
               className={styles.input}
               value={theme}
-              onChange={(e) => setTheme(e.target.value)}
+              onChange={(event) => {
+                setTheme(
+                  event.target.value
+                );
+
+                clearMessages();
+              }}
+              disabled={isBusy}
             >
-              <option value="light">Claro</option>
-              <option value="dark">Oscuro</option>
+              <option value="light">
+                Claro
+              </option>
+
+              <option value="dark">
+                Oscuro
+              </option>
+
+              <option value="system">
+                Usar configuración del sistema
+              </option>
             </select>
           </div>
 
-          <button className={styles.saveButton} type="submit">
-            Guardar configuración
+          <button
+            className={
+              styles.saveButton
+            }
+            type="submit"
+            disabled={isBusy}
+          >
+            {activeAction ===
+            "save-settings"
+              ? "Guardando..."
+              : "Guardar configuración"}
           </button>
         </form>
       </section>
 
       <section className={styles.card}>
-        <h2 className={styles.cardTitle}>Mantenimiento de datos</h2>
+        <h2
+          className={styles.cardTitle}
+        >
+          Mantenimiento de datos
+        </h2>
 
-        <div className={styles.actionsGrid}>
+        <div
+          className={
+            styles.actionsGrid
+          }
+        >
           <button
-            className={styles.secondaryButton}
+            className={
+              styles.secondaryButton
+            }
             type="button"
-            onClick={handleClearIncomes}
+            onClick={() =>
+              void handleClearIncomes()
+            }
+            disabled={isBusy}
           >
-            Limpiar ingresos
+            {activeAction ===
+            "clear-incomes"
+              ? "Eliminando ingresos..."
+              : "Limpiar ingresos"}
           </button>
 
           <button
-            className={styles.secondaryButton}
+            className={
+              styles.secondaryButton
+            }
             type="button"
-            onClick={handleClearExpenses}
+            onClick={() =>
+              void handleClearExpenses()
+            }
+            disabled={isBusy}
           >
-            Limpiar gastos
+            {activeAction ===
+            "clear-expenses"
+              ? "Eliminando gastos..."
+              : "Limpiar gastos"}
           </button>
 
           <button
-            className={styles.secondaryButton}
+            className={
+              styles.secondaryButton
+            }
             type="button"
-            onClick={handleClearGoals}
+            onClick={() =>
+              void handleClearGoals()
+            }
+            disabled={isBusy}
           >
-            Limpiar objetivos
+            {activeAction ===
+            "clear-goals"
+              ? "Eliminando objetivos..."
+              : "Limpiar objetivos"}
           </button>
 
           <button
-            className={styles.dangerButton}
+            className={
+              styles.dangerButton
+            }
             type="button"
-            onClick={handleResetApp}
+            onClick={() =>
+              void handleResetApp()
+            }
+            disabled={isBusy}
           >
-            Reiniciar toda la app
+            {activeAction ===
+            "reset-app"
+              ? "Reiniciando..."
+              : "Reiniciar toda la app"}
           </button>
         </div>
       </section>

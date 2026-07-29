@@ -25,11 +25,15 @@ function Income() {
     movementUsage,
   } = useContext(FinanceContext);
 
-  const [editingIncome, setEditingIncome] =
-    useState(null);
+  const [
+    editingIncome,
+    setEditingIncome,
+  ] = useState(null);
 
-  const [showPremiumModal, setShowPremiumModal] =
-    useState(false);
+  const [
+    showPremiumModal,
+    setShowPremiumModal,
+  ] = useState(false);
 
   const [fromDate, setFromDate] =
     useState("");
@@ -39,45 +43,76 @@ function Income() {
 
   const filteredIncomes = useMemo(() => {
     return incomes.filter((item) => {
-      if (fromDate && item.date < fromDate) {
+      if (
+        fromDate &&
+        item.date < fromDate
+      ) {
         return false;
       }
 
-      if (toDate && item.date > toDate) {
+      if (
+        toDate &&
+        item.date > toDate
+      ) {
         return false;
       }
 
       return true;
     });
-  }, [incomes, fromDate, toDate]);
+  }, [
+    incomes,
+    fromDate,
+    toDate,
+  ]);
 
   const clearFilters = () => {
     setFromDate("");
     setToDate("");
   };
 
-  const handleUpdateIncome = (updatedIncome) => {
+  const handleUpdateIncome = async (
+    updatedIncome
+  ) => {
     if (!editingIncome) {
       return {
         success: false,
-        message: "No se encontró el ingreso que deseas editar.",
+        message:
+          "No se encontró el ingreso que deseas editar.",
       };
     }
 
-    const result = updateIncome({
-      ...updatedIncome,
-      id: editingIncome.id,
-    });
+    try {
+      const result =
+        await updateIncome({
+          ...updatedIncome,
+          id: editingIncome.id,
+        });
 
-    if (result?.success === false) {
+      if (!result?.success) {
+        return (
+          result || {
+            success: false,
+            message:
+              "No se pudo actualizar el ingreso.",
+          }
+        );
+      }
+
+      setEditingIncome(null);
+
       return result;
+    } catch (error) {
+      console.error(
+        "No se pudo actualizar el ingreso:",
+        error
+      );
+
+      return {
+        success: false,
+        message:
+          "No se pudo actualizar el ingreso. Volvé a intentarlo.",
+      };
     }
-
-    setEditingIncome(null);
-
-    return result || {
-      success: true,
-    };
   };
 
   return (
@@ -105,42 +140,64 @@ function Income() {
 
       <Card title="Lista de ingresos">
         <div className={styles.filters}>
-          <div className={styles.filterGroup}>
+          <div
+            className={
+              styles.filterGroup
+            }
+          >
             <label htmlFor="income-from-date">
               Desde
             </label>
 
             <input
               id="income-from-date"
-              className={styles.filterInput}
+              className={
+                styles.filterInput
+              }
               type="date"
               value={fromDate}
               onChange={(event) =>
-                setFromDate(event.target.value)
+                setFromDate(
+                  event.target.value
+                )
               }
             />
           </div>
 
-          <div className={styles.filterGroup}>
+          <div
+            className={
+              styles.filterGroup
+            }
+          >
             <label htmlFor="income-to-date">
               Hasta
             </label>
 
             <input
               id="income-to-date"
-              className={styles.filterInput}
+              className={
+                styles.filterInput
+              }
               type="date"
               value={toDate}
               onChange={(event) =>
-                setToDate(event.target.value)
+                setToDate(
+                  event.target.value
+                )
               }
             />
           </div>
 
-          <div className={styles.filterActions}>
+          <div
+            className={
+              styles.filterActions
+            }
+          >
             <button
               type="button"
-              className={styles.clearButton}
+              className={
+                styles.clearButton
+              }
               onClick={clearFilters}
             >
               Limpiar filtros
@@ -149,7 +206,8 @@ function Income() {
         </div>
 
         <p className={styles.results}>
-          Mostrando {filteredIncomes.length} de{" "}
+          Mostrando{" "}
+          {filteredIncomes.length} de{" "}
           {incomes.length} ingresos
         </p>
 
@@ -162,16 +220,24 @@ function Income() {
 
       {editingIncome && (
         <Modal
-          onClose={() => setEditingIncome(null)}
+          onClose={() =>
+            setEditingIncome(null)
+          }
         >
-          <h2 className={styles.modalTitle}>
+          <h2
+            className={
+              styles.modalTitle
+            }
+          >
             Editar ingreso
           </h2>
 
           <IncomeForm
             initialData={editingIncome}
             type="income"
-            onAdd={handleUpdateIncome}
+            onAdd={
+              handleUpdateIncome
+            }
           />
         </Modal>
       )}

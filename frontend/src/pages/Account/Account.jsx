@@ -20,23 +20,56 @@ const formatDate = (dateValue) => {
     return "No disponible";
   }
 
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(dateValue));
+  const date =
+    new Date(dateValue);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "Fecha inválida";
+  }
+
+  return new Intl.DateTimeFormat(
+    "es-AR",
+    {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }
+  ).format(date);
 };
 
-const calculateRemainingDays = (expirationDate) => {
+const calculateRemainingDays = (
+  expirationDate
+) => {
   if (!expirationDate) {
     return null;
   }
 
+  const expirationTime =
+    new Date(
+      expirationDate
+    ).getTime();
+
+  if (
+    Number.isNaN(
+      expirationTime
+    )
+  ) {
+    return null;
+  }
+
   const difference =
-    new Date(expirationDate).getTime() - Date.now();
+    expirationTime -
+    Date.now();
 
   return Math.max(
-    Math.ceil(difference / (1000 * 60 * 60 * 24)),
+    Math.ceil(
+      difference /
+        (1000 * 60 * 60 * 24)
+    ),
     0
   );
 };
@@ -44,7 +77,6 @@ const calculateRemainingDays = (expirationDate) => {
 function Account() {
   const {
     currentUser,
-    updateCurrentUser,
     logout,
   } = useAuth();
 
@@ -54,15 +86,31 @@ function Account() {
     movementUsage,
   } = useContext(FinanceContext);
 
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const [name, setName] = useState(
-    currentUser?.name || ""
-  );
+  const [name, setName] =
+    useState(
+      currentUser?.name || ""
+    );
 
-  const [message, setMessage] = useState("");
-  const [errorMessage, setErrorMessage] =
+  const [message, setMessage] =
     useState("");
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  const [
+    isSavingProfile,
+    setIsSavingProfile,
+  ] = useState(false);
+
+  const [
+    isLoggingOut,
+    setIsLoggingOut,
+  ] = useState(false);
 
   const [
     showPremiumModal,
@@ -70,77 +118,167 @@ function Account() {
   ] = useState(false);
 
   useEffect(() => {
-    setName(currentUser?.name || "");
+    setName(
+      currentUser?.name || ""
+    );
   }, [currentUser?.name]);
 
-  const remainingDays = useMemo(
-    () =>
-      calculateRemainingDays(
-        currentUser?.premiumExpiresAt
-      ),
-    [currentUser?.premiumExpiresAt]
-  );
+  const remainingDays =
+    useMemo(
+      () =>
+        calculateRemainingDays(
+          currentUser
+            ?.premiumExpiresAt
+        ),
+      [
+        currentUser
+          ?.premiumExpiresAt,
+      ]
+    );
 
-  const isAdmin = currentUser?.role === "admin";
-  const isPremium = currentUser?.plan === "premium";
+  const isAdmin =
+    currentUser?.role ===
+    "admin";
+
+  const isPremium =
+    currentUser?.plan ===
+    "premium";
 
   const planName = isAdmin
     ? "Cuenta administradora"
     : isPremium
-      ? currentUser.billingCycle === "annual"
+      ? currentUser
+          ?.billingCycle ===
+        "annual"
         ? "Premium anual"
         : "Premium mensual"
       : "Plan gratuito";
 
-  const handleSaveProfile = (event) => {
-    event.preventDefault();
+  const handleSaveProfile =
+    async (event) => {
+      event.preventDefault();
 
-    const cleanName = name.trim();
+      if (isSavingProfile) {
+        return;
+      }
 
-    setMessage("");
-    setErrorMessage("");
+      const cleanName =
+        name.trim();
 
-    if (!cleanName) {
-      setErrorMessage(
-        "El nombre no puede estar vacío."
-      );
-      return;
-    }
+      setMessage("");
+      setErrorMessage("");
 
-    updateCurrentUser({
-      name: cleanName,
-    });
+      if (!cleanName) {
+        setErrorMessage(
+          "El nombre no puede estar vacío."
+        );
 
-    updateSettings({
-      ...settings,
-      userName: cleanName,
-    });
+        return;
+      }
 
-    setMessage(
-      "Los datos de la cuenta se actualizaron correctamente."
-    );
-  };
+      setIsSavingProfile(true);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login", {
-      replace: true,
-    });
-  };
+      try {
+        /*
+         * updateSettings ya actualiza el
+         * perfil en Supabase y refresca
+         * currentUser en AuthContext.
+         */
+        const result =
+          await updateSettings({
+            ...settings,
+            userName: cleanName,
+          });
+
+        if (!result?.success) {
+          setErrorMessage(
+            result?.message ||
+              "No se pudieron actualizar los datos de la cuenta."
+          );
+
+          return;
+        }
+
+        setMessage(
+          result?.message ||
+            "Los datos de la cuenta se actualizaron correctamente."
+        );
+      } catch (error) {
+        console.error(
+          "No se pudo actualizar la cuenta:",
+          error
+        );
+
+        setErrorMessage(
+          "No se pudieron actualizar los datos de la cuenta. Volvé a intentarlo."
+        );
+      } finally {
+        setIsSavingProfile(false);
+      }
+    };
+
+  const handleLogout =
+    async () => {
+      if (isLoggingOut) {
+        return;
+      }
+
+      setMessage("");
+      setErrorMessage("");
+      setIsLoggingOut(true);
+
+      try {
+        const result =
+          await logout();
+
+        if (!result?.success) {
+          setErrorMessage(
+            result?.message ||
+              "No se pudo cerrar la sesión."
+          );
+
+          return;
+        }
+
+        navigate("/login", {
+          replace: true,
+        });
+      } catch (error) {
+        console.error(
+          "No se pudo cerrar la sesión:",
+          error
+        );
+
+        setErrorMessage(
+          "No se pudo cerrar la sesión. Volvé a intentarlo."
+        );
+      } finally {
+        setIsLoggingOut(false);
+      }
+    };
 
   return (
     <section className={styles.page}>
-      <header className={styles.pageHeader}>
+      <header
+        className={
+          styles.pageHeader
+        }
+      >
         <div>
-          <span className={styles.eyebrow}>
+          <span
+            className={
+              styles.eyebrow
+            }
+          >
             Perfil
           </span>
 
           <h1>Mi cuenta</h1>
 
           <p>
-            Consultá tus datos personales, tu plan y el uso
-            mensual de MoneyTrack.
+            Consultá tus datos
+            personales, tu plan y el
+            uso mensual de MoneyTrack.
           </p>
         </div>
 
@@ -163,24 +301,51 @@ function Account() {
         </div>
       </header>
 
-      <div className={styles.accountGrid}>
-        <article className={styles.card}>
-          <div className={styles.cardHeader}>
-            <div className={styles.cardIcon}>
+      <div
+        className={
+          styles.accountGrid
+        }
+      >
+        <article
+          className={styles.card}
+        >
+          <div
+            className={
+              styles.cardHeader
+            }
+          >
+            <div
+              className={
+                styles.cardIcon
+              }
+            >
               <i className="bi bi-person"></i>
             </div>
 
             <div>
-              <h2>Datos personales</h2>
-              <p>Información de tu cuenta.</p>
+              <h2>
+                Datos personales
+              </h2>
+
+              <p>
+                Información de tu
+                cuenta.
+              </p>
             </div>
           </div>
 
           <form
             className={styles.form}
-            onSubmit={handleSaveProfile}
+            onSubmit={
+              handleSaveProfile
+            }
+            noValidate
           >
-            <div className={styles.field}>
+            <div
+              className={
+                styles.field
+              }
+            >
               <label htmlFor="account-name">
                 Nombre
               </label>
@@ -189,13 +354,25 @@ function Account() {
                 id="account-name"
                 type="text"
                 value={name}
-                onChange={(event) =>
-                  setName(event.target.value)
+                onChange={(event) => {
+                  setName(
+                    event.target.value
+                  );
+
+                  setMessage("");
+                  setErrorMessage("");
+                }}
+                disabled={
+                  isSavingProfile
                 }
               />
             </div>
 
-            <div className={styles.field}>
+            <div
+              className={
+                styles.field
+              }
+            >
               <label htmlFor="account-email">
                 Correo electrónico
               </label>
@@ -203,33 +380,56 @@ function Account() {
               <input
                 id="account-email"
                 type="email"
-                value={currentUser?.email || ""}
+                value={
+                  currentUser?.email ||
+                  ""
+                }
                 readOnly
               />
 
               <small>
-                El correo no se puede modificar durante la
-                versión local.
+                El correo se administra
+                mediante Supabase Auth.
               </small>
             </div>
 
-            <div className={styles.field}>
-              <label>ID de usuario</label>
+            <div
+              className={
+                styles.field
+              }
+            >
+              <label>
+                ID de usuario
+              </label>
 
-              <div className={styles.readOnlyValue}>
+              <div
+                className={
+                  styles.readOnlyValue
+                }
+              >
                 {currentUser?.id}
               </div>
             </div>
 
             {errorMessage && (
-              <div className={styles.errorMessage}>
+              <div
+                className={
+                  styles.errorMessage
+                }
+                role="alert"
+              >
                 <i className="bi bi-exclamation-circle"></i>
                 {errorMessage}
               </div>
             )}
 
             {message && (
-              <div className={styles.successMessage}>
+              <div
+                className={
+                  styles.successMessage
+                }
+                role="status"
+              >
                 <i className="bi bi-check-circle"></i>
                 {message}
               </div>
@@ -237,15 +437,29 @@ function Account() {
 
             <button
               type="submit"
-              className={styles.saveButton}
+              className={
+                styles.saveButton
+              }
+              disabled={
+                isSavingProfile ||
+                isLoggingOut
+              }
             >
-              Guardar cambios
+              {isSavingProfile
+                ? "Guardando..."
+                : "Guardar cambios"}
             </button>
           </form>
         </article>
 
-        <article className={styles.card}>
-          <div className={styles.cardHeader}>
+        <article
+          className={styles.card}
+        >
+          <div
+            className={
+              styles.cardHeader
+            }
+          >
             <div
               className={`${styles.cardIcon} ${styles.planIcon}`}
             >
@@ -254,62 +468,104 @@ function Account() {
 
             <div>
               <h2>Suscripción</h2>
-              <p>Información de tu plan actual.</p>
+
+              <p>
+                Información de tu plan
+                actual.
+              </p>
             </div>
           </div>
 
-          <div className={styles.subscription}>
-            <div className={styles.subscriptionRow}>
-              <span>Plan actual</span>
-              <strong>{planName}</strong>
+          <div
+            className={
+              styles.subscription
+            }
+          >
+            <div
+              className={
+                styles.subscriptionRow
+              }
+            >
+              <span>
+                Plan actual
+              </span>
+
+              <strong>
+                {planName}
+              </strong>
             </div>
 
             {!isAdmin && (
               <>
-                <div className={styles.subscriptionRow}>
+                <div
+                  className={
+                    styles.subscriptionRow
+                  }
+                >
                   <span>Estado</span>
 
                   <strong>
                     {isPremium
                       ? "Premium activo"
-                      : currentUser?.premiumStatus ===
+                      : currentUser
+                            ?.premiumStatus ===
                           "expired"
                         ? "Premium vencido"
                         : "Plan gratuito activo"}
                   </strong>
                 </div>
 
-                <div className={styles.subscriptionRow}>
-                  <span>Fecha de activación</span>
+                <div
+                  className={
+                    styles.subscriptionRow
+                  }
+                >
+                  <span>
+                    Fecha de activación
+                  </span>
 
                   <strong>
                     {isPremium
                       ? formatDate(
-                          currentUser?.premiumActivatedAt
+                          currentUser
+                            ?.premiumActivatedAt
                         )
                       : "No corresponde"}
                   </strong>
                 </div>
 
-                <div className={styles.subscriptionRow}>
-                  <span>Fecha de vencimiento</span>
+                <div
+                  className={
+                    styles.subscriptionRow
+                  }
+                >
+                  <span>
+                    Fecha de vencimiento
+                  </span>
 
                   <strong>
                     {isPremium
                       ? formatDate(
-                          currentUser?.premiumExpiresAt
+                          currentUser
+                            ?.premiumExpiresAt
                         )
                       : "No corresponde"}
                   </strong>
                 </div>
 
                 {isPremium &&
-                  remainingDays !== null && (
-                    <div className={styles.remainingDays}>
+                  remainingDays !==
+                    null && (
+                    <div
+                      className={
+                        styles.remainingDays
+                      }
+                    >
                       <i className="bi bi-calendar-check"></i>
 
                       <span>
-                        {remainingDays === 0
+                        {remainingDays ===
+                        0
                           ? "Tu plan vence hoy."
                           : `Quedan ${remainingDays} días de Premium.`}
                       </span>
@@ -321,9 +577,13 @@ function Account() {
             {!isAdmin && (
               <button
                 type="button"
-                className={styles.premiumButton}
+                className={
+                  styles.premiumButton
+                }
                 onClick={() =>
-                  setShowPremiumModal(true)
+                  setShowPremiumModal(
+                    true
+                  )
                 }
               >
                 <i className="bi bi-whatsapp"></i>
@@ -344,9 +604,17 @@ function Account() {
         }
       />
 
-      <article className={styles.securityCard}>
+      <article
+        className={
+          styles.securityCard
+        }
+      >
         <div>
-          <div className={styles.securityIcon}>
+          <div
+            className={
+              styles.securityIcon
+            }
+          >
             <i className="bi bi-box-arrow-right"></i>
           </div>
 
@@ -354,27 +622,39 @@ function Account() {
             <h2>Cerrar sesión</h2>
 
             <p>
-              Cerrá la sesión actual en este dispositivo.
+              Cerrá la sesión actual
+              en este dispositivo.
             </p>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={() =>
+            void handleLogout()
+          }
+          disabled={
+            isLoggingOut ||
+            isSavingProfile
+          }
         >
-          Cerrar sesión
+          {isLoggingOut
+            ? "Cerrando sesión..."
+            : "Cerrar sesión"}
         </button>
       </article>
 
-      {showPremiumModal && !isAdmin && (
-        <PremiumLimitModal
-          usage={movementUsage}
-          onClose={() =>
-            setShowPremiumModal(false)
-          }
-        />
-      )}
+      {showPremiumModal &&
+        !isAdmin && (
+          <PremiumLimitModal
+            usage={movementUsage}
+            onClose={() =>
+              setShowPremiumModal(
+                false
+              )
+            }
+          />
+        )}
     </section>
   );
 }

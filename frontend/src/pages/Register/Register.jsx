@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   Link,
   Navigate,
@@ -6,6 +7,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+
 import styles from "../Login/Auth.module.css";
 
 const INITIAL_FORM = {
@@ -16,17 +18,48 @@ const INITIAL_FORM = {
 };
 
 function Register() {
-  const [formData, setFormData] = useState(INITIAL_FORM);
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [formData, setFormData] =
+    useState(INITIAL_FORM);
+
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
 
   const {
     register,
     isAuthenticated,
     isAdmin,
+    loading,
   } = useAuth();
 
   const navigate = useNavigate();
+
+  if (loading) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.formSection}>
+          <div className={styles.card}>
+            <div className={styles.header}>
+              <span className={styles.eyebrow}>
+                MoneyTrack
+              </span>
+
+              <h2>Cargando</h2>
+
+              <p>
+                Estamos verificando la sesión.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   if (isAuthenticated) {
     return (
@@ -58,7 +91,12 @@ function Register() {
       return "Todos los campos son obligatorios.";
     }
 
-    if (!formData.email.includes("@")) {
+    const validEmail =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        formData.email.trim()
+      );
+
+    if (!validEmail) {
       return "Ingresá un correo electrónico válido.";
     }
 
@@ -66,71 +104,116 @@ function Register() {
       return "La contraseña debe tener al menos 8 caracteres.";
     }
 
-    if (formData.password !== formData.confirmPassword) {
+    if (
+      formData.password !==
+      formData.confirmPassword
+    ) {
       return "Las contraseñas no coinciden.";
     }
 
     return "";
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const validationMessage = validateForm();
+    const validationMessage =
+      validateForm();
 
     if (validationMessage) {
       setErrorMessage(validationMessage);
       return;
     }
 
-    const result = register({
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-    });
+    setIsSubmitting(true);
+    setErrorMessage("");
 
-    if (!result.success) {
-      setErrorMessage(result.message);
-      return;
+    try {
+      const result = await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (!result.success) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      if (
+        result.requiresEmailConfirmation
+      ) {
+        window.alert(result.message);
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      navigate("/", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        "Error al crear la cuenta:",
+        error
+      );
+
+      setErrorMessage(
+        "No se pudo crear la cuenta. Volvé a intentarlo."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    navigate("/", {
-      replace: true,
-    });
   };
 
   return (
     <main className={styles.page}>
       <section className={styles.presentation}>
-        <div className={styles.presentationContent}>
+        <div
+          className={styles.presentationContent}
+        >
           <div className={styles.logo}>
             <i className="bi bi-wallet2"></i>
             <span>MoneyTrack</span>
           </div>
 
           <h1>
-            Empezá a tomar el control de tu dinero.
+            Empezá a tomar el control de tu
+            dinero.
           </h1>
 
           <p>
-            Creá tu cuenta gratuita y administrá tus
-            finanzas personales desde cualquier lugar.
+            Creá tu cuenta gratuita y administrá
+            tus finanzas personales desde
+            cualquier lugar.
           </p>
 
           <div className={styles.featureList}>
             <div>
               <i className="bi bi-check-circle-fill"></i>
-              <span>Hasta 100 movimientos mensuales</span>
+
+              <span>
+                Hasta 100 movimientos mensuales
+              </span>
             </div>
 
             <div>
               <i className="bi bi-check-circle-fill"></i>
-              <span>Reportes en Excel y PDF</span>
+
+              <span>
+                Reportes en Excel y PDF
+              </span>
             </div>
 
             <div>
               <i className="bi bi-check-circle-fill"></i>
-              <span>Sin necesidad de tarjeta</span>
+
+              <span>
+                Sin necesidad de tarjeta
+              </span>
             </div>
           </div>
         </div>
@@ -165,7 +248,9 @@ function Register() {
                 Nombre
               </label>
 
-              <div className={styles.inputWrapper}>
+              <div
+                className={styles.inputWrapper}
+              >
                 <i className="bi bi-person"></i>
 
                 <input
@@ -176,6 +261,7 @@ function Register() {
                   onChange={handleChange}
                   placeholder="Tu nombre"
                   autoComplete="name"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -185,7 +271,9 @@ function Register() {
                 Correo electrónico
               </label>
 
-              <div className={styles.inputWrapper}>
+              <div
+                className={styles.inputWrapper}
+              >
                 <i className="bi bi-envelope"></i>
 
                 <input
@@ -196,6 +284,7 @@ function Register() {
                   onChange={handleChange}
                   placeholder="nombre@correo.com"
                   autoComplete="email"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -205,25 +294,43 @@ function Register() {
                 Contraseña
               </label>
 
-              <div className={styles.inputWrapper}>
+              <div
+                className={styles.inputWrapper}
+              >
                 <i className="bi bi-lock"></i>
 
                 <input
                   id="register-password"
-                  type={showPassword ? "text" : "password"}
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Mínimo 8 caracteres"
                   autoComplete="new-password"
+                  disabled={isSubmitting}
                 />
 
                 <button
                   type="button"
-                  className={styles.passwordButton}
-                  onClick={() =>
-                    setShowPassword((currentValue) => !currentValue)
+                  className={
+                    styles.passwordButton
                   }
+                  onClick={() =>
+                    setShowPassword(
+                      (currentValue) =>
+                        !currentValue
+                    )
+                  }
+                  aria-label={
+                    showPassword
+                      ? "Ocultar contraseña"
+                      : "Mostrar contraseña"
+                  }
+                  disabled={isSubmitting}
                 >
                   <i
                     className={
@@ -237,27 +344,42 @@ function Register() {
             </div>
 
             <div className={styles.field}>
-              <label htmlFor="register-confirm-password">
+              <label
+                htmlFor="register-confirm-password"
+              >
                 Confirmar contraseña
               </label>
 
-              <div className={styles.inputWrapper}>
+              <div
+                className={styles.inputWrapper}
+              >
                 <i className="bi bi-shield-lock"></i>
 
                 <input
                   id="register-confirm-password"
-                  type={showPassword ? "text" : "password"}
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
                   name="confirmPassword"
-                  value={formData.confirmPassword}
+                  value={
+                    formData.confirmPassword
+                  }
                   onChange={handleChange}
                   placeholder="Repetí tu contraseña"
                   autoComplete="new-password"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
 
             {errorMessage && (
-              <div className={styles.errorMessage}>
+              <div
+                className={
+                  styles.errorMessage
+                }
+              >
                 <i className="bi bi-exclamation-circle"></i>
                 <span>{errorMessage}</span>
               </div>
@@ -265,15 +387,22 @@ function Register() {
 
             <button
               type="submit"
-              className={styles.primaryButton}
+              className={
+                styles.primaryButton
+              }
+              disabled={isSubmitting}
             >
-              Crear cuenta gratuita
+              {isSubmitting
+                ? "Creando cuenta..."
+                : "Crear cuenta gratuita"}
             </button>
           </form>
 
           <p className={styles.footerText}>
             ¿Ya tenés una cuenta?{" "}
-            <Link to="/login">Iniciar sesión</Link>
+            <Link to="/login">
+              Iniciar sesión
+            </Link>
           </p>
         </div>
       </section>

@@ -1,323 +1,638 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
+import { supabase } from "../lib/supabase";
+
 export const AuthContext = createContext(null);
 
-const USERS_STORAGE_KEY = "moneytrack_auth_users";
-const SESSION_STORAGE_KEY = "moneytrack_auth_session";
 const DEFAULT_MONTHLY_LIMIT = 100;
 
-const createDefaultUsers = () => [
-  {
-    id: "moneytrack-admin",
-    name: "Administradora",
-    email: "admin@moneytrack.com",
-    password: "Admin123!",
-    role: "admin",
-    plan: "premium",
-    billingCycle: "annual",
-    premiumStatus: "active",
-    premiumActivatedAt: new Date().toISOString(),
-    premiumExpiresAt: null,
-    monthlyLimit: null,
-    accountStatus: "active",
-    lastPaymentAmount: 0,
-    lastPaymentAt: null,
-    lastPaymentPlan: null,
-    adminNote: "",
-    paymentHistory: [],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "moneytrack-demo",
-    name: "Usuario Demo",
-    email: "demo@moneytrack.com",
-    password: "Demo123!",
-    role: "user",
-    plan: "free",
-    billingCycle: null,
-    premiumStatus: "inactive",
-    premiumActivatedAt: null,
-    premiumExpiresAt: null,
-    monthlyLimit: DEFAULT_MONTHLY_LIMIT,
-    accountStatus: "active",
-    lastPaymentAmount: 0,
-    lastPaymentAt: null,
-    lastPaymentPlan: null,
-    adminNote: "",
-    paymentHistory: [],
-    createdAt: new Date().toISOString(),
-  },
-];
+const getSubscription = (subscriptions) => {
+  if (Array.isArray(subscriptions)) {
+    return subscriptions[0] || null;
+  }
 
-const normalizeUser = (user) => {
-  const isAdmin = user.role === "admin";
+  return subscriptions || null;
+};
+
+const mapPayment = (payment) => ({
+  id: payment.id,
+  userId: payment.user_id,
+  subscriptionId: payment.subscription_id,
+  planType: payment.plan_type,
+  amount: Number(payment.amount) || 0,
+  status: payment.status,
+  paymentDate: payment.payment_date,
+  periodStartAt: payment.period_start_at,
+  periodEndAt: payment.period_end_at,
+  note: payment.note || "",
+  createdBy: payment.created_by,
+  createdAt: payment.created_at,
+});
+
+const mapProfile = (
+  profile,
+  payments = [],
+  notes = []
+) => {
+  if (!profile) {
+    return null;
+  }
+
+  const subscription = getSubscription(
+    profile.subscriptions
+  );
+
+  const isAdmin = profile.role === "admin";
+
+  const paymentHistory = payments
+    .filter(
+      (payment) => payment.user_id === profile.id
+    )
+    .map(mapPayment);
+
+  const userNotes = notes.filter(
+    (note) => note.user_id === profile.id
+  );
 
   return {
-    ...user,
+    id: profile.id,
+    name: profile.name || "Usuario",
+    email: profile.email || "",
     role: isAdmin ? "admin" : "user",
+    accountStatus:
+      profile.account_status || "active",
+    currency: profile.currency || "ARS",
+    theme: profile.theme || "system",
+    createdAt: profile.created_at,
+    updatedAt: profile.updated_at,
+
     plan: isAdmin
       ? "premium"
-      : user.plan === "premium"
-        ? "premium"
-        : "free",
+      : subscription?.plan || "free",
+
     billingCycle: isAdmin
       ? "annual"
-      : user.billingCycle || null,
+      : subscription?.billing_cycle || null,
+
     premiumStatus: isAdmin
       ? "active"
-      : user.premiumStatus || "inactive",
-    premiumActivatedAt: user.premiumActivatedAt || null,
-    premiumExpiresAt: user.premiumExpiresAt || null,
+      : subscription?.premium_status || "inactive",
+
+    premiumActivatedAt:
+      subscription?.premium_activated_at || null,
+
+    premiumExpiresAt:
+      subscription?.premium_expires_at || null,
+
     monthlyLimit: isAdmin
       ? null
-      : Number(user.monthlyLimit) || DEFAULT_MONTHLY_LIMIT,
-    accountStatus: user.accountStatus || "active",
-    lastPaymentAmount: Number(user.lastPaymentAmount) || 0,
-    lastPaymentAt: user.lastPaymentAt || null,
-    lastPaymentPlan: user.lastPaymentPlan || null,
+      : Number(subscription?.monthly_limit) ||
+        DEFAULT_MONTHLY_LIMIT,
+
+    lastPaymentAmount:
+      Number(subscription?.last_payment_amount) || 0,
+
+    lastPaymentAt:
+      subscription?.last_payment_at || null,
+
+    lastPaymentPlan:
+      paymentHistory[0]?.planType || null,
+
+    subscriptionId:
+      subscription?.id || null,
+
     adminNote:
-      typeof user.adminNote === "string"
-        ? user.adminNote
-        : "",
-    paymentHistory: Array.isArray(user.paymentHistory)
-      ? user.paymentHistory
-      : [],
-    createdAt: user.createdAt || new Date().toISOString(),
+      userNotes[0]?.note || "",
+
+    paymentHistory,
+    adminNotes: userNotes.map((note) => ({
+      id: note.id,
+      note: note.note,
+      createdBy: note.created_by,
+      createdAt: note.created_at,
+    })),
   };
 };
 
-const loadUsers = () => {
-  try {
-    const storedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+const getAuthErrorMessage = (error) => {
+  const message =
+    error?.message?.toLowerCase() || "";
 
-    if (storedUsers) {
-      const parsedUsers = JSON.parse(storedUsers);
-
-      if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
-        return parsedUsers.map(normalizeUser);
-      }
-    }
-  } catch (error) {
-    console.error("No se pudieron recuperar los usuarios:", error);
+  if (
+    message.includes(
+      "invalid login credentials"
+    )
+  ) {
+    return "El correo o la contraseña son incorrectos.";
   }
 
-  const defaultUsers = createDefaultUsers().map(normalizeUser);
+  if (
+    message.includes("email not confirmed")
+  ) {
+    return "Tenés que confirmar tu correo electrónico antes de iniciar sesión.";
+  }
 
-  localStorage.setItem(
-    USERS_STORAGE_KEY,
-    JSON.stringify(defaultUsers)
+  if (
+    message.includes("user already registered") ||
+    message.includes("already been registered")
+  ) {
+    return "Ya existe una cuenta con ese correo.";
+  }
+
+  if (
+    message.includes("password should be")
+  ) {
+    return "La contraseña no cumple con los requisitos de seguridad.";
+  }
+
+  if (
+    message.includes("signup is disabled")
+  ) {
+    return "El registro de usuarios se encuentra deshabilitado.";
+  }
+
+  if (
+    message.includes("rate limit")
+  ) {
+    return "Se realizaron demasiados intentos. Esperá unos minutos y volvé a probar.";
+  }
+
+  return (
+    error?.message ||
+    "Ocurrió un error inesperado."
   );
-
-  return defaultUsers;
-};
-
-const loadSession = () => {
-  try {
-    const storedSession = localStorage.getItem(
-      SESSION_STORAGE_KEY
-    );
-
-    if (!storedSession) {
-      return null;
-    }
-
-    const parsedSession = JSON.parse(storedSession);
-
-    return parsedSession?.userId || null;
-  } catch (error) {
-    console.error("No se pudo recuperar la sesión:", error);
-    return null;
-  }
-};
-
-const removePassword = (user) => {
-  if (!user) {
-    return null;
-  }
-
-  const { password, ...safeUser } = user;
-
-  return safeUser;
-};
-
-const generateId = () => {
-  if (window.crypto?.randomUUID) {
-    return window.crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random()
-    .toString(16)
-    .slice(2)}`;
-};
-
-const addMonthsSafely = (dateValue, months) => {
-  const originalDate = new Date(dateValue);
-  const originalDay = originalDate.getDate();
-
-  const result = new Date(originalDate);
-
-  result.setDate(1);
-  result.setMonth(result.getMonth() + months);
-
-  const lastDayOfTargetMonth = new Date(
-    result.getFullYear(),
-    result.getMonth() + 1,
-    0
-  ).getDate();
-
-  result.setDate(
-    Math.min(originalDay, lastDayOfTargetMonth)
-  );
-
-  return result;
 };
 
 function AuthProvider({ children }) {
-  const [userRecords, setUserRecords] = useState(loadUsers);
-  const [currentUserId, setCurrentUserId] = useState(loadSession);
+  const [session, setSession] =
+    useState(null);
 
-  useEffect(() => {
-    localStorage.setItem(
-      USERS_STORAGE_KEY,
-      JSON.stringify(userRecords)
-    );
-  }, [userRecords]);
+  const [authUser, setAuthUser] =
+    useState(null);
 
-  useEffect(() => {
-    if (currentUserId) {
-      localStorage.setItem(
-        SESSION_STORAGE_KEY,
-        JSON.stringify({
-          userId: currentUserId,
-        })
+  const [currentUser, setCurrentUser] =
+    useState(null);
+
+  const [users, setUsers] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [usersLoading, setUsersLoading] =
+    useState(false);
+
+  const fetchCurrentProfile = useCallback(
+    async (userId) => {
+      if (!userId) {
+        return {
+          success: false,
+          user: null,
+          message:
+            "No se encontró el usuario autenticado.",
+        };
+      }
+
+      /*
+       * Actualiza la suscripción si Premium
+       * ya venció.
+       */
+      const { error: refreshError } =
+        await supabase.rpc(
+          "refresh_my_subscription"
+        );
+
+      if (refreshError) {
+        console.error(
+          "No se pudo revisar la suscripción:",
+          refreshError
+        );
+      }
+
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select(`
+          id,
+          name,
+          email,
+          role,
+          account_status,
+          currency,
+          theme,
+          created_at,
+          updated_at,
+          subscriptions (
+            id,
+            user_id,
+            plan,
+            billing_cycle,
+            premium_status,
+            monthly_limit,
+            premium_activated_at,
+            premium_expires_at,
+            last_payment_amount,
+            last_payment_at,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error(
+          "No se pudo cargar el perfil:",
+          profileError
+        );
+
+        return {
+          success: false,
+          user: null,
+          message:
+            "No se pudo cargar la información de la cuenta.",
+        };
+      }
+
+      if (!profile) {
+        return {
+          success: false,
+          user: null,
+          message:
+            "No se encontró el perfil asociado a esta cuenta.",
+        };
+      }
+
+      const mappedUser =
+        mapProfile(profile);
+
+      return {
+        success: true,
+        user: mappedUser,
+      };
+    },
+    []
+  );
+
+  const fetchAdminUsers =
+    useCallback(async () => {
+      setUsersLoading(true);
+
+      try {
+        const [
+          profilesResult,
+          paymentsResult,
+          notesResult,
+        ] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select(`
+              id,
+              name,
+              email,
+              role,
+              account_status,
+              currency,
+              theme,
+              created_at,
+              updated_at,
+              subscriptions (
+                id,
+                user_id,
+                plan,
+                billing_cycle,
+                premium_status,
+                monthly_limit,
+                premium_activated_at,
+                premium_expires_at,
+                last_payment_amount,
+                last_payment_at,
+                created_at,
+                updated_at
+              )
+            `)
+            .eq("role", "user")
+            .order("created_at", {
+              ascending: false,
+            }),
+
+          supabase
+            .from("payments")
+            .select(`
+              id,
+              user_id,
+              subscription_id,
+              plan_type,
+              amount,
+              status,
+              payment_date,
+              period_start_at,
+              period_end_at,
+              note,
+              created_by,
+              created_at
+            `)
+            .order("payment_date", {
+              ascending: false,
+            }),
+
+          supabase
+            .from("admin_notes")
+            .select(`
+              id,
+              user_id,
+              note,
+              created_by,
+              created_at
+            `)
+            .order("created_at", {
+              ascending: false,
+            }),
+        ]);
+
+        if (profilesResult.error) {
+          throw profilesResult.error;
+        }
+
+        if (paymentsResult.error) {
+          throw paymentsResult.error;
+        }
+
+        if (notesResult.error) {
+          throw notesResult.error;
+        }
+
+        const mappedUsers = (
+          profilesResult.data || []
+        ).map((profile) =>
+          mapProfile(
+            profile,
+            paymentsResult.data || [],
+            notesResult.data || []
+          )
+        );
+
+        setUsers(mappedUsers);
+
+        return {
+          success: true,
+          users: mappedUsers,
+        };
+      } catch (error) {
+        console.error(
+          "No se pudieron cargar los usuarios:",
+          error
+        );
+
+        setUsers([]);
+
+        return {
+          success: false,
+          users: [],
+          message:
+            "No se pudieron cargar los usuarios.",
+        };
+      } finally {
+        setUsersLoading(false);
+      }
+    }, []);
+
+  const loadSessionUser = useCallback(
+    async (
+      nextSession,
+      options = {}
+    ) => {
+      const {
+        showLoading = true,
+      } = options;
+
+      if (showLoading) {
+        setLoading(true);
+      }
+
+      setSession(nextSession);
+      setAuthUser(
+        nextSession?.user || null
       );
-    } else {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
-  }, [currentUserId]);
+
+      if (!nextSession?.user) {
+        setCurrentUser(null);
+        setUsers([]);
+        setLoading(false);
+
+        return {
+          success: true,
+          user: null,
+        };
+      }
+
+      const profileResult =
+        await fetchCurrentProfile(
+          nextSession.user.id
+        );
+
+      if (!profileResult.success) {
+        setCurrentUser(null);
+        setUsers([]);
+        setLoading(false);
+
+        return profileResult;
+      }
+
+      const loadedUser =
+        profileResult.user;
+
+      if (
+        loadedUser.accountStatus ===
+        "blocked"
+      ) {
+        await supabase.auth.signOut();
+
+        setSession(null);
+        setAuthUser(null);
+        setCurrentUser(null);
+        setUsers([]);
+        setLoading(false);
+
+        return {
+          success: false,
+          user: null,
+          message:
+            "Esta cuenta se encuentra bloqueada.",
+        };
+      }
+
+      setCurrentUser(loadedUser);
+
+      if (
+        loadedUser.role === "admin"
+      ) {
+        await fetchAdminUsers();
+      } else {
+        setUsers([]);
+      }
+
+      setLoading(false);
+
+      return {
+        success: true,
+        user: loadedUser,
+      };
+    },
+    [
+      fetchAdminUsers,
+      fetchCurrentProfile,
+    ]
+  );
 
   useEffect(() => {
-    const checkExpiredSubscriptions = () => {
-      const now = Date.now();
+    let isMounted = true;
 
-      setUserRecords((currentUsers) => {
-        let hasChanges = false;
+    const initializeAuth = async () => {
+      const {
+        data,
+        error,
+      } = await supabase.auth.getSession();
 
-        const updatedUsers = currentUsers.map((user) => {
-          const expirationTime = user.premiumExpiresAt
-            ? new Date(user.premiumExpiresAt).getTime()
-            : null;
+      if (!isMounted) {
+        return;
+      }
 
-          if (
-            user.role === "user" &&
-            user.plan === "premium" &&
-            expirationTime &&
-            expirationTime <= now
-          ) {
-            hasChanges = true;
+      if (error) {
+        console.error(
+          "No se pudo recuperar la sesión:",
+          error
+        );
 
-            return {
-              ...user,
-              plan: "free",
-              billingCycle: null,
-              premiumStatus: "expired",
-              monthlyLimit:
-                Number(user.monthlyLimit) ||
-                DEFAULT_MONTHLY_LIMIT,
-            };
-          }
+        setLoading(false);
+        return;
+      }
 
-          return user;
-        });
-
-        return hasChanges ? updatedUsers : currentUsers;
-      });
+      await loadSessionUser(data.session);
     };
 
-    checkExpiredSubscriptions();
+    initializeAuth();
 
-    const intervalId = window.setInterval(
-      checkExpiredSubscriptions,
-      60000
+    const {
+      data: authListener,
+    } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        window.setTimeout(() => {
+          if (isMounted) {
+            void loadSessionUser(
+              nextSession,
+              {
+                showLoading: false,
+              }
+            );
+          }
+        }, 0);
+      }
     );
 
     return () => {
-      window.clearInterval(intervalId);
+      isMounted = false;
+
+      authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadSessionUser]);
 
-  const currentUserRecord = useMemo(
-    () =>
-      userRecords.find(
-        (user) => user.id === currentUserId
-      ) || null,
-    [userRecords, currentUserId]
-  );
+  const login = async ({
+    email,
+    password,
+  }) => {
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
 
-  const currentUser = useMemo(
-    () => removePassword(currentUserRecord),
-    [currentUserRecord]
-  );
-
-  const users = useMemo(
-    () => userRecords.map(removePassword),
-    [userRecords]
-  );
-
-  const login = ({ email, password }) => {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const user = userRecords.find(
-      (storedUser) =>
-        storedUser.email.toLowerCase() === normalizedEmail
-    );
-
-    if (!user || user.password !== password) {
+    if (
+      !normalizedEmail ||
+      !password
+    ) {
       return {
         success: false,
-        message: "El correo o la contraseña son incorrectos.",
+        message:
+          "Ingresá tu correo electrónico y contraseña.",
       };
     }
 
-    if (user.accountStatus === "blocked") {
+    const {
+      data,
+      error,
+    } =
+      await supabase.auth.signInWithPassword(
+        {
+          email: normalizedEmail,
+          password,
+        }
+      );
+
+    if (error) {
       return {
         success: false,
-        message: "Esta cuenta se encuentra bloqueada.",
+        message:
+          getAuthErrorMessage(error),
       };
     }
 
-    setCurrentUserId(user.id);
+    const sessionResult =
+      await loadSessionUser(
+        data.session
+      );
+
+    if (!sessionResult.success) {
+      return sessionResult;
+    }
 
     return {
       success: true,
-      user: removePassword(user),
+      user: sessionResult.user,
     };
   };
 
-  const register = ({ name, email, password }) => {
-    const normalizedName = name.trim();
-    const normalizedEmail = email.trim().toLowerCase();
+  const register = async ({
+    name,
+    email,
+    password,
+  }) => {
+    const normalizedName =
+      name.trim();
 
-    if (!normalizedName || !normalizedEmail || !password) {
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
+
+    if (
+      !normalizedName ||
+      !normalizedEmail ||
+      !password
+    ) {
       return {
         success: false,
-        message: "Todos los campos son obligatorios.",
+        message:
+          "Todos los campos son obligatorios.",
       };
     }
 
     const validEmail =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        normalizedEmail
+      );
 
     if (!validEmail) {
       return {
         success: false,
-        message: "Ingresá un correo electrónico válido.",
+        message:
+          "Ingresá un correo electrónico válido.",
       };
     }
 
@@ -329,61 +644,138 @@ function AuthProvider({ children }) {
       };
     }
 
-    const emailExists = userRecords.some(
-      (user) =>
-        user.email.toLowerCase() === normalizedEmail
-    );
+    const {
+      data,
+      error,
+    } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        data: {
+          name: normalizedName,
+        },
+        emailRedirectTo:
+          `${window.location.origin}/login`,
+      },
+    });
 
-    if (emailExists) {
+    if (error) {
       return {
         success: false,
-        message: "Ya existe una cuenta con ese correo.",
+        message:
+          getAuthErrorMessage(error),
       };
     }
 
-    const newUser = normalizeUser({
-      id: generateId(),
-      name: normalizedName,
-      email: normalizedEmail,
-      password,
-      role: "user",
-      plan: "free",
-      billingCycle: null,
-      premiumStatus: "inactive",
-      premiumActivatedAt: null,
-      premiumExpiresAt: null,
-      monthlyLimit: DEFAULT_MONTHLY_LIMIT,
-      accountStatus: "active",
-      lastPaymentAmount: 0,
-      lastPaymentAt: null,
-      lastPaymentPlan: null,
-      adminNote: "",
-      paymentHistory: [],
-      createdAt: new Date().toISOString(),
-    });
+    /*
+     * Si la confirmación de correo está
+     * activada, Supabase crea el usuario pero
+     * no devuelve una sesión todavía.
+     */
+    if (!data.session) {
+      return {
+        success: true,
+        user: null,
+        requiresEmailConfirmation: true,
+        message:
+          "La cuenta fue creada. Revisá tu correo para confirmarla antes de iniciar sesión.",
+      };
+    }
 
-    setUserRecords((currentUsers) => [
-      ...currentUsers,
-      newUser,
-    ]);
+    const sessionResult =
+      await loadSessionUser(
+        data.session
+      );
 
-    setCurrentUserId(newUser.id);
+    if (!sessionResult.success) {
+      return sessionResult;
+    }
 
     return {
       success: true,
-      user: removePassword(newUser),
+      user: sessionResult.user,
+      requiresEmailConfirmation: false,
+      message:
+        "La cuenta fue creada correctamente.",
     };
   };
 
-  const logout = () => {
-    setCurrentUserId(null);
-  };
+  const logout = async () => {
+    const { error } =
+      await supabase.auth.signOut();
 
-  const updateCurrentUser = (changes) => {
-    if (!currentUserId) {
+    if (error) {
       return {
         success: false,
-        message: "No hay una sesión activa.",
+        message:
+          getAuthErrorMessage(error),
+      };
+    }
+
+    setSession(null);
+    setAuthUser(null);
+    setCurrentUser(null);
+    setUsers([]);
+
+    return {
+      success: true,
+    };
+  };
+
+  const refreshCurrentUser =
+    useCallback(async () => {
+      if (!authUser?.id) {
+        return {
+          success: false,
+          message:
+            "No hay una sesión activa.",
+        };
+      }
+
+      const result =
+        await fetchCurrentProfile(
+          authUser.id
+        );
+
+      if (result.success) {
+        setCurrentUser(result.user);
+      }
+
+      return result;
+    }, [
+      authUser?.id,
+      fetchCurrentProfile,
+    ]);
+
+  const refreshUsers =
+    useCallback(async () => {
+      if (
+        currentUser?.role !== "admin"
+      ) {
+        setUsers([]);
+
+        return {
+          success: false,
+          users: [],
+          message:
+            "Se requieren permisos de administración.",
+        };
+      }
+
+      return fetchAdminUsers();
+    }, [
+      currentUser?.role,
+      fetchAdminUsers,
+    ]);
+
+  const updateCurrentUser = async (
+    changes
+  ) => {
+    if (!currentUser?.id) {
+      return {
+        success: false,
+        message:
+          "No hay una sesión activa.",
       };
     }
 
@@ -395,226 +787,186 @@ function AuthProvider({ children }) {
     if (!cleanName) {
       return {
         success: false,
-        message: "El nombre no puede estar vacío.",
+        message:
+          "El nombre no puede estar vacío.",
       };
     }
 
-    setUserRecords((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === currentUserId
-          ? {
-              ...user,
-              name: cleanName,
-            }
-          : user
-      )
-    );
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        name: cleanName,
+      })
+      .eq("id", currentUser.id);
+
+    if (error) {
+      return {
+        success: false,
+        message:
+          "No se pudo actualizar la cuenta.",
+      };
+    }
+
+    const result =
+      await refreshCurrentUser();
 
     return {
-      success: true,
-      message: "Cuenta actualizada correctamente.",
+      success: result.success,
+      message: result.success
+        ? "Cuenta actualizada correctamente."
+        : result.message,
     };
   };
 
-  const activatePremium = (
+  const activatePremium = async (
     userId,
     billingCycle,
     paymentAmount = 0,
     note = ""
   ) => {
-    if (
-      billingCycle !== "monthly" &&
-      billingCycle !== "annual"
-    ) {
-      return {
-        success: false,
-        message: "El tipo de plan no es válido.",
-      };
-    }
-
-    const targetUser = userRecords.find(
-      (user) => user.id === userId && user.role !== "admin"
+    const numericAmount = Number(
+      paymentAmount
     );
 
-    if (!targetUser) {
-      return {
-        success: false,
-        message: "No se encontró el usuario.",
-      };
-    }
-
-    const numericAmount = Number(paymentAmount);
-
     if (
-      Number.isNaN(numericAmount) ||
+      !Number.isFinite(numericAmount) ||
       numericAmount < 0
     ) {
       return {
         success: false,
-        message: "El monto ingresado no es válido.",
+        message:
+          "El monto ingresado no es válido.",
       };
     }
 
-    const now = new Date();
-    const months = billingCycle === "annual" ? 12 : 1;
-
-    setUserRecords((currentUsers) =>
-      currentUsers.map((user) => {
-        if (user.id !== userId || user.role === "admin") {
-          return user;
-        }
-
-        const currentExpiration = user.premiumExpiresAt
-          ? new Date(user.premiumExpiresAt)
-          : null;
-
-        const hasActiveFuturePeriod =
-          user.plan === "premium" &&
-          currentExpiration &&
-          currentExpiration > now;
-
-        const periodStartAt = hasActiveFuturePeriod
-          ? currentExpiration
-          : now;
-
-        const periodEndAt = addMonthsSafely(
-          periodStartAt,
-          months
-        );
-
-        const paymentRecord = {
-          id: generateId(),
-          planType: billingCycle,
-          amount: numericAmount,
-          paymentDate: now.toISOString(),
-          periodStartAt: periodStartAt.toISOString(),
-          periodEndAt: periodEndAt.toISOString(),
-          status: "approved",
-          note:
-            typeof note === "string"
-              ? note.trim()
-              : "",
-        };
-
-        return {
-          ...user,
-          plan: "premium",
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "admin_activate_premium",
+      {
+        target_user_id: userId,
+        selected_billing_cycle:
           billingCycle,
-          premiumStatus: "active",
-          premiumActivatedAt:
-            hasActiveFuturePeriod && user.premiumActivatedAt
-              ? user.premiumActivatedAt
-              : now.toISOString(),
-          premiumExpiresAt: periodEndAt.toISOString(),
-          lastPaymentAmount: numericAmount,
-          lastPaymentAt: now.toISOString(),
-          lastPaymentPlan: billingCycle,
-          adminNote:
-            typeof note === "string" && note.trim()
-              ? note.trim()
-              : user.adminNote || "",
-          paymentHistory: [
-            paymentRecord,
-            ...(user.paymentHistory || []),
-          ].slice(0, 100),
-        };
-      })
+        payment_amount:
+          numericAmount,
+        payment_note:
+          typeof note === "string"
+            ? note.trim()
+            : "",
+      }
     );
 
-    return {
-      success: true,
-      message:
-        billingCycle === "annual"
-          ? "Premium anual activado correctamente."
-          : "Premium mensual activado correctamente.",
-    };
-  };
+    if (error) {
+      console.error(
+        "No se pudo activar Premium:",
+        error
+      );
 
-  const removePremium = (userId) => {
-    const targetUser = userRecords.find(
-      (user) => user.id === userId && user.role !== "admin"
-    );
-
-    if (!targetUser) {
       return {
         success: false,
-        message: "No se encontró el usuario.",
+        message:
+          "No se pudo activar o renovar Premium.",
       };
     }
 
-    setUserRecords((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId && user.role !== "admin"
-          ? {
-              ...user,
-              plan: "free",
-              billingCycle: null,
-              premiumStatus: "inactive",
-              premiumActivatedAt: null,
-              premiumExpiresAt: null,
-              monthlyLimit:
-                Number(user.monthlyLimit) ||
-                DEFAULT_MONTHLY_LIMIT,
-            }
-          : user
-      )
-    );
+    await fetchAdminUsers();
 
-    return {
-      success: true,
-      message: "El plan Premium fue retirado.",
-    };
+    return (
+      data || {
+        success: true,
+        message:
+          "Premium actualizado correctamente.",
+      }
+    );
   };
 
-  const toggleAccountStatus = (userId) => {
-    const targetUser = userRecords.find(
-      (user) => user.id === userId && user.role !== "admin"
+  const removePremium = async (
+    userId
+  ) => {
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "admin_remove_premium",
+      {
+        target_user_id: userId,
+      }
     );
 
-    if (!targetUser) {
+    if (error) {
+      console.error(
+        "No se pudo quitar Premium:",
+        error
+      );
+
       return {
         success: false,
-        message: "No se encontró el usuario.",
+        message:
+          "No se pudo quitar el plan Premium.",
       };
     }
 
-    const newStatus =
-      targetUser.accountStatus === "blocked"
-        ? "active"
-        : "blocked";
+    await fetchAdminUsers();
 
-    setUserRecords((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId && user.role !== "admin"
-          ? {
-              ...user,
-              accountStatus: newStatus,
-            }
-          : user
-      )
+    return (
+      data || {
+        success: true,
+        message:
+          "El plan Premium fue retirado.",
+      }
+    );
+  };
+
+  const toggleAccountStatus = async (
+    userId
+  ) => {
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "admin_toggle_account_status",
+      {
+        target_user_id: userId,
+      }
+    );
+
+    if (error) {
+      console.error(
+        "No se pudo cambiar el estado:",
+        error
+      );
+
+      return {
+        success: false,
+        message:
+          "No se pudo cambiar el estado de la cuenta.",
+      };
+    }
+
+    await fetchAdminUsers();
+
+    return (
+      data || {
+        success: true,
+        message:
+          "Estado actualizado correctamente.",
+      }
+    );
+  };
+
+  const changeMonthlyLimit = async (
+    userId,
+    newLimit
+  ) => {
+    const numericLimit = Number(
+      newLimit
     );
 
     if (
-      newStatus === "blocked" &&
-      currentUserId === userId
+      !Number.isInteger(numericLimit) ||
+      numericLimit < 1
     ) {
-      setCurrentUserId(null);
-    }
-
-    return {
-      success: true,
-      accountStatus: newStatus,
-      message:
-        newStatus === "blocked"
-          ? "La cuenta fue bloqueada."
-          : "La cuenta fue habilitada.",
-    };
-  };
-
-  const changeMonthlyLimit = (userId, newLimit) => {
-    const numericLimit = Number(newLimit);
-
-    if (!Number.isInteger(numericLimit) || numericLimit < 1) {
       return {
         success: false,
         message:
@@ -622,93 +974,151 @@ function AuthProvider({ children }) {
       };
     }
 
-    const targetUser = userRecords.find(
-      (user) => user.id === userId && user.role !== "admin"
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "admin_change_monthly_limit",
+      {
+        target_user_id: userId,
+        new_monthly_limit:
+          numericLimit,
+      }
     );
 
-    if (!targetUser) {
+    if (error) {
+      console.error(
+        "No se pudo cambiar el límite:",
+        error
+      );
+
       return {
         success: false,
-        message: "No se encontró el usuario.",
+        message:
+          "No se pudo actualizar el límite mensual.",
       };
     }
 
-    setUserRecords((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId && user.role !== "admin"
-          ? {
-              ...user,
-              monthlyLimit: numericLimit,
-            }
-          : user
-      )
-    );
+    await fetchAdminUsers();
 
-    return {
-      success: true,
-      message: "Límite mensual actualizado correctamente.",
-    };
+    return (
+      data || {
+        success: true,
+        message:
+          "Límite mensual actualizado.",
+      }
+    );
   };
 
-  const updateAdminNote = (userId, note) => {
-    const targetUser = userRecords.find(
-      (user) => user.id === userId && user.role !== "admin"
-    );
-
-    if (!targetUser) {
-      return {
-        success: false,
-        message: "No se encontró el usuario.",
-      };
-    }
-
+  const updateAdminNote = async (
+    userId,
+    note
+  ) => {
     const cleanNote =
       typeof note === "string"
         ? note.trim()
         : "";
 
-    setUserRecords((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId && user.role !== "admin"
-          ? {
-              ...user,
-              adminNote: cleanNote,
-            }
-          : user
-      )
+    if (!cleanNote) {
+      return {
+        success: false,
+        message:
+          "La nota no puede estar vacía.",
+      };
+    }
+
+    const {
+      data,
+      error,
+    } = await supabase.rpc(
+      "admin_save_note",
+      {
+        target_user_id: userId,
+        note_text: cleanNote,
+      }
     );
 
-    return {
-      success: true,
-      message: "Nota administrativa guardada.",
-    };
+    if (error) {
+      console.error(
+        "No se pudo guardar la nota:",
+        error
+      );
+
+      return {
+        success: false,
+        message:
+          "No se pudo guardar la nota administrativa.",
+      };
+    }
+
+    await fetchAdminUsers();
+
+    return (
+      data || {
+        success: true,
+        message:
+          "Nota administrativa guardada.",
+      }
+    );
   };
 
-  const value = {
-    users,
-    currentUser,
-    isAuthenticated: Boolean(currentUser),
-    isAdmin: currentUser?.role === "admin",
-    login,
-    register,
-    logout,
-    updateCurrentUser,
-    activatePremium,
-    removePremium,
-    toggleAccountStatus,
-    changeMonthlyLimit,
-    updateAdminNote,
-  };
+  const value = useMemo(
+    () => ({
+      session,
+      authUser,
+      currentUser,
+      users,
+      loading,
+      usersLoading,
+
+      isAuthenticated:
+        Boolean(
+          session &&
+          currentUser
+        ),
+
+      isAdmin:
+        currentUser?.role ===
+        "admin",
+
+      login,
+      register,
+      logout,
+      updateCurrentUser,
+
+      refreshCurrentUser,
+      refreshUsers,
+
+      activatePremium,
+      removePremium,
+      toggleAccountStatus,
+      changeMonthlyLimit,
+      updateAdminNote,
+    }),
+    [
+      session,
+      authUser,
+      currentUser,
+      users,
+      loading,
+      usersLoading,
+      refreshCurrentUser,
+      refreshUsers,
+    ]
+  );
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={value}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(

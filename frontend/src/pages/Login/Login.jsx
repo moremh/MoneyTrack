@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   Link,
   Navigate,
@@ -7,6 +8,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+
 import styles from "./Auth.module.css";
 
 const INITIAL_FORM = {
@@ -15,18 +17,49 @@ const INITIAL_FORM = {
 };
 
 function Login() {
-  const [formData, setFormData] = useState(INITIAL_FORM);
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [formData, setFormData] =
+    useState(INITIAL_FORM);
+
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
 
   const {
     login,
     isAuthenticated,
     isAdmin,
+    loading,
   } = useAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  if (loading) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.formSection}>
+          <div className={styles.card}>
+            <div className={styles.header}>
+              <span className={styles.eyebrow}>
+                MoneyTrack
+              </span>
+
+              <h2>Cargando sesión</h2>
+
+              <p>
+                Estamos verificando tu cuenta.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   if (isAuthenticated) {
     return (
@@ -48,85 +81,98 @@ function Login() {
     setErrorMessage("");
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!formData.email.trim() || !formData.password) {
+    if (
+      !formData.email.trim() ||
+      !formData.password
+    ) {
       setErrorMessage(
         "Ingresá tu correo electrónico y contraseña."
       );
+
       return;
     }
 
-    const result = login(formData);
+    setIsSubmitting(true);
+    setErrorMessage("");
 
-    if (!result.success) {
-      setErrorMessage(result.message);
-      return;
+    try {
+      const result = await login(formData);
+
+      if (!result.success) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      const previousRoute =
+        location.state?.from;
+
+      const destination =
+        result.user?.role === "admin"
+          ? "/admin"
+          : previousRoute || "/";
+
+      navigate(destination, {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        "Error al iniciar sesión:",
+        error
+      );
+
+      setErrorMessage(
+        "No se pudo iniciar sesión. Volvé a intentarlo."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const previousRoute = location.state?.from;
-
-    const destination =
-      result.user.role === "admin"
-        ? "/admin"
-        : previousRoute || "/";
-
-    navigate(destination, {
-      replace: true,
-    });
-  };
-
-  const loadDemoUser = () => {
-    setFormData({
-      email: "demo@moneytrack.com",
-      password: "Demo123!",
-    });
-
-    setErrorMessage("");
-  };
-
-  const loadAdminUser = () => {
-    setFormData({
-      email: "admin@moneytrack.com",
-      password: "Admin123!",
-    });
-
-    setErrorMessage("");
   };
 
   return (
     <main className={styles.page}>
       <section className={styles.presentation}>
-        <div className={styles.presentationContent}>
+        <div
+          className={styles.presentationContent}
+        >
           <div className={styles.logo}>
             <i className="bi bi-wallet2"></i>
             <span>MoneyTrack</span>
           </div>
 
           <h1>
-            Organizá tus finanzas de una manera simple.
+            Organizá tus finanzas de una manera
+            simple.
           </h1>
 
           <p>
-            Registrá tus ingresos, controlá tus gastos y
-            cumplí tus objetivos desde un solo lugar.
+            Registrá tus ingresos, controlá tus
+            gastos y cumplí tus objetivos desde
+            un solo lugar.
           </p>
 
           <div className={styles.featureList}>
             <div>
               <i className="bi bi-check-circle-fill"></i>
-              <span>Control de ingresos y gastos</span>
+              <span>
+                Control de ingresos y gastos
+              </span>
             </div>
 
             <div>
               <i className="bi bi-check-circle-fill"></i>
-              <span>Reportes y estadísticas</span>
+              <span>
+                Reportes y estadísticas
+              </span>
             </div>
 
             <div>
               <i className="bi bi-check-circle-fill"></i>
-              <span>Objetivos de ahorro</span>
+              <span>
+                Objetivos de ahorro
+              </span>
             </div>
           </div>
         </div>
@@ -147,7 +193,8 @@ function Login() {
             <h2>Iniciar sesión</h2>
 
             <p>
-              Ingresá tus datos para acceder a tu cuenta.
+              Ingresá tus datos para acceder a tu
+              cuenta.
             </p>
           </div>
 
@@ -161,7 +208,9 @@ function Login() {
                 Correo electrónico
               </label>
 
-              <div className={styles.inputWrapper}>
+              <div
+                className={styles.inputWrapper}
+              >
                 <i className="bi bi-envelope"></i>
 
                 <input
@@ -172,6 +221,7 @@ function Login() {
                   onChange={handleChange}
                   placeholder="nombre@correo.com"
                   autoComplete="email"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -181,30 +231,43 @@ function Login() {
                 Contraseña
               </label>
 
-              <div className={styles.inputWrapper}>
+              <div
+                className={styles.inputWrapper}
+              >
                 <i className="bi bi-lock"></i>
 
                 <input
                   id="login-password"
-                  type={showPassword ? "text" : "password"}
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Ingresá tu contraseña"
                   autoComplete="current-password"
+                  disabled={isSubmitting}
                 />
 
                 <button
                   type="button"
-                  className={styles.passwordButton}
+                  className={
+                    styles.passwordButton
+                  }
                   onClick={() =>
-                    setShowPassword((currentValue) => !currentValue)
+                    setShowPassword(
+                      (currentValue) =>
+                        !currentValue
+                    )
                   }
                   aria-label={
                     showPassword
                       ? "Ocultar contraseña"
                       : "Mostrar contraseña"
                   }
+                  disabled={isSubmitting}
                 >
                   <i
                     className={
@@ -218,7 +281,11 @@ function Login() {
             </div>
 
             {errorMessage && (
-              <div className={styles.errorMessage}>
+              <div
+                className={
+                  styles.errorMessage
+                }
+              >
                 <i className="bi bi-exclamation-circle"></i>
                 <span>{errorMessage}</span>
               </div>
@@ -226,35 +293,22 @@ function Login() {
 
             <button
               type="submit"
-              className={styles.primaryButton}
+              className={
+                styles.primaryButton
+              }
+              disabled={isSubmitting}
             >
-              Iniciar sesión
+              {isSubmitting
+                ? "Iniciando sesión..."
+                : "Iniciar sesión"}
             </button>
           </form>
 
-          <div className={styles.demoSection}>
-            <p>Usuarios de prueba</p>
-
-            <div className={styles.demoButtons}>
-              <button
-                type="button"
-                onClick={loadDemoUser}
-              >
-                Usuario gratuito
-              </button>
-
-              <button
-                type="button"
-                onClick={loadAdminUser}
-              >
-                Administradora
-              </button>
-            </div>
-          </div>
-
           <p className={styles.footerText}>
             ¿Todavía no tenés una cuenta?{" "}
-            <Link to="/register">Registrate gratis</Link>
+            <Link to="/register">
+              Registrate gratis
+            </Link>
           </p>
         </div>
       </section>
