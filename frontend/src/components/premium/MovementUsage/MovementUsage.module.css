@@ -1,0 +1,186 @@
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.premiumCard {
+  border-color: rgba(245, 158, 11, 0.4);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 158, 11, 0.08),
+      transparent 55%
+    ),
+    var(--surface);
+}
+
+.limitReachedCard {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 14px;
+  font-size: 1.25rem;
+}
+
+.premiumCard .icon {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.content {
+  min-width: 0;
+  flex: 1;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-light);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.freeBadge,
+.premiumBadge {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.freeBadge {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.premiumBadge {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.progressTrack {
+  height: 9px;
+  margin-top: 16px;
+  overflow: hidden;
+  background: var(--surface-soft);
+  border-radius: 999px;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.normalProgress {
+  background: var(--primary);
+}
+
+.warningProgress {
+  background: var(--warning);
+}
+
+.dangerProgress {
+  background: var(--danger);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.footer p,
+.premiumCard p {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.88rem;
+}
+
+.premiumCard p {
+  margin-top: 12px;
+}
+
+.premiumButton {
+  min-height: 38px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  color: #ffffff;
+  background: var(--primary);
+  border: none;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.premiumButton:hover {
+  opacity: 0.9;
+}
+
+body[data-theme="dark"] .freeBadge {
+  color: #e2e8f0;
+  background: #334155;
+}
+
+body[data-theme="dark"] .premiumBadge {
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.4);
+}
+
+@media (max-width: 650px) {
+  .card {
+    padding: 17px;
+  }
+
+  .header,
+  .footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .freeBadge,
+  .premiumBadge {
+    align-self: flex-start;
+  }
+
+  .premiumButton {
+    width: 100%;
+  }
+}

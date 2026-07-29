@@ -1,0 +1,325 @@
+.page {
+  display: grid;
+  gap: 24px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pageHeader h1 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.pageHeader p {
+  margin: 0;
+  color: var(--text-light);
+}
+
+.planBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.freeBadge {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.premiumBadge {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.accountGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 20px;
+}
+
+.card {
+  padding: 26px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 25px;
+}
+
+.cardIcon,
+.securityIcon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 14px;
+  font-size: 1.2rem;
+}
+
+.planIcon {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.cardHeader h2,
+.securityCard h2 {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.cardHeader p,
+.securityCard p {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.88rem;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.field input,
+.readOnlyValue {
+  min-height: 48px;
+  width: 100%;
+  padding: 0 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  outline: none;
+}
+
+.field input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.field input:read-only,
+.readOnlyValue {
+  display: flex;
+  align-items: center;
+  color: var(--text-light);
+  background: var(--surface-soft);
+}
+
+.field small {
+  color: var(--text-light);
+  font-size: 0.78rem;
+}
+
+.saveButton,
+.premiumButton {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 17px;
+  border: none;
+  border-radius: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.saveButton {
+  color: #ffffff;
+  background: var(--primary);
+}
+
+.premiumButton {
+  width: 100%;
+  margin-top: 8px;
+  color: #ffffff;
+  background: #16a34a;
+}
+
+.saveButton:hover,
+.premiumButton:hover {
+  opacity: 0.9;
+}
+
+.errorMessage,
+.successMessage {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 13px;
+  border-radius: 11px;
+  font-size: 0.87rem;
+}
+
+.errorMessage {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.successMessage {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+
+.subscription {
+  display: grid;
+  gap: 15px;
+}
+
+.subscriptionRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subscriptionRow span {
+  color: var(--text-light);
+  font-size: 0.87rem;
+}
+
+.subscriptionRow strong {
+  color: var(--text);
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.remainingDays {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 11px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.securityCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.securityCard > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.securityCard button {
+  min-height: 42px;
+  padding: 0 15px;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+body[data-theme="dark"] .freeBadge {
+  color: #e2e8f0;
+  background: #334155;
+}
+
+body[data-theme="dark"] .premiumBadge,
+body[data-theme="dark"] .remainingDays {
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.4);
+}
+
+body[data-theme="dark"] .errorMessage {
+  color: #fecaca;
+  background: rgba(153, 27, 27, 0.35);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+body[data-theme="dark"] .successMessage {
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.35);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+@media (max-width: 950px) {
+  .accountGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .pageHeader,
+  .securityCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planBadge {
+    align-self: flex-start;
+  }
+
+  .securityCard button {
+    width: 100%;
+  }
+
+  .subscriptionRow {
+    flex-direction: column;
+  }
+
+  .subscriptionRow strong {
+    text-align: left;
+  }
+}

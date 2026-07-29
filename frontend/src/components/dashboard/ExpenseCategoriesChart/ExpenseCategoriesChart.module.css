@@ -1,0 +1,16 @@
+.chartWrapper {
+  width: 100%;
+}
+
+.emptyState {
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-light);
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 20px;
+}

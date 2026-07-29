@@ -1,0 +1,94 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.title {
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.modalTitle {
+  margin: 0 0 20px;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+  align-items: end;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filterGroup label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.filterInput {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  transition: var(--transition);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.filterInput:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.filterActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.clearButton {
+  border: none;
+  background: var(--neutral-button-bg);
+  color: var(--neutral-button-text);
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.clearButton:hover {
+  filter: brightness(0.97);
+}
+
+.results {
+  margin: 0 0 16px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filterActions {
+    justify-content: stretch;
+  }
+
+  .clearButton {
+    width: 100%;
+  }
+}

@@ -1,0 +1,166 @@
+.sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  min-height: calc(100vh - 72px);
+  position: sticky;
+  top: 72px;
+  background-color: #081631;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px 14px;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.sidebarCollapsed {
+  width: 84px;
+}
+
+.logo {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 38px;
+  padding: 0 12px;
+}
+
+.logo i {
+  flex-shrink: 0;
+  color: #60a5fa;
+}
+
+.logo h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.sidebarCollapsed .logo {
+  justify-content: center;
+  padding: 0;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.link {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  color: #cbd5e1;
+  border-radius: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.link i {
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.link:hover {
+  color: white;
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.active {
+  color: white;
+  background: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.32);
+}
+
+.sidebarCollapsed .link {
+  justify-content: center;
+  padding: 12px 10px;
+}
+
+.sidebarCollapsed .link i {
+  width: auto;
+}
+
+.footer {
+  margin-top: 24px;
+  padding: 18px 6px 0;
+  border-top: 1px solid #21314f;
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: #2563eb;
+  border-radius: 50%;
+  font-weight: 800;
+}
+
+.userInfo {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.userInfo strong,
+.userInfo span {
+  max-width: 165px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userInfo strong {
+  color: #ffffff;
+  font-size: 0.88rem;
+}
+
+.userInfo span {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.role {
+  display: inline-flex;
+  margin-top: 12px;
+  padding: 6px 9px;
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.premiumRole {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.sidebarCollapsed .footer {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebarCollapsed .user {
+  justify-content: center;
+}

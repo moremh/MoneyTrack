@@ -1,0 +1,12 @@
+.container {
+  display: flex;
+  min-height: calc(100vh - 72px);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px;
+  background: var(--background);
+  overflow-x: hidden;
+}

@@ -1,0 +1,77 @@
+.tableContainer {
+  max-height: 320px;
+  overflow: auto;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--text);
+}
+
+.thead th {
+  position: sticky;
+  top: 0;
+  background: #2563eb;
+  color: white;
+  text-align: left;
+  padding: 14px 16px;
+  z-index: 2;
+}
+
+.row td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
+}
+
+.row:hover {
+  background: var(--surface-soft);
+}
+
+.amount {
+  white-space: nowrap;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.actionsCell {
+  width: 90px;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.actions button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text);
+  transition: var(--transition);
+}
+
+.actions button:hover {
+  color: var(--primary);
+}
+
+.tableContainer::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+  background: #2563eb;
+  border-radius: 10px;
+}
