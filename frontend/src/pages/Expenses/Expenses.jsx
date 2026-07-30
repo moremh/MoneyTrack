@@ -140,70 +140,56 @@ function Expenses() {
 
       <Card title="Lista de gastos">
         <div className={styles.filters}>
-          <div
-            className={
-              styles.filterGroup
-            }
-          >
-            <label htmlFor="expense-from-date">
-              Desde
-            </label>
+  <div className={styles.filterGroup}>
+    <label htmlFor="expense-from-date">
+      Desde
+    </label>
 
-            <input
-              id="expense-from-date"
-              className={
-                styles.filterInput
-              }
-              type="date"
-              value={fromDate}
-              onChange={(event) =>
-                setFromDate(
-                  event.target.value
-                )
-              }
-            />
-          </div>
+    <div className={styles.dateControl}>
+      <input
+        id="expense-from-date"
+        className={styles.filterInput}
+        type="date"
+        value={fromDate}
+        onChange={(event) =>
+          setFromDate(
+            event.target.value
+          )
+        }
+      />
+    </div>
+  </div>
 
-          <div
-            className={
-              styles.filterGroup
-            }
-          >
-            <label htmlFor="expense-to-date">
-              Hasta
-            </label>
+  <div className={styles.filterGroup}>
+    <label htmlFor="expense-to-date">
+      Hasta
+    </label>
 
-            <input
-              id="expense-to-date"
-              className={
-                styles.filterInput
-              }
-              type="date"
-              value={toDate}
-              onChange={(event) =>
-                setToDate(
-                  event.target.value
-                )
-              }
-            />
-          </div>
+    <div className={styles.dateControl}>
+      <input
+        id="expense-to-date"
+        className={styles.filterInput}
+        type="date"
+        value={toDate}
+        onChange={(event) =>
+          setToDate(
+            event.target.value
+          )
+        }
+      />
+    </div>
+  </div>
 
-          <div
-            className={
-              styles.filterActions
-            }
-          >
-            <button
-              type="button"
-              className={
-                styles.clearButton
-              }
-              onClick={clearFilters}
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        </div>
+  <div className={styles.filterActions}>
+    <button
+      type="button"
+      className={styles.clearButton}
+      onClick={clearFilters}
+    >
+      Limpiar filtros
+    </button>
+  </div>
+</div>
 
         <p className={styles.results}>
           Mostrando{" "}

@@ -193,26 +193,46 @@ function Dashboard() {
           </div>
 
           <div className={styles.dateFilters}>
-            <div className={styles.filterGroup}>
-              <label>Desde</label>
-              <input
-                className={styles.filterInput}
-                type="date"
-                value={fromDate}
-                onChange={(e) => handleFromDateChange(e.target.value)}
-              />
-            </div>
+  <div className={styles.filterGroup}>
+    <label htmlFor="dashboard-from-date">
+      Desde
+    </label>
 
-            <div className={styles.filterGroup}>
-              <label>Hasta</label>
-              <input
-                className={styles.filterInput}
-                type="date"
-                value={toDate}
-                onChange={(e) => handleToDateChange(e.target.value)}
-              />
-            </div>
-          </div>
+    <div className={styles.dateControl}>
+      <input
+        id="dashboard-from-date"
+        className={styles.filterInput}
+        type="date"
+        value={fromDate}
+        onChange={(event) =>
+          handleFromDateChange(
+            event.target.value
+          )
+        }
+      />
+    </div>
+  </div>
+
+  <div className={styles.filterGroup}>
+    <label htmlFor="dashboard-to-date">
+      Hasta
+    </label>
+
+    <div className={styles.dateControl}>
+      <input
+        id="dashboard-to-date"
+        className={styles.filterInput}
+        type="date"
+        value={toDate}
+        onChange={(event) =>
+          handleToDateChange(
+            event.target.value
+          )
+        }
+      />
+    </div>
+  </div>
+</div>
         </div>
 
         <p className={styles.periodText}>{periodText}</p>

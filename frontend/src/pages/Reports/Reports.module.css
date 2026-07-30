@@ -12,14 +12,18 @@
 
 .title {
   margin: 0;
+
+  color: var(--text);
+
   font-size: 2.1rem;
   font-weight: 700;
-  color: var(--text);
 }
 
 .subtitle {
   margin: 0;
+
   color: var(--text-light);
+
   font-size: 1rem;
 }
 
@@ -27,72 +31,132 @@
 .chartCard,
 .summaryCard {
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  border: 1px solid var(--border);
 }
 
 .filtersCard {
+  width: 100%;
+  min-width: 0;
+
   padding: 20px;
+
+  overflow: hidden;
 }
 
 .filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr))
+    auto;
   gap: 16px;
   align-items: end;
+
+  width: 100%;
+  min-width: 0;
 }
 
 .filterGroup {
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  width: 100%;
+  min-width: 0;
+
+  overflow: hidden;
 }
 
 .filterGroup label {
-  font-weight: 600;
   color: var(--text);
+  font-weight: 600;
 }
 
 .filterInput {
+  box-sizing: border-box;
+
+  display: block;
+
   width: 100%;
-  padding: 12px 14px;
+  min-width: 0;
+  max-width: 100%;
+  height: 44px;
+
+  padding: 0 12px;
+
+  overflow: hidden;
+
+  color: var(--text);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   outline: none;
+
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 44px;
+
   transition: var(--transition);
-  background: var(--surface);
-  color: var(--text);
+}
+
+.filterInput[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.filterInput[type="date"]::-webkit-date-and-time-value {
+  display: block;
+
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+
+  padding: 0;
+  margin: 0;
+
+  line-height: 44px;
+  text-align: left;
 }
 
 .filterInput:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.15);
 }
 
 .filterActions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .clearButton,
 .exportButton {
-  border: none;
-  border-radius: 12px;
-  padding: 12px 18px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
+  width: auto;
+
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+
+  padding: 11px 16px;
+
+  border: none;
+  border-radius: 12px;
+
+  font-weight: 600;
+  white-space: nowrap;
+
+  cursor: pointer;
+  transition: var(--transition);
 }
 
 .clearButton {
-  background: var(--neutral-button-bg);
   color: var(--neutral-button-text);
+  background: var(--neutral-button-bg);
 }
 
 .clearButton:hover {
@@ -100,8 +164,8 @@
 }
 
 .exportButton {
+  color: #ffffff;
   background: #16a34a;
-  color: white;
 }
 
 .exportButton:hover {
@@ -114,15 +178,17 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
   gap: 18px;
 }
 
 .summaryCard {
-  padding: 22px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+
+  padding: 22px;
 }
 
 .label {
@@ -132,8 +198,10 @@
 
 .value {
   margin: 0;
-  font-size: 1.8rem;
+
   color: var(--text);
+
+  font-size: 1.8rem;
 }
 
 .chartCard {
@@ -142,14 +210,19 @@
 
 .cardTitle {
   margin: 0 0 18px;
+
+  color: var(--text);
+
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--text);
 }
 
 .chartBox {
   width: 100%;
+  min-width: 0;
   min-height: 340px;
+
+  overflow: hidden;
 }
 
 .bottomGrid {
@@ -166,42 +239,50 @@
 
 .categoryItem {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
+
   padding: 14px 16px;
-  border-radius: 12px;
+
   background: var(--surface-soft);
   border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .categoryName {
-  font-weight: 600;
   color: var(--text);
+  font-weight: 600;
 }
 
 .categoryValue {
-  font-weight: 700;
   color: var(--primary);
+
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .emptyState {
   min-height: 220px;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
+
+  padding: 20px;
+
   color: var(--text-light);
   background: var(--surface-soft);
   border: 1px dashed var(--border);
   border-radius: 14px;
-  padding: 20px;
+
+  text-align: center;
 }
 
 @media (max-width: 1100px) {
   .summaryGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
   }
 
   .bottomGrid {
@@ -215,18 +296,34 @@
   }
 
   .filterActions {
-    justify-content: stretch;
+    justify-content: center;
   }
 
   .clearButton,
   .exportButton {
-    width: 100%;
-    justify-content: center;
+    width: auto;
   }
 }
 
 @media (max-width: 640px) {
   .summaryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .filtersCard {
+    padding: 18px;
+  }
+
+  .filterActions {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .clearButton,
+  .exportButton {
+    flex: 0 0 auto;
+    padding: 10px 14px;
+
+    font-size: 0.9rem;
   }
 }

@@ -354,7 +354,6 @@ function IncomeForm({
           )}
         </select>
       </div>
-
       <div
   className={`${styles.group} ${styles.dateGroup}`}
 >
@@ -362,18 +361,20 @@ function IncomeForm({
     Fecha
   </label>
 
-  <input
-    id={`${type}-date`}
-    className={`${styles.input} ${styles.dateInput}`}
-    type="date"
-    value={date}
-    onChange={(event) =>
-      setDate(
-        event.target.value
-      )
-    }
-    disabled={isSubmitting}
-  />
+  <div className={styles.dateControl}>
+    <input
+      id={`${type}-date`}
+      className={`${styles.input} ${styles.dateInput}`}
+      type="date"
+      value={date}
+      onChange={(event) =>
+        setDate(
+          event.target.value
+        )
+      }
+      disabled={isSubmitting}
+    />
+  </div>
 </div>
 
 <div className={styles.actions}>

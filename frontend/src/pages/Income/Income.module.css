@@ -2,69 +2,198 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+
+  width: 100%;
+  min-width: 0;
 }
 
 .title {
+  margin: 0;
+
+  color: var(--text);
+
   font-size: 2.1rem;
   font-weight: 700;
-  color: var(--text);
-  margin: 0;
 }
 
 .modalTitle {
   margin: 0 0 20px;
+
+  color: var(--text);
+
   font-size: 1.9rem;
   font-weight: 700;
-  color: var(--text);
 }
 
+/*
+ * Dos fechas compactas en la misma fila.
+ * El botón queda debajo y centrado.
+ */
 .filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 18px;
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 150px)
+    );
+  justify-content: center;
   align-items: end;
+  gap: 12px;
+
+  width: min(100%, 312px);
+  min-width: 0;
+
+  margin: 0 auto 18px;
 }
 
 .filterGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
+
+  width: 100%;
+  min-width: 0;
 }
 
 .filterGroup label {
-  font-weight: 600;
   color: var(--text);
+
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dateControl {
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 42px;
+
+  overflow: hidden;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+
+  transition: var(--transition);
+}
+
+.dateControl:focus-within {
+  border-color: var(--primary);
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.15);
 }
 
 .filterInput {
+  box-sizing: border-box;
+
+  display: block;
+
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+
   width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  outline: none;
-  transition: var(--transition);
-  background: var(--surface);
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+
+  padding: 0 6px;
+  margin: 0;
+
+  overflow: hidden;
+
   color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+
+  font-family: inherit;
+  font-size: 14px;
+  line-height: normal;
+  text-align: center;
+
+  cursor: pointer;
+
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.filterInput:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+.filterInput[type="date"]::-webkit-date-and-time-value {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+  margin: 0;
+
+  text-align: center;
+}
+
+.filterInput[type="date"]::-webkit-datetime-edit {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+
+  text-align: center;
+}
+
+.filterInput[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+}
+
+.filterInput[type="date"]::-webkit-calendar-picker-indicator {
+  flex: 0 0 auto;
+
+  width: 17px;
+  height: 17px;
+
+  margin: 0 0 0 2px;
+  padding: 0;
+
+  cursor: pointer;
 }
 
 .filterActions {
+  grid-column: 1 / -1;
+
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+
+  width: 100%;
+  margin-top: 2px;
 }
 
 .clearButton {
-  border: none;
-  background: var(--neutral-button-bg);
+  width: auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px 16px;
+
   color: var(--neutral-button-text);
-  border-radius: 12px;
-  padding: 12px 18px;
+  background: var(--neutral-button-bg);
+  border: none;
+  border-radius: 11px;
+
+  font-family: inherit;
+  font-size: 0.9rem;
   font-weight: 600;
+  white-space: nowrap;
+
   cursor: pointer;
   transition: var(--transition);
 }
@@ -75,20 +204,61 @@
 
 .results {
   margin: 0 0 16px;
+
   color: var(--text-light);
+
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 600px) {
   .filters {
-    grid-template-columns: 1fr;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 145px)
+      );
+    gap: 10px;
+
+    width: min(100%, 300px);
   }
 
-  .filterActions {
-    justify-content: stretch;
+  .dateControl {
+    height: 40px;
+  }
+
+  .filterInput {
+    padding: 0 4px;
+
+    font-size: 13px;
+  }
+
+  .filterInput[type="date"]::-webkit-calendar-picker-indicator {
+    width: 15px;
+    height: 15px;
+
+    margin-left: 1px;
   }
 
   .clearButton {
-    width: 100%;
+    width: auto;
+
+    padding: 9px 15px;
+  }
+}
+
+@media (max-width: 380px) {
+  .filters {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 135px)
+      );
+    gap: 8px;
+
+    width: min(100%, 278px);
+  }
+
+  .filterInput {
+    font-size: 12px;
   }
 }
