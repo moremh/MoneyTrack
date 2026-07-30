@@ -355,42 +355,46 @@ function IncomeForm({
         </select>
       </div>
 
-      <div className={styles.group}>
-        <label htmlFor={`${type}-date`}>
-          Fecha
-        </label>
+      <div
+  className={`${styles.group} ${styles.dateGroup}`}
+>
+  <label htmlFor={`${type}-date`}>
+    Fecha
+  </label>
 
-        <input
-          id={`${type}-date`}
-          className={styles.input}
-          type="date"
-          value={date}
-          onChange={(event) =>
-            setDate(
-              event.target.value
-            )
-          }
-          disabled={isSubmitting}
-        />
-      </div>
+  <input
+    id={`${type}-date`}
+    className={`${styles.input} ${styles.dateInput}`}
+    type="date"
+    value={date}
+    onChange={(event) =>
+      setDate(
+        event.target.value
+      )
+    }
+    disabled={isSubmitting}
+  />
+</div>
 
-      <button
-        className={styles.button}
-        type="submit"
-        disabled={isSubmitting}
-      >
-        {isSubmitting
-          ? initialData
-            ? "Guardando cambios..."
-            : "Guardando..."
-          : isCreationBlocked
-            ? "Ver opciones Premium"
-            : initialData
-              ? "Guardar cambios"
-              : type === "expense"
-                ? "Agregar gasto"
-                : "Agregar ingreso"}
-      </button>
+<div className={styles.actions}>
+  <button
+    className={styles.button}
+    type="submit"
+    disabled={isSubmitting}
+  >
+    {isSubmitting
+      ? initialData
+        ? "Guardando cambios..."
+        : "Guardando..."
+      : isCreationBlocked
+        ? "Ver opciones Premium"
+        : initialData
+          ? "Guardar cambios"
+          : type === "expense"
+            ? "Agregar gasto"
+            : "Agregar ingreso"}
+  </button>
+</div>
     </form>
   );
 }

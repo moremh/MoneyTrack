@@ -26,8 +26,10 @@
 .filtersCard {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 
+  width: 100%;
+  min-width: 0;
   padding: 24px;
 
   background: var(--surface);
@@ -42,12 +44,16 @@
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
+
+  width: 100%;
+  min-width: 0;
 }
 
 .quickFilters {
   flex: 1 1 420px;
 
   display: flex;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 
@@ -55,14 +61,18 @@
 }
 
 .filterButton {
-  padding: 11px 16px;
+  width: auto;
+  min-height: 42px;
+  padding: 10px 16px;
 
   color: var(--neutral-button-text);
   background: var(--neutral-button-bg);
   border: none;
   border-radius: 12px;
 
+  font-size: 0.95rem;
   font-weight: 600;
+  white-space: nowrap;
 
   cursor: pointer;
   transition: var(--transition);
@@ -77,19 +87,24 @@
   background: var(--primary);
 }
 
+/*
+ * Los dos campos de fecha quedan pequeños,
+ * centrados y en la misma fila.
+ */
 .dateFilters {
-  flex: 0 1 420px;
+  flex: 0 1 380px;
 
   display: grid;
   grid-template-columns:
-    repeat(
-      2,
-      minmax(0, 1fr)
-    );
-  gap: 16px;
+    repeat(2, minmax(130px, 180px));
+  justify-content: center;
+  gap: 14px;
 
   width: 100%;
+  max-width: 380px;
   min-width: 0;
+
+  margin-left: auto;
 }
 
 .filterGroup {
@@ -97,6 +112,7 @@
   flex-direction: column;
   gap: 8px;
 
+  width: 100%;
   min-width: 0;
 }
 
@@ -108,12 +124,14 @@
 .filterInput {
   box-sizing: border-box;
 
+  display: block;
+
   width: 100%;
   min-width: 0;
-  max-width: 100%;
-  min-height: 46px;
+  max-width: 180px;
+  height: 44px;
 
-  padding: 11px 13px;
+  padding: 0 10px;
 
   color: var(--text);
   background: var(--surface);
@@ -121,24 +139,26 @@
   border-radius: 12px;
   outline: none;
 
-  font: inherit;
-  font-size: 1rem;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: normal;
+  text-align: center;
 
   transition: var(--transition);
 }
 
 .filterInput[type="date"] {
-  height: 46px;
-  line-height: 1.2;
+  min-height: 44px;
 }
 
 .filterInput[type="date"]::-webkit-date-and-time-value {
   min-width: 0;
-  text-align: left;
+  padding: 0;
+  text-align: center;
 }
 
 .filterInput[type="date"]::-webkit-calendar-picker-indicator {
-  margin-left: auto;
+  margin-left: 4px;
 }
 
 .filterInput:focus {
@@ -146,12 +166,7 @@
 
   box-shadow:
     0 0 0 3px
-    rgba(
-      37,
-      99,
-      235,
-      0.15
-    );
+    rgba(37, 99, 235, 0.15);
 }
 
 .periodText {
@@ -174,8 +189,7 @@
 
 .cardsGrid {
   display: grid;
-  grid-template-columns:
-    repeat(4, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 24px;
 }
 
@@ -209,10 +223,14 @@
     flex-direction: column;
   }
 
-  .quickFilters,
-  .dateFilters {
+  .quickFilters {
     flex-basis: auto;
     width: 100%;
+  }
+
+  .dateFilters {
+    flex-basis: auto;
+    margin-inline: auto;
   }
 }
 
@@ -239,40 +257,47 @@
   .quickFilters {
     display: grid;
     grid-template-columns:
-      repeat(
-        2,
-        minmax(0, 1fr)
-      );
+      repeat(2, minmax(0, 1fr));
+    gap: 10px;
+
+    max-width: 360px;
+    margin-inline: auto;
   }
 
   .filterButton {
     width: 100%;
     min-width: 0;
-    padding: 10px 12px;
+
+    padding: 10px 8px;
+
+    font-size: 0.9rem;
   }
 
   .dateFilters {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 12px;
+
+    max-width: 330px;
   }
 
   .filterInput {
-    min-height: 44px;
-    padding: 10px 12px;
-  }
-
-  .filterInput[type="date"] {
-    height: 44px;
+    max-width: none;
   }
 }
 
-@media (max-width: 420px) {
-  .quickFilters {
-    grid-template-columns: 1fr;
+@media (max-width: 380px) {
+  .filtersCard,
+  .chartSection {
+    padding: 16px;
   }
 
-  .chartSection,
-  .filtersCard {
-    padding: 16px;
+  .filterButton {
+    font-size: 0.84rem;
+  }
+
+  .dateFilters {
+    max-width: 310px;
+    gap: 10px;
   }
 }

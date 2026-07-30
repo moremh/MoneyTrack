@@ -24,6 +24,8 @@
 .input {
   box-sizing: border-box;
 
+  display: block;
+
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -37,8 +39,9 @@
   border-radius: 12px;
   outline: none;
 
-  font: inherit;
-  font-size: 1rem;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: normal;
 
   transition: var(--transition);
 }
@@ -53,40 +56,60 @@
 
   box-shadow:
     0 0 0 3px
-    rgba(
-      37,
-      99,
-      235,
-      0.15
-    );
-}
-
-.input[type="date"] {
-  height: 48px;
-  min-height: 48px;
-
-  padding: 10px 14px;
-
-  line-height: 1.2;
-}
-
-.input[type="date"]::-webkit-date-and-time-value {
-  min-width: 0;
-  text-align: left;
-}
-
-.input[type="date"]::-webkit-calendar-picker-indicator {
-  margin-left: auto;
+    rgba(37, 99, 235, 0.15);
 }
 
 select.input {
-  appearance: none;
+  appearance: auto;
+}
+
+/*
+ * Solamente la fecha utiliza un ancho pequeño.
+ */
+.dateGroup {
+  align-items: center;
+}
+
+.dateGroup label {
+  width: min(100%, 220px);
+}
+
+.dateInput {
+  width: min(100%, 220px);
+  min-width: 0;
+  height: 46px;
+  min-height: 46px;
+  max-height: 46px;
+
+  padding: 0 12px;
+
+  line-height: normal;
+  text-align: center;
+}
+
+.dateInput[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.dateInput[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 4px;
+}
+
+/*
+ * El contenedor centra el botón sin estirarlo.
+ */
+.actions {
+  display: flex;
+  justify-content: center;
+
+  width: 100%;
 }
 
 .button {
-  align-self: center;
-
-  min-width: 220px;
+  width: fit-content;
+  min-width: 160px;
   max-width: 100%;
 
   display: inline-flex;
@@ -100,8 +123,11 @@ select.input {
   border: none;
   border-radius: 12px;
 
+  font-family: inherit;
+  font-size: 1rem;
   font-weight: 600;
   text-align: center;
+  white-space: nowrap;
 
   cursor: pointer;
   transition: var(--transition);
@@ -152,16 +178,23 @@ select.input {
     padding: 10px 13px;
   }
 
-  .input[type="date"] {
-    height: 46px;
-    min-height: 46px;
+  .dateGroup label {
+    width: min(100%, 200px);
+  }
+
+  .dateInput {
+    width: min(100%, 200px);
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+
+    padding: 0 10px;
   }
 
   .button {
-    width: 100%;
-    max-width: 300px;
-    min-width: 0;
+    width: fit-content;
+    min-width: 150px;
 
-    padding: 11px 18px;
+    padding: 11px 20px;
   }
 }
