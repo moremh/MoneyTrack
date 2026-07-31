@@ -323,3 +323,24 @@ body[data-theme="dark"] .configurationWarning {
     text-align: left;
   }
 }
+
+.previousPrice {
+  display: block;
+  margin-top: 16px;
+  color: var(--text-light);
+  font-size: 0.86rem;
+}
+
+.previousPrice + .price {
+  margin-top: 4px;
+}
+
+.offerDetails {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-light);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

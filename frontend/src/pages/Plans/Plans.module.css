@@ -350,3 +350,146 @@ body[data-theme="dark"] .offerBadge {
     font-size: 1.7rem;
   }
 }
+
+.planDescription {
+  margin: 12px 0 0;
+  color: var(--text-light);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.catalogNotice {
+  margin: 0;
+  padding: 12px 15px;
+  color: var(--text-light);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.promotionsSection {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 158, 11, 0.1),
+      transparent 60%
+    ),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.promotionsHeader span {
+  color: #d97706;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.promotionsHeader h2 {
+  margin: 5px 0 6px;
+  color: var(--text);
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.promotionsHeader p {
+  margin: 0;
+  color: var(--text-light);
+}
+
+.promotionsGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.promotionCard {
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.promotionBadge {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  padding: 6px 9px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.promotionPlan {
+  color: var(--primary);
+  font-size: 0.77rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.promotionCard h3 {
+  margin: 7px 0 0;
+  padding-right: 75px;
+  color: var(--text);
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.promotionCard > p {
+  margin: 14px 0 0;
+  color: var(--text-light);
+  line-height: 1.55;
+}
+
+.promotionPrice {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.promotionPrice del {
+  color: var(--text-light);
+  font-size: 0.92rem;
+}
+
+.promotionPrice strong {
+  color: var(--text);
+  font-size: 1.9rem;
+  font-weight: 800;
+}
+
+body[data-theme="dark"] .promotionBadge {
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.4);
+}
+
+@media (max-width: 800px) {
+  .promotionsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .promotionsSection {
+    padding: 20px;
+  }
+
+  .promotionCard {
+    padding: 20px;
+  }
+}

@@ -1,12 +1,24 @@
-import { useContext, useMemo } from "react";
-
-import { FinanceContext } from "../../context/FinanceContext";
-import { useAuth } from "../../context/AuthContext";
+import {
+  useContext,
+  useMemo,
+} from "react";
 
 import {
-  PREMIUM_PLANS,
+  FinanceContext,
+} from "../../context/FinanceContext";
+
+import {
+  useAuth,
+} from "../../context/AuthContext";
+
+import {
+  useCommercialCatalog,
+} from "../../hooks/useCommercialCatalog";
+
+import {
   buildWhatsAppPremiumRequest,
   formatCurrency,
+  isPromotionCurrentlyActive,
 } from "../../config/premiumConfig";
 
 import styles from "./Plans.module.css";
@@ -16,172 +28,281 @@ const formatDate = (dateValue) => {
     return "Sin vencimiento";
   }
 
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(dateValue));
+  return new Intl.DateTimeFormat(
+    "es-AR",
+    {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }
+  ).format(new Date(dateValue));
 };
 
 function Plans() {
-  const { currentUser } = useAuth();
-  const { movementUsage } = useContext(FinanceContext);
+  const {
+    currentUser,
+  } = useAuth();
 
-  const premiumPlans = useMemo(
-    () => Object.values(PREMIUM_PLANS),
-    []
-  );
+  const {
+    movementUsage,
+  } = useContext(FinanceContext);
 
-  const isAdmin = currentUser?.role === "admin";
-  const isPremium = currentUser?.plan === "premium";
+  const {
+    settings,
+    planMap,
+    premiumPlans,
+    promotions,
+    loading,
+    error,
+  } = useCommercialCatalog();
+
+  const isAdmin =
+    currentUser?.role === "admin";
+
+  const isPremium =
+    currentUser?.plan === "premium";
+
+  const freePlan = planMap.free;
 
   const currentPlanName = isAdmin
     ? "Cuenta administradora"
     : isPremium
-      ? currentUser.billingCycle === "annual"
-        ? "Premium anual"
-        : "Premium mensual"
-      : "Plan gratuito";
+      ? planMap?.[
+          currentUser.billingCycle
+        ]?.name || "Premium"
+      : freePlan?.name ||
+        "Plan gratuito";
 
-  const createWhatsAppRequest = (plan) =>
+  const visiblePromotions =
+    useMemo(
+      () =>
+        promotions.filter(
+          (promotion) =>
+            promotion.showOnPlans &&
+            isPromotionCurrentlyActive(
+              promotion
+            )
+        ),
+      [promotions]
+    );
+
+  const createRequest = (
+    plan,
+    promotion = null
+  ) =>
     buildWhatsAppPremiumRequest({
       user: currentUser,
       plan,
+      promotion,
+      settings,
     });
 
   return (
     <section className={styles.page}>
       <header className={styles.hero}>
         <div>
-          <span className={styles.eyebrow}>
-            Planes MoneyTrack
+          <span
+            className={styles.eyebrow}
+          >
+            {settings.plansEyebrow}
           </span>
 
-          <h1>Elegí el plan que mejor se adapte a vos</h1>
+          <h1>{settings.plansTitle}</h1>
 
           <p>
-            Todos los planes tienen las mismas herramientas.
-            La diferencia está en la cantidad de movimientos
-            que podés registrar.
+            {settings.plansDescription}
           </p>
         </div>
 
-        <div className={styles.currentPlan}>
+        <div
+          className={styles.currentPlan}
+        >
           <span>Tu plan actual</span>
-          <strong>{currentPlanName}</strong>
 
-          {isPremium && currentUser?.premiumExpiresAt && (
-            <small>
-              Vence el{" "}
-              {formatDate(currentUser.premiumExpiresAt)}
-            </small>
-          )}
+          <strong>
+            {currentPlanName}
+          </strong>
+
+          {isPremium &&
+            currentUser
+              ?.premiumExpiresAt && (
+              <small>
+                Vence el{" "}
+                {formatDate(
+                  currentUser
+                    .premiumExpiresAt
+                )}
+              </small>
+            )}
         </div>
       </header>
 
-      <div className={styles.plansGrid}>
-        <article
-          className={`${styles.planCard} ${
-            !isPremium && !isAdmin
-              ? styles.currentCard
-              : ""
-          }`}
+      {loading && (
+        <p
+          className={
+            styles.catalogNotice
+          }
         >
-          {!isPremium && !isAdmin && (
-            <span className={styles.currentBadge}>
-              Plan actual
-            </span>
-          )}
+          Cargando planes...
+        </p>
+      )}
 
-          <div className={styles.planIcon}>
-            <i className="bi bi-person"></i>
-          </div>
+      {error && (
+        <p
+          className={
+            styles.catalogNotice
+          }
+        >
+          Se están mostrando los
+          valores de respaldo.
+        </p>
+      )}
 
-          <div className={styles.planHeader}>
-            <span>Para comenzar</span>
-            <h2>Gratuito</h2>
-          </div>
+      <div
+        className={styles.plansGrid}
+      >
+        {freePlan?.isVisible && (
+          <article
+            className={`${styles.planCard} ${
+              !isPremium && !isAdmin
+                ? styles.currentCard
+                : ""
+            }`}
+          >
+            {!isPremium &&
+              !isAdmin && (
+                <span
+                  className={
+                    styles.currentBadge
+                  }
+                >
+                  Plan actual
+                </span>
+              )}
 
-          <div className={styles.price}>
-            <strong>$0</strong>
-            <span>sin vencimiento</span>
-          </div>
+            <div
+              className={styles.planIcon}
+            >
+              <i className="bi bi-person"></i>
+            </div>
 
-          <ul className={styles.features}>
-            <li>
-              <i className="bi bi-check-circle-fill"></i>
-              100 movimientos por mes
-            </li>
+            <div
+              className={styles.planHeader}
+            >
+              <span>
+                {freePlan.subtitle}
+              </span>
 
-            <li>
-              <i className="bi bi-check-circle-fill"></i>
-              Ingresos y gastos
-            </li>
+              <h2>{freePlan.name}</h2>
+            </div>
 
-            <li>
-              <i className="bi bi-check-circle-fill"></i>
-              Reportes PDF y Excel
-            </li>
-
-            <li>
-              <i className="bi bi-check-circle-fill"></i>
-              Objetivos y categorías
-            </li>
-
-            <li>
-              <i className="bi bi-check-circle-fill"></i>
-              Todos los gráficos y filtros
-            </li>
-          </ul>
-
-          <div className={styles.usage}>
-            <div>
-              <span>Uso mensual</span>
+            <div
+              className={styles.price}
+            >
               <strong>
-                {movementUsage?.used || 0} de{" "}
-                {movementUsage?.limit || 100}
+                {formatCurrency(
+                  freePlan.price
+                )}
               </strong>
+
+              <span>
+                {freePlan.priceSuffix}
+              </span>
             </div>
 
-            <div className={styles.progressTrack}>
+            {freePlan.description && (
+              <p
+                className={
+                  styles.planDescription
+                }
+              >
+                {freePlan.description}
+              </p>
+            )}
+
+            <ul
+              className={styles.features}
+            >
+              {freePlan.features.map(
+                (feature) => (
+                  <li key={feature}>
+                    <i className="bi bi-check-circle-fill"></i>
+                    {feature}
+                  </li>
+                )
+              )}
+            </ul>
+
+            <div
+              className={styles.usage}
+            >
+              <div>
+                <span>Uso mensual</span>
+
+                <strong>
+                  {movementUsage?.used ||
+                    0}{" "}
+                  de{" "}
+                  {movementUsage?.limit ||
+                    100}
+                </strong>
+              </div>
+
               <div
-                className={styles.progressBar}
-                style={{
-                  width: `${
-                    movementUsage?.percentage || 0
-                  }%`,
-                }}
-              ></div>
+                className={
+                  styles.progressTrack
+                }
+              >
+                <div
+                  className={
+                    styles.progressBar
+                  }
+                  style={{
+                    width: `${
+                      movementUsage?.percentage ||
+                      0
+                    }%`,
+                  }}
+                ></div>
+              </div>
             </div>
-          </div>
-        </article>
+          </article>
+        )}
 
         {premiumPlans.map((plan) => {
-          const request = createWhatsAppRequest(plan);
+          const request =
+            createRequest(plan);
 
           const isCurrentPlan =
             isPremium &&
-            currentUser?.billingCycle === plan.id;
+            currentUser?.billingCycle ===
+              plan.id;
 
           return (
             <article
               key={plan.id}
-              className={`${styles.planCard} ${
-                styles.premiumCard
-              } ${
+              className={`${styles.planCard} ${styles.premiumCard} ${
                 isCurrentPlan
                   ? styles.currentPremiumCard
                   : ""
               }`}
             >
               {isCurrentPlan && (
-                <span className={styles.premiumCurrentBadge}>
+                <span
+                  className={
+                    styles.premiumCurrentBadge
+                  }
+                >
                   Plan actual
                 </span>
               )}
 
               {plan.badge && (
-                <span className={styles.offerBadge}>
+                <span
+                  className={
+                    styles.offerBadge
+                  }
+                >
                   {plan.badge}
                 </span>
               )}
@@ -192,48 +313,53 @@ function Plans() {
                 <i className="bi bi-gem"></i>
               </div>
 
-              <div className={styles.planHeader}>
-                <span>Movimientos ilimitados</span>
+              <div
+                className={
+                  styles.planHeader
+                }
+              >
+                <span>
+                  {plan.subtitle}
+                </span>
+
                 <h2>{plan.name}</h2>
               </div>
 
-              <div className={styles.price}>
+              <div
+                className={styles.price}
+              >
                 <strong>
-                  {formatCurrency(plan.price)}
+                  {formatCurrency(
+                    plan.price
+                  )}
                 </strong>
 
                 <span>
-                  {plan.id === "annual"
-                    ? "por año"
-                    : "por mes"}
+                  {plan.priceSuffix}
                 </span>
               </div>
 
-              <ul className={styles.features}>
-                <li>
-                  <i className="bi bi-check-circle-fill"></i>
-                  Movimientos ilimitados
-                </li>
+              {plan.description && (
+                <p
+                  className={
+                    styles.planDescription
+                  }
+                >
+                  {plan.description}
+                </p>
+              )}
 
-                <li>
-                  <i className="bi bi-check-circle-fill"></i>
-                  Todas las funciones del plan gratuito
-                </li>
-
-                <li>
-                  <i className="bi bi-check-circle-fill"></i>
-                  Reportes PDF y Excel
-                </li>
-
-                <li>
-                  <i className="bi bi-check-circle-fill"></i>
-                  Filtros y estadísticas completas
-                </li>
-
-                <li>
-                  <i className="bi bi-check-circle-fill"></i>
-                  Activación manual por WhatsApp
-                </li>
+              <ul
+                className={styles.features}
+              >
+                {plan.features.map(
+                  (feature) => (
+                    <li key={feature}>
+                      <i className="bi bi-check-circle-fill"></i>
+                      {feature}
+                    </li>
+                  )
+                )}
               </ul>
 
               {!isAdmin &&
@@ -242,22 +368,27 @@ function Plans() {
                     href={request.url}
                     target="_blank"
                     rel="noreferrer"
-                    className={styles.whatsappButton}
+                    className={
+                      styles.whatsappButton
+                    }
                   >
                     <i className="bi bi-whatsapp"></i>
 
                     {isCurrentPlan
                       ? "Renovar por WhatsApp"
-                      : `Solicitar ${plan.name}`}
+                      : plan.buttonText ||
+                        `Solicitar ${plan.name}`}
                   </a>
                 ) : (
                   <button
                     type="button"
-                    className={styles.whatsappButton}
+                    className={
+                      styles.whatsappButton
+                    }
                     disabled
                   >
                     <i className="bi bi-whatsapp"></i>
-                    Configurar WhatsApp
+                    WhatsApp no configurado
                   </button>
                 ))}
             </article>
@@ -265,19 +396,174 @@ function Plans() {
         })}
       </div>
 
-      <article className={styles.information}>
-        <div className={styles.informationIcon}>
+      {visiblePromotions.length > 0 && (
+        <section
+          className={
+            styles.promotionsSection
+          }
+        >
+          <header
+            className={
+              styles.promotionsHeader
+            }
+          >
+            <span>Promociones</span>
+
+            <h2>Ofertas disponibles</h2>
+
+            <p>
+              Aprovechá las promociones
+              vigentes de MoneyTrack.
+            </p>
+          </header>
+
+          <div
+            className={
+              styles.promotionsGrid
+            }
+          >
+            {visiblePromotions.map(
+              (promotion) => {
+                const plan =
+                  planMap[
+                    promotion.planId
+                  ];
+
+                if (!plan) {
+                  return null;
+                }
+
+                const request =
+                  createRequest(
+                    plan,
+                    promotion
+                  );
+
+                return (
+                  <article
+                    key={promotion.id}
+                    className={
+                      styles.promotionCard
+                    }
+                  >
+                    {promotion.badge && (
+                      <span
+                        className={
+                          styles.promotionBadge
+                        }
+                      >
+                        {promotion.badge}
+                      </span>
+                    )}
+
+                    <span
+                      className={
+                        styles.promotionPlan
+                      }
+                    >
+                      {plan.name}
+                    </span>
+
+                    <h3>
+                      {promotion.title}
+                    </h3>
+
+                    <div
+                      className={
+                        styles.promotionPrice
+                      }
+                    >
+                      {promotion.previousPrice !==
+                        null && (
+                        <del>
+                          {formatCurrency(
+                            promotion.previousPrice
+                          )}
+                        </del>
+                      )}
+
+                      <strong>
+                        {formatCurrency(
+                          promotion.promotionalPrice
+                        )}
+                      </strong>
+                    </div>
+
+                    <p>
+                      {promotion.description}
+                    </p>
+
+                    {promotion.details
+                      .length > 0 && (
+                      <ul
+                        className={
+                          styles.features
+                        }
+                      >
+                        {promotion.details.map(
+                          (detail) => (
+                            <li key={detail}>
+                              <i className="bi bi-check-circle-fill"></i>
+                              {detail}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    )}
+
+                    {!isAdmin &&
+                      (request.isConfigured ? (
+                        <a
+                          href={request.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={
+                            styles.whatsappButton
+                          }
+                        >
+                          <i className="bi bi-whatsapp"></i>
+
+                          {promotion.buttonText}
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className={
+                            styles.whatsappButton
+                          }
+                          disabled
+                        >
+                          WhatsApp no configurado
+                        </button>
+                      ))}
+                  </article>
+                );
+              }
+            )}
+          </div>
+        </section>
+      )}
+
+      <article
+        className={styles.information}
+      >
+        <div
+          className={
+            styles.informationIcon
+          }
+        >
           <i className="bi bi-info-circle"></i>
         </div>
 
         <div>
-          <h2>¿Cómo se activa Premium?</h2>
+          <h2>
+            {settings.activationTitle}
+          </h2>
 
           <p>
-            Elegís el plan, enviás el mensaje por WhatsApp y
-            recibís los datos para realizar la transferencia.
-            Después de verificar el comprobante, tu cuenta se
-            activa desde el panel administrativo.
+            {
+              settings.activationDescription
+            }
           </p>
         </div>
       </article>

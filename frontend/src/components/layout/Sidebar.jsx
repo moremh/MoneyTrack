@@ -8,6 +8,7 @@ import {
 
 import { FinanceContext } from "../../context/FinanceContext";
 import { useAuth } from "../../context/AuthContext";
+import { useCommercialCatalog } from "../../hooks/useCommercialCatalog";
 
 import sidebarMenu from "../../data/sidebarMenu";
 
@@ -29,6 +30,10 @@ function Sidebar({
     isAdmin,
   } = useAuth();
 
+  const {
+    planMap,
+  } = useCommercialCatalog();
+
   const displayName =
     currentUser?.name ||
     settings.userName ||
@@ -40,12 +45,12 @@ function Sidebar({
       ? "Administradora"
       : currentUser?.plan ===
           "premium"
-        ? currentUser
-              .billingCycle ===
-            "annual"
-          ? "Premium anual"
-          : "Premium mensual"
-        : "Plan gratuito";
+        ? planMap?.[
+            currentUser.billingCycle
+          ]?.name ||
+          "Premium"
+        : planMap?.free?.name ||
+          "Plan gratuito";
 
   const visibleMenu =
     sidebarMenu.filter(

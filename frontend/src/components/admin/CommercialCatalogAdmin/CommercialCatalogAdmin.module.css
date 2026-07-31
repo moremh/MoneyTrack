@@ -1,0 +1,344 @@
+.section {
+  display: grid;
+  gap: 20px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 6px;
+
+  color: var(--primary);
+
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sectionHeader h2 {
+  margin: 0 0 7px;
+
+  color: var(--text);
+
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.sectionHeader p {
+  margin: 0;
+
+  color: var(--text-light);
+
+  line-height: 1.55;
+}
+
+.catalogBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 9px 13px;
+
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 999px;
+
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.catalogGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.editorCard {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 24px;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.editorCard:first-child {
+  grid-column: 1 / -1;
+}
+
+.editorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  margin-bottom: 22px;
+}
+
+.editorHeader span {
+  display: block;
+  margin-bottom: 4px;
+
+  color: var(--text-light);
+
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.editorHeader h3 {
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+
+.editorHeader > i {
+  color: var(--primary);
+
+  font-size: 1.25rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field {
+  min-width: 0;
+
+  display: grid;
+  gap: 7px;
+}
+
+.field > span,
+.checkboxField span {
+  color: var(--text);
+
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.field textarea {
+  box-sizing: border-box;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+
+  padding: 0 12px;
+
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+
+  font-family: inherit;
+}
+
+.field textarea {
+  min-height: 80px;
+
+  padding-top: 11px;
+  padding-bottom: 11px;
+
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--primary);
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.12);
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.checkboxGroup {
+  display: grid;
+  align-content: end;
+  gap: 9px;
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  min-height: 42px;
+}
+
+.checkboxField input {
+  width: 18px;
+  height: 18px;
+
+  accent-color: var(--primary);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  margin-top: auto;
+}
+
+.saveButton,
+.deleteButton {
+  width: auto;
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  margin-top: 20px;
+  padding: 0 15px;
+
+  border: none;
+  border-radius: 10px;
+
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.saveButton {
+  color: #ffffff;
+  background: var(--primary);
+}
+
+.deleteButton {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.saveButton:disabled,
+.deleteButton:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+}
+
+.successMessage,
+.errorMessage,
+.loading {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+
+  margin-top: 16px;
+  padding: 12px 14px;
+
+  border-radius: 10px;
+
+  font-size: 0.84rem;
+}
+
+.successMessage {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.errorMessage {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.loading {
+  margin: 0;
+
+  color: var(--text-light);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+body[data-theme="dark"] .catalogBadge {
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.4);
+}
+
+body[data-theme="dark"] .successMessage {
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.35);
+}
+
+body[data-theme="dark"] .errorMessage,
+body[data-theme="dark"] .deleteButton {
+  color: #fecaca;
+  background: rgba(153, 27, 27, 0.35);
+}
+
+@media (max-width: 1000px) {
+  .catalogGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .editorCard:first-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .sectionHeader {
+    flex-direction: column;
+
+    padding: 20px;
+  }
+
+  .editorCard {
+    padding: 20px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullField {
+    grid-column: auto;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions button,
+  .saveButton {
+    width: 100%;
+  }
+}

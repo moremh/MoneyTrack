@@ -9,9 +9,14 @@ import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
 
 import {
-  PREMIUM_PLANS,
   formatCurrency,
 } from "../../config/premiumConfig";
+
+import {
+  useCommercialCatalog,
+} from "../../hooks/useCommercialCatalog";
+
+import CommercialCatalogAdmin from "../../components/admin/CommercialCatalogAdmin/CommercialCatalogAdmin";
 
 import styles from "./Admin.module.css";
 
@@ -94,14 +99,25 @@ const getStatusLabel = (status) => {
   return labels[status] || "Activa";
 };
 
-const getPlanLabel = (user) => {
+const getPlanLabel = (
+  user,
+  planMap
+) => {
   if (user.plan !== "premium") {
-    return "Gratuito";
+    return (
+      planMap?.free?.name ||
+      "Gratuito"
+    );
   }
 
-  return user.billingCycle === "annual"
-    ? "Premium anual"
-    : "Premium mensual";
+  return (
+    planMap?.[
+      user.billingCycle
+    ]?.name ||
+    (user.billingCycle === "annual"
+      ? "Premium anual"
+      : "Premium mensual")
+  );
 };
 
 function Admin() {
@@ -115,6 +131,10 @@ function Admin() {
     changeMonthlyLimit,
     updateAdminNote,
   } = useAuth();
+
+  const {
+    planMap,
+  } = useCommercialCatalog();
 
   const [search, setSearch] =
     useState("");
@@ -137,9 +157,7 @@ function Admin() {
   const [
     paymentAmount,
     setPaymentAmount,
-  ] = useState(
-    PREMIUM_PLANS.monthly.price
-  );
+  ] = useState(0);
 
   const [
     monthlyLimit,
@@ -395,9 +413,11 @@ function Admin() {
     );
 
     setPaymentAmount(
-      PREMIUM_PLANS[
-        initialCycle
-      ].price
+      Number(
+        planMap?.[
+          initialCycle
+        ]?.price
+      ) || 0
     );
 
     setMonthlyLimit(
@@ -445,7 +465,9 @@ function Admin() {
     setSelectedCycle(cycle);
 
     setPaymentAmount(
-      PREMIUM_PLANS[cycle].price
+      Number(
+        planMap?.[cycle]?.price
+      ) || 0
     );
 
     setFeedbackMessage("");
@@ -916,6 +938,8 @@ function Admin() {
         </article>
       </div>
 
+      <CommercialCatalogAdmin />
+
       <article className={styles.panel}>
         <div
           className={
@@ -1103,7 +1127,8 @@ function Admin() {
                             }`}
                           >
                             {getPlanLabel(
-                              user
+                              user,
+                              planMap
                             )}
                           </span>
                         </td>
@@ -1281,7 +1306,8 @@ function Admin() {
 
                 <strong>
                   {getPlanLabel(
-                    selectedUser
+                    selectedUser,
+                    planMap
                   )}
                 </strong>
               </div>
@@ -1359,11 +1385,13 @@ function Admin() {
                   disabled={isBusy}
                 >
                   <option value="monthly">
-                    Premium mensual
+                    {planMap?.monthly?.name ||
+                      "Premium mensual"}
                   </option>
 
                   <option value="annual">
-                    Premium anual
+                    {planMap?.annual?.name ||
+                      "Premium anual"}
                   </option>
                 </select>
               </div>
@@ -1589,10 +1617,13 @@ function Admin() {
                     >
                       <div>
                         <strong>
-                          {payment.planType ===
-                          "annual"
-                            ? "Premium anual"
-                            : "Premium mensual"}
+                          {planMap?.[
+                            payment.planType
+                          ]?.name ||
+                            (payment.planType ===
+                            "annual"
+                              ? "Premium anual"
+                              : "Premium mensual")}
                         </strong>
 
                         <span>

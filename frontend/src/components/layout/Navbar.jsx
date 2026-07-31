@@ -6,12 +6,14 @@ import {
 
 import { FinanceContext } from "../../context/FinanceContext";
 import { useAuth } from "../../context/AuthContext";
+import { useCommercialCatalog } from "../../hooks/useCommercialCatalog";
 
 import styles from "./Navbar.module.css";
 
 function Navbar({ toggleSidebar }) {
   const { settings } = useContext(FinanceContext);
   const { currentUser, logout } = useAuth();
+  const { planMap } = useCommercialCatalog();
 
   const navigate = useNavigate();
 
@@ -24,10 +26,10 @@ function Navbar({ toggleSidebar }) {
     currentUser?.role === "admin"
       ? "Administradora"
       : currentUser?.plan === "premium"
-        ? currentUser.billingCycle === "annual"
-          ? "Premium anual"
-          : "Premium mensual"
-        : "Plan gratuito";
+        ? planMap?.[currentUser.billingCycle]?.name ||
+          "Premium"
+        : planMap?.free?.name ||
+          "Plan gratuito";
 
   const handleLogout = () => {
     logout();

@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 
 import { FinanceContext } from "../../context/FinanceContext";
 import { useAuth } from "../../context/AuthContext";
+import { useCommercialCatalog } from "../../hooks/useCommercialCatalog";
 
 import MovementUsage from "../../components/premium/MovementUsage/MovementUsage";
 import PremiumLimitModal from "../../components/premium/PremiumLimitModal/PremiumLimitModal";
@@ -86,6 +87,10 @@ function Account() {
     movementUsage,
   } = useContext(FinanceContext);
 
+  const {
+    planMap,
+  } = useCommercialCatalog();
+
   const navigate =
     useNavigate();
 
@@ -147,12 +152,12 @@ function Account() {
   const planName = isAdmin
     ? "Cuenta administradora"
     : isPremium
-      ? currentUser
-          ?.billingCycle ===
-        "annual"
-        ? "Premium anual"
-        : "Premium mensual"
-      : "Plan gratuito";
+      ? planMap?.[
+          currentUser?.billingCycle
+        ]?.name ||
+        "Premium"
+      : planMap?.free?.name ||
+        "Plan gratuito";
 
   const handleSaveProfile =
     async (event) => {

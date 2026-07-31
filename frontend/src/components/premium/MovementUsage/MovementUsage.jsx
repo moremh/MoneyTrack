@@ -1,8 +1,10 @@
 import { useAuth } from "../../../context/AuthContext";
+import { useCommercialCatalog } from "../../../hooks/useCommercialCatalog";
 import styles from "./MovementUsage.module.css";
 
 function MovementUsage({ usage, onPremiumClick }) {
   const { currentUser } = useAuth();
+  const { planMap } = useCommercialCatalog();
 
   if (!usage) {
     return null;
@@ -12,10 +14,10 @@ function MovementUsage({ usage, onPremiumClick }) {
     currentUser?.role === "admin"
       ? "Cuenta administradora"
       : currentUser?.plan === "premium"
-        ? currentUser.billingCycle === "annual"
-          ? "Premium anual"
-          : "Premium mensual"
-        : "Plan gratuito";
+        ? planMap?.[currentUser.billingCycle]?.name ||
+          "Premium"
+        : planMap?.free?.name ||
+          "Plan gratuito";
 
   if (usage.isPremium) {
     return (
@@ -72,7 +74,9 @@ function MovementUsage({ usage, onPremiumClick }) {
       <div className={styles.content}>
         <div className={styles.header}>
           <div>
-            <span className={styles.label}>Plan gratuito</span>
+            <span className={styles.label}>
+              {planMap?.free?.name || "Plan gratuito"}
+            </span>
 
             <h2>
               {usage.used} de {usage.limit} movimientos
