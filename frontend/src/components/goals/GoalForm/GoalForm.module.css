@@ -2,42 +2,190 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+
+  width: 100%;
+  min-width: 0;
 }
 
 .group {
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  width: 100%;
+  min-width: 0;
 }
 
 .group label {
-  font-weight: 600;
   color: var(--text);
+
+  font-weight: 600;
 }
 
 .input {
+  box-sizing: border-box;
+
+  display: block;
+
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+
   padding: 12px 16px;
+
+  color: var(--text);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   outline: none;
+
+  font-family: inherit;
+  font-size: 16px;
+
   transition: var(--transition);
 }
 
 .input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.15);
+}
+
+.dateGroup {
+  align-items: center;
+}
+
+.dateGroup > label {
+  width: min(100%, 320px);
+}
+
+.dateControl {
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: min(100%, 320px);
+  min-width: 0;
+  max-width: 100%;
+  height: 44px;
+
+  overflow: hidden;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  transition: var(--transition);
+}
+
+.dateControl:focus-within {
+  border-color: var(--primary);
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.15);
+}
+
+.dateInput,
+.dateInput[type="date"] {
+  box-sizing: border-box;
+
+  display: block;
+
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%;
+
+  padding: 0 10px;
+  margin: 0;
+
+  overflow: hidden;
+
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+
+  line-height: normal;
+  text-align: center;
+}
+
+.dateInput:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.dateInput[type="date"]::-webkit-date-and-time-value {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+  margin: 0;
+
+  text-align: center;
+}
+
+.dateInput[type="date"]::-webkit-datetime-edit {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+
+  text-align: center;
+}
+
+.dateInput[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0;
+}
+
+.dateInput[type="date"]::-webkit-calendar-picker-indicator {
+  flex: 0 0 auto;
+
+  margin-left: 4px;
+
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+
+  width: 100%;
 }
 
 .button {
-  align-self: flex-end;
-  background: var(--primary);
-  color: white;
-  border: none;
+  width: auto;
+  min-width: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
   padding: 12px 22px;
+
+  color: #ffffff;
+  background: var(--primary);
+  border: none;
   border-radius: 12px;
-  cursor: pointer;
+
+  font-family: inherit;
   font-weight: 600;
+  white-space: nowrap;
+
+  cursor: pointer;
+
   transition: var(--transition);
 }
 
@@ -46,24 +194,65 @@
   filter: brightness(1.05);
 }
 
+.button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .message {
   display: flex;
   align-items: center;
   gap: 10px;
+
   padding: 12px 14px;
+
   border-radius: 12px;
-  font-weight: 600;
+
   font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .errorMessage {
-  background: #fef2f2;
   color: #b91c1c;
+  background: #fef2f2;
   border: 1px solid #fecaca;
 }
 
 .successMessage {
-  background: #f0fdf4;
   color: #15803d;
+  background: #f0fdf4;
   border: 1px solid #bbf7d0;
+}
+
+body[data-theme="dark"] .errorMessage {
+  color: #fecaca;
+  background: rgba(153, 27, 27, 0.35);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+body[data-theme="dark"] .successMessage {
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.35);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+@media (max-width: 520px) {
+  .dateGroup > label,
+  .dateControl {
+    width: min(100%, 280px);
+  }
+
+  .dateControl {
+    height: 42px;
+  }
+
+  .dateInput,
+  .dateInput[type="date"] {
+    padding: 0 8px;
+  }
+
+  .button {
+    padding: 11px 20px;
+  }
 }

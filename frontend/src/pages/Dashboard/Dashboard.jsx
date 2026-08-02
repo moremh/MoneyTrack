@@ -208,6 +208,11 @@ function Dashboard() {
     filteredIncomes.length +
     filteredExpenses.length;
 
+  const movementsLabel =
+    fromDate || toDate
+      ? "Movimientos del período"
+      : "Movimientos totales registrados";
+
   const periodText =
     useMemo(() => {
       if (
@@ -620,7 +625,7 @@ function Dashboard() {
             styles.movementsText
           }
         >
-          Movimientos analizados:{" "}
+          {movementsLabel}:{" "}
           {totalMovements}
         </p>
       </section>

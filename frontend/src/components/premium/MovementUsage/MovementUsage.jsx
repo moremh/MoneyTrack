@@ -41,8 +41,11 @@ function MovementUsage({ usage, onPremiumClick }) {
           </div>
 
           <p>
-            Este mes registraste <strong>{usage.used}</strong>{" "}
-            {usage.used === 1 ? "movimiento" : "movimientos"}.
+            Durante este mes calendario registraste{" "}
+            <strong>{usage.used}</strong>{" "}
+            {usage.used === 1
+              ? "movimiento"
+              : "movimientos"}.
           </p>
         </div>
       </section>
@@ -79,7 +82,7 @@ function MovementUsage({ usage, onPremiumClick }) {
             </span>
 
             <h2>
-              {usage.used} de {usage.limit} movimientos
+              {usage.used} de {usage.limit} movimientos este mes
             </h2>
           </div>
 

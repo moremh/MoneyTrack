@@ -8,6 +8,7 @@ import {
   Tooltip,
   Cell,
 } from "recharts";
+
 import styles from "./ExpenseCategoriesChart.module.css";
 
 const CATEGORY_COLORS = {
@@ -28,74 +29,201 @@ const FALLBACK_COLORS = [
   "#06b6d4",
 ];
 
-function ExpenseCategoriesChart({ expenses = [] }) {
-  const grouped = expenses.reduce((acc, expense) => {
-    const category = expense.category || "General";
+const formatCurrency = (value) =>
+  `$ ${Number(value || 0).toLocaleString(
+    "es-AR"
+  )}`;
 
-    if (!acc[category]) {
-      acc[category] = 0;
-    }
+function CategoryTooltip({
+  active,
+  payload,
+}) {
+  if (
+    !active ||
+    !payload?.length
+  ) {
+    return null;
+  }
 
-    acc[category] += Number(expense.amount);
+  const item =
+    payload[0]?.payload;
 
-    return acc;
-  }, {});
+  if (!item) {
+    return null;
+  }
 
-  const data = Object.entries(grouped)
-    .map(([category, total], index) => ({
-      category,
-      total,
-      color:
-        CATEGORY_COLORS[category] ||
-        FALLBACK_COLORS[index % FALLBACK_COLORS.length],
-    }))
-    .sort((a, b) => b.total - a.total);
+  return (
+    <div
+      className={
+        styles.tooltip
+      }
+    >
+      <strong>
+        {item.category}
+      </strong>
+
+      <span>
+        Total:{" "}
+        {formatCurrency(
+          item.total
+        )}
+      </span>
+    </div>
+  );
+}
+
+function ExpenseCategoriesChart({
+  expenses = [],
+}) {
+  const grouped =
+    expenses.reduce(
+      (accumulator, expense) => {
+        const category =
+          expense.category ||
+          "General";
+
+        if (
+          !accumulator[
+            category
+          ]
+        ) {
+          accumulator[
+            category
+          ] = 0;
+        }
+
+        accumulator[
+          category
+        ] += Number(
+          expense.amount
+        );
+
+        return accumulator;
+      },
+      {}
+    );
+
+  const data =
+    Object.entries(grouped)
+      .map(
+        (
+          [category, total],
+          index
+        ) => ({
+          category,
+          total,
+
+          color:
+            CATEGORY_COLORS[
+              category
+            ] ||
+            FALLBACK_COLORS[
+              index %
+                FALLBACK_COLORS.length
+            ],
+        })
+      )
+      .sort(
+        (first, second) =>
+          second.total -
+          first.total
+      );
 
   if (data.length === 0) {
     return (
-      <div className={styles.emptyState}>
-        Todavía no hay gastos cargados para mostrar por categoría.
+      <div
+        className={
+          styles.emptyState
+        }
+      >
+        Todavía no hay gastos
+        cargados para mostrar por
+        categoría.
       </div>
     );
   }
 
   return (
-    <div className={styles.chartWrapper}>
-      <ResponsiveContainer width="100%" height={320}>
+    <div
+      className={
+        styles.chartWrapper
+      }
+    >
+      <ResponsiveContainer
+        width="100%"
+        height={320}
+      >
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
+          margin={{
+            top: 10,
+            right: 20,
+            left: 10,
+            bottom: 10,
+          }}
         >
-          <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+          <CartesianGrid
+            stroke="var(--chart-grid)"
+            strokeDasharray="3 3"
+          />
 
           <XAxis
             type="number"
-            tick={{ fill: "var(--text-light)" }}
-            tickFormatter={(value) => `$ ${value.toLocaleString("es-AR")}`}
+            tick={{
+              fill:
+                "var(--text-light)",
+            }}
+            tickFormatter={
+              formatCurrency
+            }
           />
 
           <YAxis
             type="category"
             dataKey="category"
             width={110}
-            tick={{ fill: "var(--text-light)" }}
-          />
-
-          <Tooltip
-            formatter={(value) => `$ ${Number(value).toLocaleString("es-AR")}`}
-            contentStyle={{
-              backgroundColor: "var(--surface)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-              borderRadius: "12px",
+            tick={{
+              fill:
+                "var(--text-light)",
             }}
           />
 
-          <Bar dataKey="total" radius={[0, 8, 8, 0]}>
-            {data.map((entry, index) => (
-              <Cell key={entry.category || index} fill={entry.color} />
-            ))}
+          <Tooltip
+            content={
+              <CategoryTooltip />
+            }
+            cursor={{
+              fill:
+                "rgba(148, 163, 184, 0.12)",
+            }}
+          />
+
+          <Bar
+            dataKey="total"
+            radius={[
+              0,
+              8,
+              8,
+              0,
+            ]}
+          >
+            {data.map(
+              (
+                entry,
+                index
+              ) => (
+                <Cell
+                  key={
+                    entry.category ||
+                    index
+                  }
+                  fill={
+                    entry.color
+                  }
+                />
+              )
+            )}
           </Bar>
         </BarChart>
       </ResponsiveContainer>

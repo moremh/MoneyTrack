@@ -307,41 +307,47 @@ function GoalForm({
         />
       </div>
 
-      <div className={styles.group}>
+      <div
+        className={`${styles.group} ${styles.dateGroup}`}
+      >
         <label htmlFor="goal-deadline">
           Fecha límite
         </label>
 
-        <input
-          id="goal-deadline"
-          className={styles.input}
-          type="date"
-          value={deadline}
-          onChange={(event) => {
-            setDeadline(
-              event.target.value
-            );
+        <div className={styles.dateControl}>
+          <input
+            id="goal-deadline"
+            className={`${styles.input} ${styles.dateInput}`}
+            type="date"
+            value={deadline}
+            onChange={(event) => {
+              setDeadline(
+                event.target.value
+              );
 
-            setErrorMessage("");
-            setSuccessMessage("");
-          }}
-          disabled={isSubmitting}
-        />
+              setErrorMessage("");
+              setSuccessMessage("");
+            }}
+            disabled={isSubmitting}
+          />
+        </div>
       </div>
 
-      <button
-        className={styles.button}
-        type="submit"
-        disabled={isSubmitting}
-      >
-        {isSubmitting
-          ? initialData
-            ? "Guardando cambios..."
-            : "Agregando objetivo..."
-          : initialData
-            ? "Guardar cambios"
-            : "Agregar objetivo"}
-      </button>
+      <div className={styles.actions}>
+        <button
+          className={styles.button}
+          type="submit"
+          disabled={isSubmitting}
+        >
+          {isSubmitting
+            ? initialData
+              ? "Guardando cambios..."
+              : "Agregando objetivo..."
+            : initialData
+              ? "Guardar cambios"
+              : "Agregar objetivo"}
+        </button>
+      </div>
     </form>
   );
 }
