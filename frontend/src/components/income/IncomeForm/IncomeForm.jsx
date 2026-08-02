@@ -14,6 +14,13 @@ import {
   isValidDateString,
 } from "../../../utils/dateUtils";
 
+import {
+  formatAmountInput,
+  formatStoredAmount,
+  normalizeAmountOnBlur,
+  parseAmountInput,
+} from "../../../utils/amountUtils";
+
 import styles from "./IncomeForm.module.css";
 
 function IncomeForm({
@@ -85,7 +92,9 @@ function IncomeForm({
       );
 
       setAmount(
-        initialData.amount ?? ""
+        formatStoredAmount(
+          initialData.amount ?? ""
+        )
       );
 
       setCategory(
@@ -135,7 +144,7 @@ function IncomeForm({
       description.trim();
 
     const numericAmount =
-      Number(amount);
+      parseAmountInput(amount);
 
     if (!cleanDescription) {
       setErrorMessage(
@@ -335,16 +344,35 @@ function IncomeForm({
         <input
           id={`${type}-amount`}
           className={styles.input}
-          type="number"
-          min="0.01"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
+          lang="es-AR"
           value={amount}
-          onChange={(event) =>
+          onChange={(event) => {
+            const nextValue =
+              event.target.value;
+
             setAmount(
-              event.target.value
+              (currentValue) =>
+                formatAmountInput(
+                  nextValue,
+                  currentValue
+                )
+            );
+
+            setErrorMessage("");
+            setSuccessMessage("");
+          }}
+          onBlur={() =>
+            setAmount(
+              (currentValue) =>
+                normalizeAmountOnBlur(
+                  currentValue
+                )
             )
           }
-          placeholder="Ej: 250000"
+          placeholder="Ej: 250.000,50"
+          autoComplete="off"
           disabled={isSubmitting}
         />
       </div>

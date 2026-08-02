@@ -3,6 +3,13 @@ import {
   useState,
 } from "react";
 
+import {
+  formatAmountInput,
+  formatStoredAmount,
+  normalizeAmountOnBlur,
+  parseAmountInput,
+} from "../../../utils/amountUtils";
+
 import styles from "./GoalForm.module.css";
 
 function GoalForm({
@@ -49,16 +56,20 @@ function GoalForm({
       );
 
       setTargetAmount(
-        initialData.targetAmount ??
-          initialData.target ??
-          ""
+        formatStoredAmount(
+          initialData.targetAmount ??
+            initialData.target ??
+            ""
+        )
       );
 
       setCurrentAmount(
-        initialData.currentAmount ??
-          initialData.savedAmount ??
-          initialData.saved ??
-          ""
+        formatStoredAmount(
+          initialData.currentAmount ??
+            initialData.savedAmount ??
+            initialData.saved ??
+            ""
+        )
       );
 
       setDeadline(
@@ -94,10 +105,14 @@ function GoalForm({
       title.trim();
 
     const numericTarget =
-      Number(targetAmount);
+      parseAmountInput(
+        targetAmount
+      );
 
     const numericCurrent =
-      Number(currentAmount);
+      parseAmountInput(
+        currentAmount
+      );
 
     if (!cleanTitle) {
       setErrorMessage(
@@ -265,19 +280,35 @@ function GoalForm({
         <input
           id="goal-target-amount"
           className={styles.input}
-          type="number"
-          min="0.01"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
+          lang="es-AR"
           value={targetAmount}
           onChange={(event) => {
+            const nextValue =
+              event.target.value;
+
             setTargetAmount(
-              event.target.value
+              (currentValue) =>
+                formatAmountInput(
+                  nextValue,
+                  currentValue
+                )
             );
 
             setErrorMessage("");
             setSuccessMessage("");
           }}
-          placeholder="Ej: 500000"
+          onBlur={() =>
+            setTargetAmount(
+              (currentValue) =>
+                normalizeAmountOnBlur(
+                  currentValue
+                )
+            )
+          }
+          placeholder="Ej: 500.000,00"
+          autoComplete="off"
           disabled={isSubmitting}
         />
       </div>
@@ -290,19 +321,35 @@ function GoalForm({
         <input
           id="goal-current-amount"
           className={styles.input}
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
+          lang="es-AR"
           value={currentAmount}
           onChange={(event) => {
+            const nextValue =
+              event.target.value;
+
             setCurrentAmount(
-              event.target.value
+              (currentValue) =>
+                formatAmountInput(
+                  nextValue,
+                  currentValue
+                )
             );
 
             setErrorMessage("");
             setSuccessMessage("");
           }}
-          placeholder="Ej: 150000"
+          onBlur={() =>
+            setCurrentAmount(
+              (currentValue) =>
+                normalizeAmountOnBlur(
+                  currentValue
+                )
+            )
+          }
+          placeholder="Ej: 150.000,00"
+          autoComplete="off"
           disabled={isSubmitting}
         />
       </div>
