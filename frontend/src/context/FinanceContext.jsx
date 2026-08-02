@@ -9,6 +9,11 @@ import {
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 
+import {
+  getLocalToday,
+  isValidDateString,
+} from "../utils/dateUtils";
+
 export const FinanceContext = createContext(null);
 
 export const FREE_LIMIT_ERROR_CODE =
@@ -780,7 +785,12 @@ function FinanceProvider({ children }) {
           };
         }
 
-        if (!movement?.date) {
+        const movementDate =
+          String(
+            movement?.date || ""
+          ).trim();
+
+        if (!movementDate) {
           return {
             success: false,
             message:
@@ -788,8 +798,32 @@ function FinanceProvider({ children }) {
           };
         }
 
+        if (
+          !isValidDateString(
+            movementDate
+          )
+        ) {
+          return {
+            success: false,
+            message:
+              "La fecha del movimiento no es válida.",
+          };
+        }
+
+        if (
+          movementDate >
+          getLocalToday()
+        ) {
+          return {
+            success: false,
+            message:
+              "La fecha del movimiento no puede ser posterior a hoy.",
+          };
+        }
+
         return {
           success: true,
+          date: movementDate,
         };
       },
       [currentUserId]
@@ -844,7 +878,7 @@ function FinanceProvider({ children }) {
         category_name:
           cleanCategory,
 
-        date: movement.date,
+        date: validation.date,
       };
 
       const { data, error } =
@@ -967,7 +1001,7 @@ function FinanceProvider({ children }) {
           category_name:
             cleanCategory,
 
-          date: updatedMovement.date,
+          date: validation.date,
         };
 
         const { data, error } =

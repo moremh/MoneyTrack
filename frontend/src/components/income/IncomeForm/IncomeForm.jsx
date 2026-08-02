@@ -9,6 +9,11 @@ import {
   FREE_LIMIT_ERROR_CODE,
 } from "../../../context/FinanceContext";
 
+import {
+  getLocalToday,
+  isValidDateString,
+} from "../../../utils/dateUtils";
+
 import styles from "./IncomeForm.module.css";
 
 function IncomeForm({
@@ -96,9 +101,7 @@ function IncomeForm({
       setCategory("");
 
       setDate(
-        new Date()
-          .toISOString()
-          .split("T")[0]
+        getLocalToday()
       );
     }
 
@@ -162,9 +165,35 @@ function IncomeForm({
       return;
     }
 
-    if (!date) {
+    const cleanDate =
+      String(date || "").trim();
+
+    if (!cleanDate) {
       setErrorMessage(
         `Debes seleccionar una fecha para el ${typeLabel}.`
+      );
+
+      return;
+    }
+
+    if (
+      !isValidDateString(
+        cleanDate
+      )
+    ) {
+      setErrorMessage(
+        `La fecha del ${typeLabel} no es válida.`
+      );
+
+      return;
+    }
+
+    if (
+      cleanDate >
+      getLocalToday()
+    ) {
+      setErrorMessage(
+        `La fecha del ${typeLabel} no puede ser posterior a hoy.`
       );
 
       return;
@@ -187,7 +216,7 @@ function IncomeForm({
           numericAmount,
 
         category,
-        date,
+        date: cleanDate,
       });
 
       if (
@@ -226,9 +255,7 @@ function IncomeForm({
         setCategory("");
 
         setDate(
-          new Date()
-            .toISOString()
-            .split("T")[0]
+          getLocalToday()
         );
       }
     } catch (error) {
@@ -367,6 +394,7 @@ function IncomeForm({
       className={`${styles.input} ${styles.dateInput}`}
       type="date"
       value={date}
+      max={getLocalToday()}
       onChange={(event) =>
         setDate(
           event.target.value
