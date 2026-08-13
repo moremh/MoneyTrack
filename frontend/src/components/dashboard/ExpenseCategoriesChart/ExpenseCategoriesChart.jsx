@@ -129,6 +129,11 @@ function ExpenseCategoriesChart({
           first.total
       );
 
+  const chartHeight = Math.max(
+  320,
+  data.length * 44
+);
+
   if (data.length === 0) {
     return (
       <div
@@ -151,7 +156,7 @@ function ExpenseCategoriesChart({
     >
       <ResponsiveContainer
         width="100%"
-        height={320}
+        height={chartHeight}
       >
         <BarChart
           data={data}
@@ -180,14 +185,15 @@ function ExpenseCategoriesChart({
           />
 
           <YAxis
-            type="category"
-            dataKey="category"
-            width={110}
-            tick={{
-              fill:
-                "var(--text-light)",
-            }}
-          />
+  type="category"
+  dataKey="category"
+  width={120}
+  interval={0}
+  tick={{
+    fill: "var(--text-light)",
+    fontSize: 14,
+  }}
+/>
 
           <Tooltip
             content={
