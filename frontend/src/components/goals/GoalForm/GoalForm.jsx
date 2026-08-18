@@ -24,11 +24,6 @@ function GoalForm({
     setTargetAmount,
   ] = useState("");
 
-  const [
-    currentAmount,
-    setCurrentAmount,
-  ] = useState("");
-
   const [deadline, setDeadline] =
     useState("");
 
@@ -63,15 +58,6 @@ function GoalForm({
         )
       );
 
-      setCurrentAmount(
-        formatStoredAmount(
-          initialData.currentAmount ??
-            initialData.savedAmount ??
-            initialData.saved ??
-            ""
-        )
-      );
-
       setDeadline(
         initialData.deadline ||
           initialData.date ||
@@ -80,7 +66,6 @@ function GoalForm({
     } else {
       setTitle("");
       setTargetAmount("");
-      setCurrentAmount("");
       setDeadline("");
     }
 
@@ -109,11 +94,6 @@ function GoalForm({
         targetAmount
       );
 
-    const numericCurrent =
-      parseAmountInput(
-        currentAmount
-      );
-
     if (!cleanTitle) {
       setErrorMessage(
         "El nombre del objetivo es obligatorio."
@@ -136,20 +116,6 @@ function GoalForm({
       return;
     }
 
-    if (
-      currentAmount === "" ||
-      !Number.isFinite(
-        numericCurrent
-      ) ||
-      numericCurrent < 0
-    ) {
-      setErrorMessage(
-        "El monto ahorrado no puede ser negativo."
-      );
-
-      return;
-    }
-
     if (!deadline) {
       setErrorMessage(
         "Debes seleccionar una fecha límite."
@@ -165,18 +131,19 @@ function GoalForm({
         await onSubmit({
           ...(initialData?.id
             ? {
-                id: initialData.id,
+                id:
+                  initialData.id,
               }
             : {}),
 
-          title: cleanTitle,
-          name: cleanTitle,
+          title:
+            cleanTitle,
+
+          name:
+            cleanTitle,
 
           targetAmount:
             numericTarget,
-
-          currentAmount:
-            numericCurrent,
 
           deadline,
         });
@@ -199,7 +166,6 @@ function GoalForm({
       if (!initialData) {
         setTitle("");
         setTargetAmount("");
-        setCurrentAmount("");
         setDeadline("");
       }
     } catch (error) {
@@ -215,6 +181,16 @@ function GoalForm({
       setIsSubmitting(false);
     }
   };
+
+  const currentSavedAmount =
+    initialData
+      ? formatStoredAmount(
+          initialData.currentAmount ??
+            initialData.savedAmount ??
+            initialData.saved ??
+            0
+        )
+      : "";
 
   return (
     <form
@@ -313,46 +289,24 @@ function GoalForm({
         />
       </div>
 
-      <div className={styles.group}>
-        <label htmlFor="goal-current-amount">
-          Monto ahorrado
-        </label>
+      {initialData && (
+        <div className={styles.group}>
+          <label htmlFor="goal-current-amount">
+            Monto ahorrado actual
+          </label>
 
-        <input
-          id="goal-current-amount"
-          className={styles.input}
-          type="text"
-          inputMode="decimal"
-          lang="es-AR"
-          value={currentAmount}
-          onChange={(event) => {
-            const nextValue =
-              event.target.value;
-
-            setCurrentAmount(
-              (currentValue) =>
-                formatAmountInput(
-                  nextValue,
-                  currentValue
-                )
-            );
-
-            setErrorMessage("");
-            setSuccessMessage("");
-          }}
-          onBlur={() =>
-            setCurrentAmount(
-              (currentValue) =>
-                normalizeAmountOnBlur(
-                  currentValue
-                )
-            )
-          }
-          placeholder="Ej: 150.000,00"
-          autoComplete="off"
-          disabled={isSubmitting}
-        />
-      </div>
+          <input
+            id="goal-current-amount"
+            className={styles.input}
+            type="text"
+            value={
+              currentSavedAmount
+            }
+            readOnly
+            disabled
+          />
+        </div>
+      )}
 
       <div
         className={`${styles.group} ${styles.dateGroup}`}
@@ -361,7 +315,11 @@ function GoalForm({
           Fecha límite
         </label>
 
-        <div className={styles.dateControl}>
+        <div
+          className={
+            styles.dateControl
+          }
+        >
           <input
             id="goal-deadline"
             className={`${styles.input} ${styles.dateInput}`}
@@ -375,16 +333,24 @@ function GoalForm({
               setErrorMessage("");
               setSuccessMessage("");
             }}
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting
+            }
           />
         </div>
       </div>
 
-      <div className={styles.actions}>
+      <div
+        className={styles.actions}
+      >
         <button
-          className={styles.button}
+          className={
+            styles.button
+          }
           type="submit"
-          disabled={isSubmitting}
+          disabled={
+            isSubmitting
+          }
         >
           {isSubmitting
             ? initialData

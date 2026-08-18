@@ -81,14 +81,88 @@ function getYearStart() {
   return formatLocalDate(date);
 }
 
+function formatAmountInput(value) {
+  const cleaned = String(
+    value || ""
+  ).replace(/[^0-9.,]/g, "");
+
+  if (!cleaned) {
+    return "";
+  }
+
+  const lastComma =
+    cleaned.lastIndexOf(",");
+  const lastDot =
+    cleaned.lastIndexOf(".");
+
+  let decimalIndex = -1;
+
+  if (lastComma >= 0) {
+    decimalIndex = lastComma;
+  } else if (lastDot >= 0) {
+    const digitsAfterDot =
+      cleaned.length -
+      lastDot -
+      1;
+
+    if (digitsAfterDot <= 2) {
+      decimalIndex = lastDot;
+    }
+  }
+
+  const integerSource =
+    decimalIndex >= 0
+      ? cleaned.slice(
+          0,
+          decimalIndex
+        )
+      : cleaned;
+
+  const integerDigits =
+    integerSource.replace(
+      /[.,]/g,
+      ""
+    );
+
+  const formattedInteger =
+    (integerDigits || "0").replace(
+      /\B(?=(\d{3})+(?!\d))/g,
+      "."
+    );
+
+  if (decimalIndex < 0) {
+    return formattedInteger;
+  }
+
+  const decimalDigits =
+    cleaned
+      .slice(decimalIndex + 1)
+      .replace(/[.,]/g, "")
+      .slice(0, 2);
+
+  return `${formattedInteger},${decimalDigits}`;
+}
+
+function parseAmountInput(value) {
+  const normalized = String(
+    value || ""
+  )
+    .replace(/\./g, "")
+    .replace(",", ".");
+
+  return Number(normalized);
+}
+
 function Dashboard() {
   const {
     incomes,
     expenses,
     goals,
+    goalMovements = [],
     settings,
     addIncome,
     addExpense,
+    recordGoalMovement,
     movementUsage,
   } = useContext(
     FinanceContext
@@ -113,6 +187,46 @@ function Dashboard() {
     quickMovementType,
     setQuickMovementType,
   ] = useState(null);
+
+  const [
+    showSavingsModal,
+    setShowSavingsModal,
+  ] = useState(false);
+
+  const [
+    savingsGoalId,
+    setSavingsGoalId,
+  ] = useState("");
+
+  const [
+    savingsMovementType,
+    setSavingsMovementType,
+  ] = useState("deposit");
+
+  const [
+    savingsAmount,
+    setSavingsAmount,
+  ] = useState("");
+
+  const [
+    savingsDescription,
+    setSavingsDescription,
+  ] = useState("");
+
+  const [
+    savingsDate,
+    setSavingsDate,
+  ] = useState(() => getToday());
+
+  const [
+    savingsError,
+    setSavingsError,
+  ] = useState("");
+
+  const [
+    isSavingMovement,
+    setIsSavingMovement,
+  ] = useState(false);
 
   const [
     showPremiumModal,
@@ -173,6 +287,33 @@ function Dashboard() {
       toDate,
     ]);
 
+  const filteredGoalMovements =
+    useMemo(() => {
+      return goalMovements.filter(
+        (item) => {
+          if (
+            fromDate &&
+            item.date < fromDate
+          ) {
+            return false;
+          }
+
+          if (
+            toDate &&
+            item.date > toDate
+          ) {
+            return false;
+          }
+
+          return true;
+        }
+      );
+    }, [
+      goalMovements,
+      fromDate,
+      toDate,
+    ]);
+
   const totalIncome =
     filteredIncomes.reduce(
       (accumulator, item) =>
@@ -200,13 +341,35 @@ function Dashboard() {
       0
     );
 
+  const netSavingsMovement =
+    filteredGoalMovements.reduce(
+      (accumulator, movement) => {
+        const amount = Number(
+          movement.amount || 0
+        );
+
+        return movement.type ===
+          "withdrawal"
+          ? accumulator - amount
+          : accumulator + amount;
+      },
+      0
+    );
+
+  const savingsImpactOnBalance =
+    fromDate || toDate
+      ? netSavingsMovement
+      : totalGoalSavings;
+
   const balance =
     totalIncome -
-    totalExpenses;
+    totalExpenses -
+    savingsImpactOnBalance;
 
   const totalMovements =
     filteredIncomes.length +
-    filteredExpenses.length;
+    filteredExpenses.length +
+    filteredGoalMovements.length;
 
   const movementsLabel =
     fromDate || toDate
@@ -336,6 +499,30 @@ function Dashboard() {
     );
   };
 
+  const openSavingsForm = () => {
+    setSavingsGoalId(
+      goals[0]?.id || ""
+    );
+    setSavingsMovementType(
+      "deposit"
+    );
+    setSavingsAmount("");
+    setSavingsDescription("");
+    setSavingsDate(getToday());
+    setSavingsError("");
+    setIsSavingMovement(false);
+    setShowSavingsModal(true);
+  };
+
+  const closeSavingsForm = () => {
+    if (isSavingMovement) {
+      return;
+    }
+
+    setShowSavingsModal(false);
+    setSavingsError("");
+  };
+
   const closeQuickForm = () => {
     setQuickMovementType(
       null
@@ -369,6 +556,96 @@ function Dashboard() {
 
       return result;
     };
+
+  const handleSavingsAmountChange =
+    (value) => {
+      setSavingsAmount(
+        formatAmountInput(value)
+      );
+    };
+
+  const handleSavingsSubmit =
+    async (event) => {
+      event.preventDefault();
+
+      if (isSavingMovement) {
+        return;
+      }
+
+      setSavingsError("");
+
+      const numericAmount =
+        parseAmountInput(
+          savingsAmount
+        );
+
+      if (!savingsGoalId) {
+        setSavingsError(
+          "Seleccioná un objetivo de ahorro."
+        );
+        return;
+      }
+
+      if (
+        !Number.isFinite(
+          numericAmount
+        ) ||
+        numericAmount <= 0
+      ) {
+        setSavingsError(
+          "El monto debe ser mayor a 0."
+        );
+        return;
+      }
+
+      if (!savingsDate) {
+        setSavingsError(
+          "Seleccioná una fecha."
+        );
+        return;
+      }
+
+      setIsSavingMovement(true);
+
+      try {
+        const result =
+          await recordGoalMovement({
+            goalId:
+              savingsGoalId,
+            type:
+              savingsMovementType,
+            amount:
+              numericAmount,
+            description:
+              savingsDescription,
+            date: savingsDate,
+          });
+
+        if (!result?.success) {
+          setSavingsError(
+            result?.message ||
+              "No se pudo registrar el movimiento de ahorro."
+          );
+          return;
+        }
+
+        setShowSavingsModal(
+          false
+        );
+        setSavingsError("");
+      } finally {
+        setIsSavingMovement(
+          false
+        );
+      }
+    };
+
+  const selectedSavingsGoal =
+    goals.find(
+      (goal) =>
+        goal.id ===
+        savingsGoalId
+    ) || null;
 
   const handleLimitReached =
     () => {
@@ -447,6 +724,20 @@ function Dashboard() {
 
           <span>
             Agregar gasto
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.quickActionButton} ${styles.savingsAction}`}
+          onClick={
+            openSavingsForm
+          }
+        >
+          <i className="bi bi-piggy-bank"></i>
+
+          <span>
+            Ahorro
           </span>
         </button>
       </section>
@@ -761,6 +1052,279 @@ function Dashboard() {
               handleLimitReached
             }
           />
+        </Modal>
+      )}
+
+      {showSavingsModal && (
+        <Modal
+          onClose={
+            closeSavingsForm
+          }
+        >
+          <h2
+            className={
+              styles.modalTitle
+            }
+          >
+            Registrar ahorro
+          </h2>
+
+          {goals.length === 0 ? (
+            <div
+              className={
+                styles.savingsEmptyState
+              }
+            >
+              <i className="bi bi-piggy-bank"></i>
+
+              <p>
+                Primero tenés que crear
+                un objetivo de ahorro.
+              </p>
+            </div>
+          ) : (
+            <form
+              className={
+                styles.savingsForm
+              }
+              onSubmit={
+                handleSavingsSubmit
+              }
+            >
+              {savingsError && (
+                <div
+                  className={
+                    styles.savingsError
+                  }
+                  role="alert"
+                >
+                  <i className="bi bi-exclamation-circle"></i>
+                  <span>
+                    {savingsError}
+                  </span>
+                </div>
+              )}
+
+              <div
+                className={
+                  styles.savingsField
+                }
+              >
+                <label htmlFor="dashboard-savings-goal">
+                  Objetivo de ahorro
+                </label>
+
+                <select
+                  id="dashboard-savings-goal"
+                  className={
+                    styles.savingsInput
+                  }
+                  value={
+                    savingsGoalId
+                  }
+                  onChange={(event) =>
+                    setSavingsGoalId(
+                      event.target.value
+                    )
+                  }
+                  disabled={
+                    isSavingMovement
+                  }
+                >
+                  <option value="">
+                    Seleccioná un objetivo
+                  </option>
+
+                  {goals.map(
+                    (goal) => (
+                      <option
+                        key={goal.id}
+                        value={goal.id}
+                      >
+                        {goal.name ||
+                          goal.title}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              {selectedSavingsGoal && (
+                <div
+                  className={
+                    styles.savingsGoalInfo
+                  }
+                >
+                  <span>
+                    Ahorrado actualmente
+                  </span>
+                  <strong>
+                    $ {Number(
+                      selectedSavingsGoal.currentAmount ||
+                        0
+                    ).toLocaleString(
+                      "es-AR"
+                    )}
+                  </strong>
+                </div>
+              )}
+
+              <div
+                className={
+                  styles.savingsField
+                }
+              >
+                <label htmlFor="dashboard-savings-type">
+                  Tipo de movimiento
+                </label>
+
+                <select
+                  id="dashboard-savings-type"
+                  className={
+                    styles.savingsInput
+                  }
+                  value={
+                    savingsMovementType
+                  }
+                  onChange={(event) =>
+                    setSavingsMovementType(
+                      event.target.value
+                    )
+                  }
+                  disabled={
+                    isSavingMovement
+                  }
+                >
+                  <option value="deposit">
+                    Agregar ahorro
+                  </option>
+                  <option value="withdrawal">
+                    Retirar ahorro
+                  </option>
+                </select>
+              </div>
+
+              <div
+                className={
+                  styles.savingsField
+                }
+              >
+                <label htmlFor="dashboard-savings-amount">
+                  Monto
+                </label>
+
+                <input
+                  id="dashboard-savings-amount"
+                  className={
+                    styles.savingsInput
+                  }
+                  type="text"
+                  inputMode="decimal"
+                  value={
+                    savingsAmount
+                  }
+                  onChange={(event) =>
+                    handleSavingsAmountChange(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Ej: 25.000,00"
+                  disabled={
+                    isSavingMovement
+                  }
+                  autoComplete="off"
+                />
+              </div>
+
+              <div
+                className={
+                  styles.savingsField
+                }
+              >
+                <label htmlFor="dashboard-savings-description">
+                  Descripción
+                  <span
+                    className={
+                      styles.optionalText
+                    }
+                  >
+                    (opcional)
+                  </span>
+                </label>
+
+                <textarea
+                  id="dashboard-savings-description"
+                  className={`${styles.savingsInput} ${styles.savingsTextarea}`}
+                  rows="3"
+                  value={
+                    savingsDescription
+                  }
+                  onChange={(event) =>
+                    setSavingsDescription(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Ej: Aporte del sueldo"
+                  disabled={
+                    isSavingMovement
+                  }
+                ></textarea>
+              </div>
+
+              <div
+                className={
+                  styles.savingsField
+                }
+              >
+                <label htmlFor="dashboard-savings-date">
+                  Fecha
+                </label>
+
+                <input
+                  id="dashboard-savings-date"
+                  className={
+                    styles.savingsInput
+                  }
+                  type="date"
+                  value={
+                    savingsDate
+                  }
+                  max={getToday()}
+                  onChange={(event) =>
+                    setSavingsDate(
+                      event.target.value
+                    )
+                  }
+                  disabled={
+                    isSavingMovement
+                  }
+                />
+              </div>
+
+              <div
+                className={
+                  styles.savingsActions
+                }
+              >
+                <button
+                  type="submit"
+                  className={
+                    styles.savingsSubmitButton
+                  }
+                  disabled={
+                    isSavingMovement
+                  }
+                >
+                  {isSavingMovement
+                    ? "Guardando..."
+                    : savingsMovementType ===
+                        "withdrawal"
+                      ? "Registrar retiro"
+                      : "Registrar ahorro"}
+                </button>
+              </div>
+            </form>
+          )}
         </Modal>
       )}
 

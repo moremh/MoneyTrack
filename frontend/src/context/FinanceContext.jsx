@@ -66,6 +66,17 @@ const GOAL_FIELDS = `
   updated_at
 `;
 
+const GOAL_MOVEMENT_FIELDS = `
+  id,
+  user_id,
+  goal_id,
+  type,
+  amount,
+  description,
+  date,
+  created_at
+`;
+
 const getDefaultMovementUsage = (currentUser) => {
   const isPremium =
     currentUser?.role === "admin" ||
@@ -158,6 +169,17 @@ const mapGoal = (goal) => {
     updatedAt: goal.updated_at,
   };
 };
+
+const mapGoalMovement = (movement) => ({
+  id: movement.id,
+  userId: movement.user_id,
+  goalId: movement.goal_id,
+  type: movement.type,
+  amount: Number(movement.amount) || 0,
+  description: movement.description || "",
+  date: movement.date,
+  createdAt: movement.created_at,
+});
 
 const mapMovementUsage = (
   data,
@@ -274,6 +296,62 @@ const getDatabaseErrorMessage = (
     return "No tenés permiso para utilizar esa categoría.";
   }
 
+  if (
+    errorContent.includes(
+      "INSUFFICIENT_GOAL_BALANCE"
+    )
+  ) {
+    return "No podés retirar un monto mayor al dinero ahorrado en este objetivo.";
+  }
+
+  if (
+  errorContent.includes(
+    "GOAL_MOVEMENT_NOT_FOUND"
+  )
+) {
+  return "No se encontró el movimiento de ahorro.";
+}
+
+  if (
+    errorContent.includes(
+      "GOAL_NOT_FOUND"
+    )
+  ) {
+    return "No se encontró el objetivo de ahorro.";
+  }
+
+  if (
+    errorContent.includes(
+      "INVALID_GOAL_MOVEMENT_TYPE"
+    )
+  ) {
+    return "El tipo de movimiento de ahorro no es válido.";
+  }
+
+  if (
+    errorContent.includes(
+      "INVALID_GOAL_MOVEMENT_AMOUNT"
+    )
+  ) {
+    return "El monto del ahorro debe ser mayor a 0.";
+  }
+
+  if (
+    errorContent.includes(
+      "INVALID_GOAL_MOVEMENT_DATE"
+    )
+  ) {
+    return "La fecha del movimiento de ahorro no es válida.";
+  }
+
+  if (
+    errorContent.includes(
+      "NOT_AUTHENTICATED"
+    )
+  ) {
+    return "Debés iniciar sesión para registrar movimientos de ahorro.";
+  }
+
   if (error?.code === "23505") {
     return "Ya existe un registro con esos datos.";
   }
@@ -356,6 +434,11 @@ function FinanceProvider({ children }) {
     useState([]);
 
   const [
+    goalMovements,
+    setGoalMovements,
+  ] = useState([]);
+
+  const [
     categoryRecords,
     setCategoryRecords,
   ] = useState([]);
@@ -428,6 +511,7 @@ function FinanceProvider({ children }) {
       setIncomes([]);
       setExpenses([]);
       setGoals([]);
+      setGoalMovements([]);
       setCategoryRecords([]);
 
       setSettings(
@@ -519,6 +603,7 @@ function FinanceProvider({ children }) {
           transactionsResult,
           categoriesResult,
           goalsResult,
+          goalMovementsResult,
           usageResult,
         ] = await Promise.all([
           supabase
@@ -556,6 +641,22 @@ function FinanceProvider({ children }) {
               ascending: false,
             }),
 
+          supabase
+            .from("goal_movements")
+            .select(
+              GOAL_MOVEMENT_FIELDS
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .order("date", {
+              ascending: false,
+            })
+            .order("created_at", {
+              ascending: false,
+            }),
+
           supabase.rpc(
             "get_my_movement_usage"
           ),
@@ -573,6 +674,10 @@ function FinanceProvider({ children }) {
 
         if (goalsResult.error) {
           throw goalsResult.error;
+        }
+
+        if (goalMovementsResult.error) {
+          throw goalMovementsResult.error;
         }
 
         const transactions = (
@@ -605,6 +710,12 @@ function FinanceProvider({ children }) {
           (goalsResult.data || []).map(
             mapGoal
           )
+        );
+
+        setGoalMovements(
+          (
+            goalMovementsResult.data || []
+          ).map(mapGoalMovement)
         );
 
         setSettings({
@@ -1669,179 +1780,258 @@ function FinanceProvider({ children }) {
       [updateCategory]
     );
 
-  const addGoal = useCallback(
-    async (goal) => {
-      if (!currentUserId) {
-        return {
-          success: false,
-          message:
-            "No hay una sesión activa.",
-        };
-      }
+const addGoal = useCallback(
+  async (goal) => {
+    if (!currentUserId) {
+      return {
+        success: false,
+        message:
+          "No hay una sesión activa.",
+      };
+    }
 
-      const payload =
-        getGoalPayload(goal);
+    const payload =
+      getGoalPayload(goal);
 
-      if (!payload.name) {
-        return {
-          success: false,
-          message:
-            "El nombre del objetivo es obligatorio.",
-        };
-      }
+    if (!payload.name) {
+      return {
+        success: false,
+        message:
+          "El nombre del objetivo es obligatorio.",
+      };
+    }
 
-      if (
-        !Number.isFinite(
-          payload.target_amount
-        ) ||
-        payload.target_amount <= 0
-      ) {
-        return {
-          success: false,
-          message:
-            "El monto objetivo debe ser mayor a 0.",
-        };
-      }
+    if (
+      !Number.isFinite(
+        payload.target_amount
+      ) ||
+      payload.target_amount <= 0
+    ) {
+      return {
+        success: false,
+        message:
+          "El monto objetivo debe ser mayor a 0.",
+      };
+    }
 
-      if (
-        !Number.isFinite(
-          payload.current_amount
-        ) ||
-        payload.current_amount < 0
-      ) {
-        return {
-          success: false,
-          message:
-            "El monto actual no puede ser negativo.",
-        };
-      }
+    /*
+     * Los objetivos nuevos siempre
+     * comienzan con saldo 0.
+     *
+     * El ahorro únicamente se modifica
+     * mediante movimientos de ahorro.
+     */
+    const goalPayload = {
+      ...payload,
+      current_amount: 0,
+      status: "active",
+    };
 
-      const { data, error } =
-        await supabase
-          .from("goals")
-          .insert({
-            user_id:
-              currentUserId,
-            ...payload,
-          })
-          .select(GOAL_FIELDS)
-          .single();
+    const { data, error } =
+      await supabase
+        .from("goals")
+        .insert({
+          user_id:
+            currentUserId,
+          ...goalPayload,
+        })
+        .select(GOAL_FIELDS)
+        .single();
 
-      if (error) {
-        return {
-          success: false,
-          message:
-            getDatabaseErrorMessage(
-              error,
-              "No se pudo crear el objetivo."
-            ),
-        };
-      }
+    if (error) {
+      return {
+        success: false,
+        message:
+          getDatabaseErrorMessage(
+            error,
+            "No se pudo crear el objetivo."
+          ),
+      };
+    }
 
-      const mappedGoal =
-        mapGoal(data);
+    const mappedGoal =
+      mapGoal(data);
 
-      setGoals(
-        (currentGoals) => [
-          mappedGoal,
-          ...currentGoals,
-        ]
+    setGoals(
+      (currentGoals) => [
+        mappedGoal,
+        ...currentGoals,
+      ]
+    );
+
+    return {
+      success: true,
+      goal: mappedGoal,
+    };
+  },
+  [currentUserId]
+);
+
+const updateGoal = useCallback(
+  async (updatedGoal) => {
+    if (
+      !currentUserId ||
+      !updatedGoal?.id
+    ) {
+      return {
+        success: false,
+        message:
+          "No se encontró el objetivo.",
+      };
+    }
+
+    const payload =
+      getGoalPayload(
+        updatedGoal
       );
 
+    if (!payload.name) {
       return {
-        success: true,
-        goal: mappedGoal,
+        success: false,
+        message:
+          "El nombre del objetivo es obligatorio.",
       };
-    },
-    [currentUserId]
-  );
+    }
 
-  const updateGoal = useCallback(
-    async (updatedGoal) => {
-      if (
-        !currentUserId ||
-        !updatedGoal?.id
-      ) {
-        return {
-          success: false,
-          message:
-            "No se encontró el objetivo.",
-        };
-      }
-
-      const payload =
-        getGoalPayload(
-          updatedGoal
-        );
-
-      if (!payload.name) {
-        return {
-          success: false,
-          message:
-            "El nombre del objetivo es obligatorio.",
-        };
-      }
-
-      if (
-        !Number.isFinite(
-          payload.target_amount
-        ) ||
-        payload.target_amount <= 0
-      ) {
-        return {
-          success: false,
-          message:
-            "El monto objetivo debe ser mayor a 0.",
-        };
-      }
-
-      const { data, error } =
-        await supabase
-          .from("goals")
-          .update(payload)
-          .eq(
-            "id",
-            updatedGoal.id
-          )
-          .eq(
-            "user_id",
-            currentUserId
-          )
-          .select(GOAL_FIELDS)
-          .single();
-
-      if (error) {
-        return {
-          success: false,
-          message:
-            getDatabaseErrorMessage(
-              error,
-              "No se pudo modificar el objetivo."
-            ),
-        };
-      }
-
-      const mappedGoal =
-        mapGoal(data);
-
-      setGoals(
-        (currentGoals) =>
-          currentGoals.map(
-            (goal) =>
-              goal.id ===
-              mappedGoal.id
-                ? mappedGoal
-                : goal
-          )
-      );
-
+    if (
+      !Number.isFinite(
+        payload.target_amount
+      ) ||
+      payload.target_amount <= 0
+    ) {
       return {
-        success: true,
-        goal: mappedGoal,
+        success: false,
+        message:
+          "El monto objetivo debe ser mayor a 0.",
       };
-    },
-    [currentUserId]
-  );
+    }
+
+    /*
+     * Primero obtenemos el objetivo
+     * actual desde Supabase.
+     *
+     * current_amount NO se toma del
+     * formulario porque el ahorro
+     * solamente puede cambiar mediante
+     * aportes o retiros.
+     */
+    const {
+      data: existingGoal,
+      error: existingGoalError,
+    } = await supabase
+      .from("goals")
+      .select(
+        "current_amount, description"
+      )
+      .eq(
+        "id",
+        updatedGoal.id
+      )
+      .eq(
+        "user_id",
+        currentUserId
+      )
+      .single();
+
+    if (existingGoalError) {
+      return {
+        success: false,
+        message:
+          getDatabaseErrorMessage(
+            existingGoalError,
+            "No se pudo obtener el objetivo."
+          ),
+      };
+    }
+
+    const currentAmount =
+      Number(
+        existingGoal?.current_amount
+      ) || 0;
+
+    const status =
+      currentAmount >=
+      payload.target_amount
+        ? "completed"
+        : "active";
+
+    /*
+     * Solamente permitimos modificar
+     * datos propios del objetivo.
+     *
+     * current_amount queda intacto.
+     */
+    const updatePayload = {
+      name: payload.name,
+
+      description:
+        updatedGoal.description !==
+        undefined
+          ? String(
+              updatedGoal.description ||
+                ""
+            ).trim() || null
+          : existingGoal?.description ||
+            null,
+
+      target_amount:
+        payload.target_amount,
+
+      deadline:
+        payload.deadline,
+
+      status,
+    };
+
+    const { data, error } =
+      await supabase
+        .from("goals")
+        .update(
+          updatePayload
+        )
+        .eq(
+          "id",
+          updatedGoal.id
+        )
+        .eq(
+          "user_id",
+          currentUserId
+        )
+        .select(GOAL_FIELDS)
+        .single();
+
+    if (error) {
+      return {
+        success: false,
+        message:
+          getDatabaseErrorMessage(
+            error,
+            "No se pudo modificar el objetivo."
+          ),
+      };
+    }
+
+    const mappedGoal =
+      mapGoal(data);
+
+    setGoals(
+      (currentGoals) =>
+        currentGoals.map(
+          (goal) =>
+            goal.id ===
+            mappedGoal.id
+              ? mappedGoal
+              : goal
+        )
+    );
+
+    return {
+      success: true,
+      goal: mappedGoal,
+    };
+  },
+  [currentUserId]
+);
 
   const deleteGoal = useCallback(
     async (id) => {
@@ -1882,11 +2072,476 @@ function FinanceProvider({ children }) {
           )
       );
 
+      setGoalMovements(
+        (currentMovements) =>
+          currentMovements.filter(
+            (movement) =>
+              movement.goalId !== id
+          )
+      );
+
       return {
         success: true,
       };
     },
     [currentUserId]
+  );
+
+  const recordGoalMovement =
+    useCallback(
+      async (movement) => {
+        if (!currentUserId) {
+          return {
+            success: false,
+            message:
+              "No hay una sesión activa.",
+          };
+        }
+
+        const goalId = String(
+          movement?.goalId ||
+            movement?.goal_id ||
+            ""
+        ).trim();
+
+        const type = String(
+          movement?.type || ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const amount = Number(
+          movement?.amount
+        );
+
+        const description = String(
+          movement?.description || ""
+        ).trim();
+
+        const movementDate = String(
+          movement?.date || ""
+        ).trim();
+
+        if (!goalId) {
+          return {
+            success: false,
+            message:
+              "Seleccioná un objetivo de ahorro.",
+          };
+        }
+
+        if (
+          type !== "deposit" &&
+          type !== "withdrawal"
+        ) {
+          return {
+            success: false,
+            message:
+              "Seleccioná si querés agregar o retirar dinero.",
+          };
+        }
+
+        if (
+          !Number.isFinite(amount) ||
+          amount <= 0
+        ) {
+          return {
+            success: false,
+            message:
+              "El monto debe ser mayor a 0.",
+          };
+        }
+
+        if (!movementDate) {
+          return {
+            success: false,
+            message:
+              "La fecha es obligatoria.",
+          };
+        }
+
+        if (
+          !isValidDateString(
+            movementDate
+          )
+        ) {
+          return {
+            success: false,
+            message:
+              "La fecha del movimiento no es válida.",
+          };
+        }
+
+        if (
+          movementDate >
+          getLocalToday()
+        ) {
+          return {
+            success: false,
+            message:
+              "La fecha del movimiento no puede ser posterior a hoy.",
+          };
+        }
+
+        const selectedGoal =
+          goals.find(
+            (goal) =>
+              goal.id === goalId
+          );
+
+        if (!selectedGoal) {
+          return {
+            success: false,
+            message:
+              "No se encontró el objetivo seleccionado.",
+          };
+        }
+
+        if (
+          type === "withdrawal" &&
+          amount >
+            Number(
+              selectedGoal.currentAmount
+            )
+        ) {
+          return {
+            success: false,
+            message:
+              "No podés retirar más dinero del que tenés ahorrado en este objetivo.",
+          };
+        }
+
+        const { data, error } =
+          await supabase.rpc(
+            "record_goal_movement",
+            {
+              p_goal_id: goalId,
+              p_type: type,
+              p_amount: amount,
+              p_description:
+                description || null,
+              p_date:
+                movementDate,
+            }
+          );
+
+        if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo registrar el movimiento de ahorro."
+              ),
+          };
+        }
+
+        const rawMovement =
+          Array.isArray(data)
+            ? data[0]
+            : data;
+
+        const mappedMovement =
+          rawMovement
+            ? mapGoalMovement(
+                rawMovement
+              )
+            : null;
+
+        const {
+          data: updatedGoalData,
+          error: updatedGoalError,
+        } = await supabase
+          .from("goals")
+          .select(GOAL_FIELDS)
+          .eq(
+            "id",
+            goalId
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .single();
+
+        let mappedGoal = null;
+
+        if (
+          !updatedGoalError &&
+          updatedGoalData
+        ) {
+          mappedGoal =
+            mapGoal(
+              updatedGoalData
+            );
+
+          setGoals(
+            (currentGoals) =>
+              currentGoals.map(
+                (goal) =>
+                  goal.id ===
+                  mappedGoal.id
+                    ? mappedGoal
+                    : goal
+              )
+          );
+        } else {
+          void loadFinanceData();
+        }
+
+        if (mappedMovement) {
+          setGoalMovements(
+            (currentMovements) =>
+              [
+                mappedMovement,
+                ...currentMovements.filter(
+                  (currentMovement) =>
+                    currentMovement.id !==
+                    mappedMovement.id
+                ),
+              ].sort((a, b) => {
+                const dateComparison =
+                  String(b.date || "").localeCompare(
+                    String(a.date || "")
+                  );
+
+                if (dateComparison !== 0) {
+                  return dateComparison;
+                }
+
+                return String(
+                  b.createdAt || ""
+                ).localeCompare(
+                  String(a.createdAt || "")
+                );
+              })
+          );
+        } else {
+          void loadFinanceData();
+        }
+
+        return {
+          success: true,
+          movement:
+            mappedMovement,
+          goal:
+            mappedGoal,
+        };
+      },
+      [
+        currentUserId,
+        goals,
+        loadFinanceData,
+      ]
+    );
+
+  const updateGoalMovement =
+  useCallback(
+    async (updatedMovement) => {
+      if (
+        !currentUserId ||
+        !updatedMovement?.id
+      ) {
+        return {
+          success: false,
+          message:
+            "No se encontró el movimiento de ahorro.",
+        };
+      }
+
+      const goalId = String(
+        updatedMovement?.goalId ||
+          updatedMovement?.goal_id ||
+          ""
+      ).trim();
+
+      const type = String(
+        updatedMovement?.type || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const amount = Number(
+        updatedMovement?.amount
+      );
+
+      const description = String(
+        updatedMovement?.description || ""
+      ).trim();
+
+      const movementDate = String(
+        updatedMovement?.date || ""
+      ).trim();
+
+      if (!goalId) {
+        return {
+          success: false,
+          message:
+            "Seleccioná un objetivo de ahorro.",
+        };
+      }
+
+      if (
+        type !== "deposit" &&
+        type !== "withdrawal"
+      ) {
+        return {
+          success: false,
+          message:
+            "Seleccioná si es un aporte o un retiro.",
+        };
+      }
+
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        return {
+          success: false,
+          message:
+            "El monto debe ser mayor a 0.",
+        };
+      }
+
+      if (!movementDate) {
+        return {
+          success: false,
+          message:
+            "La fecha es obligatoria.",
+        };
+      }
+
+      if (
+        !isValidDateString(
+          movementDate
+        )
+      ) {
+        return {
+          success: false,
+          message:
+            "La fecha del movimiento no es válida.",
+        };
+      }
+
+      if (
+        movementDate >
+        getLocalToday()
+      ) {
+        return {
+          success: false,
+          message:
+            "La fecha del movimiento no puede ser posterior a hoy.",
+        };
+      }
+
+      const { data, error } =
+        await supabase.rpc(
+          "update_goal_movement",
+          {
+            p_movement_id:
+              updatedMovement.id,
+            p_goal_id: goalId,
+            p_type: type,
+            p_amount: amount,
+            p_description:
+              description || null,
+            p_date: movementDate,
+          }
+        );
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo actualizar el movimiento de ahorro."
+            ),
+        };
+      }
+
+      const rawMovement =
+        Array.isArray(data)
+          ? data[0]
+          : data;
+
+      const mappedMovement =
+        rawMovement
+          ? mapGoalMovement(
+              rawMovement
+            )
+          : null;
+
+      /*
+       * La función SQL puede modificar
+       * uno o incluso dos objetivos,
+       * por eso recargamos los datos
+       * financieros después de editar.
+       */
+      await loadFinanceData();
+
+      return {
+        success: true,
+        movement:
+          mappedMovement,
+      };
+    },
+    [
+      currentUserId,
+      loadFinanceData,
+    ]
+  );
+
+const deleteGoalMovement =
+  useCallback(
+    async (movementId) => {
+      if (
+        !currentUserId ||
+        !movementId
+      ) {
+        return {
+          success: false,
+          message:
+            "No se encontró el movimiento de ahorro.",
+        };
+      }
+
+      const { error } =
+        await supabase.rpc(
+          "delete_goal_movement",
+          {
+            p_movement_id:
+              movementId,
+          }
+        );
+
+      if (error) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo eliminar el movimiento de ahorro."
+            ),
+        };
+      }
+
+      /*
+       * Al eliminar un movimiento,
+       * Supabase recalcula el monto
+       * del objetivo. Recargamos para
+       * reflejarlo inmediatamente.
+       */
+      await loadFinanceData();
+
+      return {
+        success: true,
+      };
+    },
+    [
+      currentUserId,
+      loadFinanceData,
+    ]
   );
 
   const updateSettings =
@@ -2077,6 +2732,7 @@ function FinanceProvider({ children }) {
       }
 
       setGoals([]);
+      setGoalMovements([]);
 
       return {
         success: true,
@@ -2195,96 +2851,115 @@ function FinanceProvider({ children }) {
     movementUsage.isPremium;
 
   const value = useMemo(
-    () => ({
-      incomes,
-      expenses,
-      goals,
-      settings,
+  () => ({
+    incomes,
+    expenses,
+    goals,
+    goalMovements,
+    settings,
 
-      incomeCategories,
-      expenseCategories,
+    incomeCategories,
+    expenseCategories,
 
-      loading,
-      errorMessage,
+    loading,
+    errorMessage,
 
-      movementUsage,
-      monthlyMovementCount,
-      monthlyLimit,
-      remainingMovements,
-      monthlyUsagePercentage,
-      hasReachedMonthlyLimit,
-      isPremium,
+    movementUsage,
+    monthlyMovementCount,
+    monthlyLimit,
+    remainingMovements,
+    monthlyUsagePercentage,
+    hasReachedMonthlyLimit,
+    isPremium,
 
-      loadFinanceData,
-      refreshMovementUsage,
+    loadFinanceData,
+    refreshMovementUsage,
 
-      addIncome,
-      deleteIncome,
-      updateIncome,
+    addIncome,
+    deleteIncome,
+    updateIncome,
 
-      addExpense,
-      deleteExpense,
-      updateExpense,
+    addExpense,
+    deleteExpense,
+    updateExpense,
 
-      addGoal,
-      deleteGoal,
-      updateGoal,
+    addGoal,
+    deleteGoal,
+    updateGoal,
+    recordGoalMovement,
+    updateGoalMovement,
+    deleteGoalMovement,
 
-      addIncomeCategory,
-      deleteIncomeCategory,
-      updateIncomeCategory,
+    addIncomeCategory,
+    deleteIncomeCategory,
+    updateIncomeCategory,
 
-      addExpenseCategory,
-      deleteExpenseCategory,
-      updateExpenseCategory,
+    addExpenseCategory,
+    deleteExpenseCategory,
+    updateExpenseCategory,
 
-      updateSettings,
+    updateSettings,
 
-      clearIncomes,
-      clearExpenses,
-      clearGoals,
-      resetAppData,
-    }),
-    [
-      incomes,
-      expenses,
-      goals,
-      settings,
-      incomeCategories,
-      expenseCategories,
-      loading,
-      errorMessage,
-      movementUsage,
-      monthlyMovementCount,
-      monthlyLimit,
-      remainingMovements,
-      monthlyUsagePercentage,
-      hasReachedMonthlyLimit,
-      isPremium,
-      loadFinanceData,
-      refreshMovementUsage,
-      addIncome,
-      deleteIncome,
-      updateIncome,
-      addExpense,
-      deleteExpense,
-      updateExpense,
-      addGoal,
-      deleteGoal,
-      updateGoal,
-      addIncomeCategory,
-      deleteIncomeCategory,
-      updateIncomeCategory,
-      addExpenseCategory,
-      deleteExpenseCategory,
-      updateExpenseCategory,
-      updateSettings,
-      clearIncomes,
-      clearExpenses,
-      clearGoals,
-      resetAppData,
-    ]
-  );
+    clearIncomes,
+    clearExpenses,
+    clearGoals,
+    resetAppData,
+  }),
+  [
+    incomes,
+    expenses,
+    goals,
+    goalMovements,
+    settings,
+
+    incomeCategories,
+    expenseCategories,
+
+    loading,
+    errorMessage,
+
+    movementUsage,
+    monthlyMovementCount,
+    monthlyLimit,
+    remainingMovements,
+    monthlyUsagePercentage,
+    hasReachedMonthlyLimit,
+    isPremium,
+
+    loadFinanceData,
+    refreshMovementUsage,
+
+    addIncome,
+    deleteIncome,
+    updateIncome,
+
+    addExpense,
+    deleteExpense,
+    updateExpense,
+
+    addGoal,
+    deleteGoal,
+    updateGoal,
+    recordGoalMovement,
+    updateGoalMovement,
+    deleteGoalMovement,
+
+    addIncomeCategory,
+    deleteIncomeCategory,
+    updateIncomeCategory,
+
+    addExpenseCategory,
+    deleteExpenseCategory,
+    updateExpenseCategory,
+
+    updateSettings,
+
+    clearIncomes,
+    clearExpenses,
+    clearGoals,
+    resetAppData,
+  ]
+);
 
   return (
     <FinanceContext.Provider
