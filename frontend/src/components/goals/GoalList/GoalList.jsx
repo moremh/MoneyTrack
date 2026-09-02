@@ -9,10 +9,7 @@ function GoalList({
 }) {
   if (loading) {
     return (
-      <div
-        className={styles.emptyState}
-        role="status"
-      >
+      <div className={styles.emptyState} role="status">
         Cargando objetivos...
       </div>
     );
@@ -20,9 +17,7 @@ function GoalList({
 
   if (goals.length === 0) {
     return (
-      <div
-        className={styles.emptyState}
-      >
+      <div className={styles.emptyState}>
         Todavía no agregaste objetivos.
       </div>
     );
@@ -31,40 +26,40 @@ function GoalList({
   return (
     <div className={styles.list}>
       {goals.map((goal) => {
-        const targetAmount =
-          Number(
-            goal.targetAmount
-          ) || 0;
+        const targetAmount = Number(goal.targetAmount) || 0;
+        const currentAmount = Number(goal.currentAmount) || 0;
 
-        const currentAmount =
-          Number(
-            goal.currentAmount
-          ) || 0;
-
-        const percentage =
+        const rawPercentage =
           targetAmount > 0
-            ? Math.min(
-                100,
-                Math.max(
-                  0,
-                  Math.round(
-                    (
-                      currentAmount /
-                      targetAmount
-                    ) * 100
-                  )
-                )
-              )
+            ? (currentAmount / targetAmount) * 100
             : 0;
 
+        const percentage = Math.min(
+          100,
+          Math.max(0, rawPercentage)
+        );
+
+        const percentageLabel =
+  percentage <= 0
+    ? "0"
+    : percentage < 10
+      ? percentage
+          .toFixed(1)
+          .replace(".", ",")
+      : String(
+          Math.round(
+            percentage
+          )
+        );
+
+        const hasProgress =
+          currentAmount > 0 && percentage > 0;
+
         const isDeleting =
-          deletingGoalId ===
-          goal.id;
+          deletingGoalId === goal.id;
 
         const goalTitle =
-          goal.title ||
-          goal.name ||
-          "Objetivo";
+          goal.title || goal.name || "Objetivo";
 
         const formattedDeadline =
           goal.deadline
@@ -82,34 +77,19 @@ function GoalList({
           >
             <div className={styles.top}>
               <div>
-                <h3
-                  className={
-                    styles.title
-                  }
-                >
+                <h3 className={styles.title}>
                   {goalTitle}
                 </h3>
 
-                <p
-                  className={
-                    styles.deadline
-                  }
-                >
-                  Fecha límite:{" "}
-                  {formattedDeadline}
+                <p className={styles.deadline}>
+                  Fecha límite: {formattedDeadline}
                 </p>
               </div>
 
-              <div
-                className={
-                  styles.actions
-                }
-              >
+              <div className={styles.actions}>
                 <button
                   type="button"
-                  onClick={() =>
-                    onEdit(goal)
-                  }
+                  onClick={() => onEdit(goal)}
                   disabled={isDeleting}
                   title="Editar objetivo"
                   aria-label={`Editar objetivo ${goalTitle}`}
@@ -119,11 +99,7 @@ function GoalList({
 
                 <button
                   type="button"
-                  onClick={() =>
-                    void onDelete(
-                      goal.id
-                    )
-                  }
+                  onClick={() => void onDelete(goal.id)}
                   disabled={isDeleting}
                   title="Eliminar objetivo"
                   aria-label={`Eliminar objetivo ${goalTitle}`}
@@ -139,66 +115,45 @@ function GoalList({
               </div>
             </div>
 
-            <div
-              className={
-                styles.values
-              }
-            >
+            <div className={styles.values}>
               <span>
                 Ahorrado: ${" "}
-                {currentAmount.toLocaleString(
-                  "es-AR",
-                  {
-                    minimumFractionDigits:
-                      0,
-                    maximumFractionDigits:
-                      2,
-                  }
-                )}
+                {currentAmount.toLocaleString("es-AR", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                })}
               </span>
 
               <span>
                 Objetivo: ${" "}
-                {targetAmount.toLocaleString(
-                  "es-AR",
-                  {
-                    minimumFractionDigits:
-                      0,
-                    maximumFractionDigits:
-                      2,
-                  }
-                )}
+                {targetAmount.toLocaleString("es-AR", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                })}
               </span>
             </div>
 
             <div
-              className={
-                styles.progressBar
-              }
+              className={styles.progressBar}
               role="progressbar"
               aria-label={`Progreso de ${goalTitle}`}
               aria-valuemin="0"
               aria-valuemax="100"
-              aria-valuenow={
-                percentage
-              }
+              aria-valuenow={Number(
+                percentage.toFixed(2)
+              )}
             >
               <div
-                className={
-                  styles.progress
-                }
+                className={styles.progress}
                 style={{
                   width: `${percentage}%`,
+                  minWidth: hasProgress ? "4px" : "0",
                 }}
               ></div>
             </div>
 
-            <p
-              className={
-                styles.percent
-              }
-            >
-              {percentage}% completado
+            <p className={styles.percent}>
+              {percentageLabel}% completado
             </p>
           </div>
         );
