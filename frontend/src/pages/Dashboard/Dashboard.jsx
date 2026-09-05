@@ -737,7 +737,7 @@ function Dashboard() {
           <i className="bi bi-piggy-bank"></i>
 
           <span>
-            Ahorro
+            Agregar ahorro
           </span>
         </button>
       </section>
