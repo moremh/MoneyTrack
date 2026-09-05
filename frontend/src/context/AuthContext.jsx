@@ -9,6 +9,12 @@ import {
 
 import { supabase } from "../lib/supabase";
 
+import {
+  clearUserOfflineData,
+  getCachedProfile,
+  saveCachedProfile,
+} from "../lib/offlineStorage";
+
 export const AuthContext = createContext(null);
 
 const DEFAULT_MONTHLY_LIMIT = 100;
@@ -189,99 +195,161 @@ function AuthProvider({ children }) {
   const [usersLoading, setUsersLoading] =
     useState(false);
 
-  const fetchCurrentProfile = useCallback(
-    async (userId) => {
-      if (!userId) {
-        return {
-          success: false,
-          user: null,
-          message:
-            "No se encontró el usuario autenticado.",
-        };
-      }
+const fetchCurrentProfile = useCallback(
+  async (userId) => {
+    if (!userId) {
+      return {
+        success: false,
+        user: null,
+        message:
+          "No se encontró el usuario autenticado.",
+      };
+    }
 
-      /*
-       * Actualiza la suscripción si Premium
-       * ya venció.
-       */
-      const { error: refreshError } =
-        await supabase.rpc(
-          "refresh_my_subscription"
-        );
+    const loadCachedProfile =
+      async () => {
+        const cachedUser =
+          await getCachedProfile(
+            userId
+          );
 
-      if (refreshError) {
-        console.error(
-          "No se pudo revisar la suscripción:",
-          refreshError
-        );
-      }
-
-      const {
-        data: profile,
-        error: profileError,
-      } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          name,
-          email,
-          role,
-          account_status,
-          currency,
-          theme,
-          created_at,
-          updated_at,
-          subscriptions (
-            id,
-            user_id,
-            plan,
-            billing_cycle,
-            premium_status,
-            monthly_limit,
-            premium_activated_at,
-            premium_expires_at,
-            last_payment_amount,
-            last_payment_at,
-            created_at,
-            updated_at
-          )
-        `)
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error(
-          "No se pudo cargar el perfil:",
-          profileError
-        );
+        if (!cachedUser) {
+          return null;
+        }
 
         return {
-          success: false,
-          user: null,
-          message:
-            "No se pudo cargar la información de la cuenta.",
+          success: true,
+          user: cachedUser,
+          offline: true,
         };
-      }
+      };
 
-      if (!profile) {
-        return {
-          success: false,
-          user: null,
-          message:
-            "No se encontró el perfil asociado a esta cuenta.",
-        };
-      }
+    /*
+     * Si no hay conexión, usamos el último
+     * perfil sincronizado de este usuario.
+     */
+    if (!navigator.onLine) {
+      const cachedResult =
+        await loadCachedProfile();
 
-      const mappedUser =
-        mapProfile(profile);
+      if (cachedResult) {
+        return cachedResult;
+      }
 
       return {
-        success: true,
-        user: mappedUser,
+        success: false,
+        user: null,
+        offline: true,
+        message:
+          "No hay conexión y todavía no existe información offline para esta cuenta.",
       };
-    },
-    []
-  );
+    }
+
+    /*
+     * Actualiza la suscripción si Premium
+     * ya venció.
+     */
+    const { error: refreshError } =
+      await supabase.rpc(
+        "refresh_my_subscription"
+      );
+
+    if (refreshError) {
+      console.error(
+        "No se pudo revisar la suscripción:",
+        refreshError
+      );
+    }
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        name,
+        email,
+        role,
+        account_status,
+        currency,
+        theme,
+        created_at,
+        updated_at,
+        subscriptions (
+          id,
+          user_id,
+          plan,
+          billing_cycle,
+          premium_status,
+          monthly_limit,
+          premium_activated_at,
+          premium_expires_at,
+          last_payment_amount,
+          last_payment_at,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq("id", userId)
+      .maybeSingle();
+
+    /*
+     * Puede ocurrir que navigator.onLine diga
+     * que existe conexión pero Supabase no
+     * responda. En ese caso también intentamos
+     * utilizar la copia local.
+     */
+    if (profileError) {
+      console.error(
+        "No se pudo cargar el perfil:",
+        profileError
+      );
+
+      const cachedResult =
+        await loadCachedProfile();
+
+      if (cachedResult) {
+        return cachedResult;
+      }
+
+      return {
+        success: false,
+        user: null,
+        message:
+          "No se pudo cargar la información de la cuenta.",
+      };
+    }
+
+    if (!profile) {
+      return {
+        success: false,
+        user: null,
+        message:
+          "No se encontró el perfil asociado a esta cuenta.",
+      };
+    }
+
+    const mappedUser =
+      mapProfile(profile);
+
+    /*
+     * Guardamos solamente el perfil del
+     * usuario autenticado. Nunca mezclamos
+     * información entre cuentas.
+     */
+    await saveCachedProfile(
+      mappedUser
+    );
+
+    return {
+      success: true,
+      user: mappedUser,
+      offline: false,
+    };
+  },
+  []
+);
 
   const fetchAdminUsers =
     useCallback(async () => {
@@ -474,12 +542,13 @@ function AuthProvider({ children }) {
       setCurrentUser(loadedUser);
 
       if (
-        loadedUser.role === "admin"
-      ) {
-        await fetchAdminUsers();
-      } else {
-        setUsers([]);
-      }
+  loadedUser.role === "admin" &&
+  navigator.onLine
+) {
+  await fetchAdminUsers();
+} else {
+  setUsers([]);
+}
 
       setLoading(false);
 
@@ -700,27 +769,38 @@ function AuthProvider({ children }) {
     };
   };
 
-  const logout = async () => {
-    const { error } =
-      await supabase.auth.signOut();
+const logout = async () => {
+  const offlineUserId =
+    currentUser?.id ||
+    authUser?.id ||
+    null;
 
-    if (error) {
-      return {
-        success: false,
-        message:
-          getAuthErrorMessage(error),
-      };
-    }
+  const { error } =
+    await supabase.auth.signOut();
 
-    setSession(null);
-    setAuthUser(null);
-    setCurrentUser(null);
-    setUsers([]);
-
+  if (error) {
     return {
-      success: true,
+      success: false,
+      message:
+        getAuthErrorMessage(error),
     };
+  }
+
+  if (offlineUserId) {
+    await clearUserOfflineData(
+      offlineUserId
+    );
+  }
+
+  setSession(null);
+  setAuthUser(null);
+  setCurrentUser(null);
+  setUsers([]);
+
+  return {
+    success: true,
   };
+};
 
   const refreshCurrentUser =
     useCallback(async () => {

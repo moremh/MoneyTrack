@@ -7,6 +7,12 @@ import {
 } from "react";
 
 import { supabase } from "../lib/supabase";
+
+import {
+  getFinanceSnapshot,
+  saveFinanceSnapshot,
+} from "../lib/offlineStorage";
+
 import { useAuth } from "./AuthContext";
 
 import {
@@ -459,6 +465,11 @@ function FinanceProvider({ children }) {
   const [errorMessage, setErrorMessage] =
     useState("");
 
+  const [
+  financeCacheReady,
+  setFinanceCacheReady,
+] = useState(false);
+
   const currentUserId =
     currentUser?.id || null;
 
@@ -506,25 +517,96 @@ function FinanceProvider({ children }) {
       ];
     }, [categoryRecords]);
 
-  const resetLocalState =
-    useCallback(() => {
-      setIncomes([]);
-      setExpenses([]);
-      setGoals([]);
-      setGoalMovements([]);
-      setCategoryRecords([]);
+const resetLocalState =
+  useCallback(() => {
+    setIncomes([]);
+    setExpenses([]);
+    setGoals([]);
+    setGoalMovements([]);
+    setCategoryRecords([]);
 
-      setSettings(
-        DEFAULT_SETTINGS
+    setSettings(
+      DEFAULT_SETTINGS
+    );
+
+    setMovementUsage(
+      getDefaultMovementUsage(null)
+    );
+
+    setFinanceCacheReady(false);
+
+    setErrorMessage("");
+    setLoading(false);
+  }, []);
+
+const applyFinanceSnapshot =
+  useCallback(
+    (snapshot) => {
+      if (!snapshot) {
+        return false;
+      }
+
+      setIncomes(
+        Array.isArray(snapshot.incomes)
+          ? snapshot.incomes
+          : []
       );
 
+      setExpenses(
+        Array.isArray(snapshot.expenses)
+          ? snapshot.expenses
+          : []
+      );
+
+      setGoals(
+        Array.isArray(snapshot.goals)
+          ? snapshot.goals
+          : []
+      );
+
+      setGoalMovements(
+        Array.isArray(
+          snapshot.goalMovements
+        )
+          ? snapshot.goalMovements
+          : []
+      );
+
+      setCategoryRecords(
+        Array.isArray(
+          snapshot.categoryRecords
+        )
+          ? snapshot.categoryRecords
+          : []
+      );
+
+      setSettings({
+        userName:
+          snapshot.settings?.userName ||
+          currentUser?.name ||
+          DEFAULT_SETTINGS.userName,
+
+        theme: normalizeTheme(
+          snapshot.settings?.theme ||
+            currentUser?.theme ||
+            DEFAULT_SETTINGS.theme
+        ),
+      });
+
       setMovementUsage(
-        getDefaultMovementUsage(null)
+        snapshot.movementUsage ||
+          getDefaultMovementUsage(
+            currentUser
+          )
       );
 
       setErrorMessage("");
-      setLoading(false);
-    }, []);
+      setFinanceCacheReady(true);
+
+      return true;
+    },
+    [currentUser]
+  );
 
   const refreshMovementUsage =
     useCallback(async () => {
@@ -585,194 +667,308 @@ function FinanceProvider({ children }) {
     ]);
 
   const loadFinanceData =
-    useCallback(async () => {
-      if (!currentUserId) {
-        resetLocalState();
-        return {
-          success: false,
-          message:
-            "No hay una sesión activa.",
-        };
-      }
+  useCallback(async () => {
+    if (!currentUserId) {
+      resetLocalState();
 
-      setLoading(true);
-      setErrorMessage("");
+      return {
+        success: false,
+        message:
+          "No hay una sesión activa.",
+      };
+    }
 
-      try {
-        const [
-          transactionsResult,
-          categoriesResult,
-          goalsResult,
-          goalMovementsResult,
-          usageResult,
-        ] = await Promise.all([
-          supabase
-            .from("transactions")
-            .select(
-              TRANSACTION_FIELDS
-            )
-            .eq(
-              "user_id",
-              currentUserId
-            )
-            .order("created_at", {
-              ascending: false,
-            }),
+    setLoading(true);
+    setErrorMessage("");
 
-          supabase
-            .from("categories")
-            .select(CATEGORY_FIELDS)
-            .eq(
-              "user_id",
-              currentUserId
-            )
-            .order("created_at", {
-              ascending: true,
-            }),
-
-          supabase
-            .from("goals")
-            .select(GOAL_FIELDS)
-            .eq(
-              "user_id",
-              currentUserId
-            )
-            .order("created_at", {
-              ascending: false,
-            }),
-
-          supabase
-            .from("goal_movements")
-            .select(
-              GOAL_MOVEMENT_FIELDS
-            )
-            .eq(
-              "user_id",
-              currentUserId
-            )
-            .order("date", {
-              ascending: false,
-            })
-            .order("created_at", {
-              ascending: false,
-            }),
-
-          supabase.rpc(
-            "get_my_movement_usage"
-          ),
-        ]);
-
-        if (
-          transactionsResult.error
-        ) {
-          throw transactionsResult.error;
-        }
-
-        if (categoriesResult.error) {
-          throw categoriesResult.error;
-        }
-
-        if (goalsResult.error) {
-          throw goalsResult.error;
-        }
-
-        if (goalMovementsResult.error) {
-          throw goalMovementsResult.error;
-        }
-
-        const transactions = (
-          transactionsResult.data || []
-        ).map(mapTransaction);
-
-        setIncomes(
-          transactions.filter(
-            (transaction) =>
-              transaction.type ===
-              "income"
-          )
-        );
-
-        setExpenses(
-          transactions.filter(
-            (transaction) =>
-              transaction.type ===
-              "expense"
-          )
-        );
-
-        setCategoryRecords(
-          (
-            categoriesResult.data || []
-          ).map(mapCategory)
-        );
-
-        setGoals(
-          (goalsResult.data || []).map(
-            mapGoal
-          )
-        );
-
-        setGoalMovements(
-          (
-            goalMovementsResult.data || []
-          ).map(mapGoalMovement)
-        );
-
-        setSettings({
-          userName:
-            currentUser?.name ||
-            DEFAULT_SETTINGS.userName,
-
-          theme: normalizeTheme(
-            currentUser?.theme ||
-              DEFAULT_SETTINGS.theme
-          ),
-        });
-
-        if (usageResult.error) {
-          console.error(
-            "No se pudo cargar el uso mensual:",
-            usageResult.error
+    const loadCachedFinance =
+      async () => {
+        const snapshot =
+          await getFinanceSnapshot(
+            currentUserId
           );
 
-          setMovementUsage(
-            getDefaultMovementUsage(
-              currentUser
-            )
-          );
-        } else {
-          setMovementUsage(
-            mapMovementUsage(
-              usageResult.data,
-              currentUser
-            )
-          );
+        if (!snapshot) {
+          return false;
         }
 
+        return applyFinanceSnapshot(
+          snapshot
+        );
+      };
+
+    /*
+     * Si sabemos que no hay conexión,
+     * ni siquiera intentamos consultar
+     * Supabase.
+     */
+    if (!navigator.onLine) {
+      const loadedFromCache =
+        await loadCachedFinance();
+
+      setLoading(false);
+
+      if (loadedFromCache) {
         return {
           success: true,
+          offline: true,
         };
-      } catch (error) {
-        const message =
-          getDatabaseErrorMessage(
-            error,
-            "No se pudieron cargar los datos financieros."
-          );
-
-        setErrorMessage(message);
-
-        return {
-          success: false,
-          message,
-        };
-      } finally {
-        setLoading(false);
       }
-    }, [
-      currentUser,
-      currentUserId,
-      resetLocalState,
-    ]);
+
+      const message =
+        "No hay conexión y todavía no existen datos financieros guardados en este dispositivo.";
+
+      setErrorMessage(message);
+
+      return {
+        success: false,
+        offline: true,
+        message,
+      };
+    }
+
+    try {
+      const [
+        transactionsResult,
+        categoriesResult,
+        goalsResult,
+        goalMovementsResult,
+        usageResult,
+      ] = await Promise.all([
+        supabase
+          .from("transactions")
+          .select(
+            TRANSACTION_FIELDS
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .order("created_at", {
+            ascending: false,
+          }),
+
+        supabase
+          .from("categories")
+          .select(CATEGORY_FIELDS)
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .order("created_at", {
+            ascending: true,
+          }),
+
+        supabase
+          .from("goals")
+          .select(GOAL_FIELDS)
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .order("created_at", {
+            ascending: false,
+          }),
+
+        supabase
+          .from("goal_movements")
+          .select(
+            GOAL_MOVEMENT_FIELDS
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .order("date", {
+            ascending: false,
+          })
+          .order("created_at", {
+            ascending: false,
+          }),
+
+        supabase.rpc(
+          "get_my_movement_usage"
+        ),
+      ]);
+
+      if (
+        transactionsResult.error
+      ) {
+        throw transactionsResult.error;
+      }
+
+      if (
+        categoriesResult.error
+      ) {
+        throw categoriesResult.error;
+      }
+
+      if (goalsResult.error) {
+        throw goalsResult.error;
+      }
+
+      if (
+        goalMovementsResult.error
+      ) {
+        throw goalMovementsResult.error;
+      }
+
+      const transactions = (
+        transactionsResult.data || []
+      ).map(mapTransaction);
+
+      const nextIncomes =
+        transactions.filter(
+          (transaction) =>
+            transaction.type ===
+            "income"
+        );
+
+      const nextExpenses =
+        transactions.filter(
+          (transaction) =>
+            transaction.type ===
+            "expense"
+        );
+
+      const nextCategories = (
+        categoriesResult.data || []
+      ).map(mapCategory);
+
+      const nextGoals = (
+        goalsResult.data || []
+      ).map(mapGoal);
+
+      const nextGoalMovements = (
+        goalMovementsResult.data || []
+      ).map(mapGoalMovement);
+
+      const nextSettings = {
+        userName:
+          currentUser?.name ||
+          DEFAULT_SETTINGS.userName,
+
+        theme: normalizeTheme(
+          currentUser?.theme ||
+            DEFAULT_SETTINGS.theme
+        ),
+      };
+
+      let nextMovementUsage;
+
+      if (usageResult.error) {
+        console.error(
+          "No se pudo cargar el uso mensual:",
+          usageResult.error
+        );
+
+        nextMovementUsage =
+          getDefaultMovementUsage(
+            currentUser
+          );
+      } else {
+        nextMovementUsage =
+          mapMovementUsage(
+            usageResult.data,
+            currentUser
+          );
+      }
+
+      setIncomes(nextIncomes);
+      setExpenses(nextExpenses);
+
+      setCategoryRecords(
+        nextCategories
+      );
+
+      setGoals(nextGoals);
+
+      setGoalMovements(
+        nextGoalMovements
+      );
+
+      setSettings(nextSettings);
+
+      setMovementUsage(
+        nextMovementUsage
+      );
+
+      /*
+       * A partir de este momento ya
+       * podemos mantener una copia local
+       * de los estados financieros.
+       */
+      setFinanceCacheReady(true);
+
+      await saveFinanceSnapshot(
+        currentUserId,
+        {
+          incomes: nextIncomes,
+          expenses: nextExpenses,
+          goals: nextGoals,
+
+          goalMovements:
+            nextGoalMovements,
+
+          categoryRecords:
+            nextCategories,
+
+          settings: nextSettings,
+
+          movementUsage:
+            nextMovementUsage,
+
+          cachedAt:
+            new Date().toISOString(),
+        }
+      );
+
+      return {
+        success: true,
+        offline: false,
+      };
+    } catch (error) {
+      console.warn(
+        "No se pudieron obtener los datos desde Supabase. Intentando usar la copia offline.",
+        error
+      );
+
+      /*
+       * Incluso si navigator.onLine decía
+       * que había internet, la conexión a
+       * Supabase puede haber fallado.
+       */
+      const loadedFromCache =
+        await loadCachedFinance();
+
+      if (loadedFromCache) {
+        return {
+          success: true,
+          offline: true,
+        };
+      }
+
+      const message =
+        getDatabaseErrorMessage(
+          error,
+          "No se pudieron cargar los datos financieros."
+        );
+
+      setErrorMessage(message);
+
+      return {
+        success: false,
+        message,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    applyFinanceSnapshot,
+    currentUser,
+    currentUserId,
+    resetLocalState,
+  ]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -786,6 +982,45 @@ function FinanceProvider({ children }) {
     loadFinanceData,
     resetLocalState,
   ]);
+
+useEffect(() => {
+  if (
+    !currentUserId ||
+    !financeCacheReady
+  ) {
+    return;
+  }
+
+  void saveFinanceSnapshot(
+    currentUserId,
+    {
+      incomes,
+      expenses,
+      goals,
+
+      goalMovements,
+
+      categoryRecords,
+
+      settings,
+
+      movementUsage,
+
+      cachedAt:
+        new Date().toISOString(),
+    }
+  );
+}, [
+  currentUserId,
+  financeCacheReady,
+  incomes,
+  expenses,
+  goals,
+  goalMovements,
+  categoryRecords,
+  settings,
+  movementUsage,
+]);
 
   useEffect(() => {
     const applyTheme = () => {
