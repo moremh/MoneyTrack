@@ -581,7 +581,7 @@ function Dashboard() {
 
       if (!savingsGoalId) {
         setSavingsError(
-          "Seleccioná un objetivo de ahorro."
+          "Seleccionár un objetivo de ahorro."
         );
         return;
       }
