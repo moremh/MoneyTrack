@@ -168,6 +168,109 @@ const getRecord = async (key) => {
   }
 };
 
+const updateRecord = async (
+  key,
+  updater
+) => {
+  try {
+    const database =
+      await openDatabase();
+
+    if (!database) {
+      return false;
+    }
+
+    return await new Promise(
+      (resolve) => {
+        const transaction =
+          database.transaction(
+            STORE_NAME,
+            "readwrite"
+          );
+
+        const store =
+          transaction.objectStore(
+            STORE_NAME
+          );
+
+        const request =
+          store.get(key);
+
+        let didWrite = false;
+
+        request.onsuccess = () => {
+          try {
+            const currentValue =
+              request.result?.value ??
+              null;
+
+            const nextValue =
+              updater(currentValue);
+
+            if (
+              typeof nextValue ===
+              "undefined"
+            ) {
+              transaction.abort();
+              return;
+            }
+
+            store.put({
+              key,
+              value: nextValue,
+              cachedAt:
+                new Date().toISOString(),
+            });
+
+            didWrite = true;
+          } catch (error) {
+            console.warn(
+              "No se pudo actualizar información offline:",
+              error
+            );
+
+            transaction.abort();
+          }
+        };
+
+        request.onerror = () => {
+          console.warn(
+            "No se pudo leer el registro para actualizarlo:",
+            request.error
+          );
+
+          transaction.abort();
+        };
+
+        transaction.oncomplete =
+          () => {
+            resolve(didWrite);
+          };
+
+        transaction.onerror = () => {
+          console.warn(
+            "No se pudo actualizar IndexedDB:",
+            transaction.error
+          );
+
+          resolve(false);
+        };
+
+        transaction.onabort = () => {
+          resolve(false);
+        };
+      }
+    );
+  } catch (error) {
+    console.warn(
+      "No se pudo actualizar IndexedDB:",
+      error
+    );
+
+    return false;
+  }
+};
+
 const deleteRecord = async (
   key
 ) => {
@@ -228,6 +331,10 @@ const getFinanceKey = (
   userId
 ) => `finance:${userId}`;
 
+const getSyncQueueKey = (
+  userId
+) => `sync-queue:${userId}`;
+
 export const saveCachedProfile =
   async (user) => {
     if (!user?.id) {
@@ -283,11 +390,158 @@ export const getFinanceSnapshot =
     return record?.value || null;
   };
 
+/*
+ * Cola persistente de sincronización.
+ *
+ * En esta primera etapa guardaremos aquí
+ * solamente ingresos y gastos creados
+ * mientras no hay conexión.
+ *
+ * Cada operación debe tener un id único.
+ * Para las transacciones usaremos el mismo
+ * UUID como id y clientMutationId.
+ */
+
+export const getPendingSyncOperations =
+  async (userId) => {
+    if (!userId) {
+      return [];
+    }
+
+    const record =
+      await getRecord(
+        getSyncQueueKey(userId)
+      );
+
+    return Array.isArray(
+      record?.value
+    )
+      ? record.value
+      : [];
+  };
+
+export const addPendingSyncOperation =
+  async (
+    userId,
+    operation
+  ) => {
+    if (
+      !userId ||
+      !operation?.id
+    ) {
+      return false;
+    }
+
+    return updateRecord(
+      getSyncQueueKey(userId),
+      (currentValue) => {
+        const currentQueue =
+          Array.isArray(
+            currentValue
+          )
+            ? currentValue
+            : [];
+
+        const alreadyExists =
+          currentQueue.some(
+            (item) =>
+              item?.id ===
+              operation.id
+          );
+
+        if (alreadyExists) {
+          return currentQueue;
+        }
+
+        return [
+          ...currentQueue,
+          {
+            ...operation,
+            queuedAt:
+              operation.queuedAt ||
+              new Date().toISOString(),
+          },
+        ];
+      }
+    );
+  };
+
+export const removePendingSyncOperation =
+  async (
+    userId,
+    operationId
+  ) => {
+    if (
+      !userId ||
+      !operationId
+    ) {
+      return false;
+    }
+
+    return updateRecord(
+      getSyncQueueKey(userId),
+      (currentValue) => {
+        const currentQueue =
+          Array.isArray(
+            currentValue
+          )
+            ? currentValue
+            : [];
+
+        return currentQueue.filter(
+          (item) =>
+            item?.id !==
+            operationId
+        );
+      }
+    );
+  };
+
+export const replacePendingSyncOperations =
+  async (
+    userId,
+    operations
+  ) => {
+    if (
+      !userId ||
+      !Array.isArray(operations)
+    ) {
+      return false;
+    }
+
+    return saveRecord(
+      getSyncQueueKey(userId),
+      operations
+    );
+  };
+
+export const clearPendingSyncOperations =
+  async (userId) => {
+    if (!userId) {
+      return false;
+    }
+
+    return deleteRecord(
+      getSyncQueueKey(userId)
+    );
+  };
+
 export const clearUserOfflineData =
   async (userId) => {
     if (!userId) {
       return;
     }
+
+    /*
+     * No borramos la cola de sincronización
+     * automáticamente.
+     *
+     * Puede contener movimientos creados
+     * sin conexión que todavía no llegaron
+     * a Supabase. Si la elimináramos durante
+     * un cierre de sesión, podríamos perder
+     * información pendiente.
+     */
 
     await Promise.all([
       deleteRecord(

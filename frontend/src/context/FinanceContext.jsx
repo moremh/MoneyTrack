@@ -3,13 +3,17 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import { supabase } from "../lib/supabase";
 
 import {
+  addPendingSyncOperation,
   getFinanceSnapshot,
+  getPendingSyncOperations,
+  removePendingSyncOperation,
   saveFinanceSnapshot,
 } from "../lib/offlineStorage";
 
@@ -34,6 +38,118 @@ const DEFAULT_SETTINGS = {
   theme: "light",
 };
 
+const createClientMutationId =
+  () => {
+    const cryptoObject =
+      globalThis?.crypto;
+
+    if (
+      cryptoObject &&
+      typeof cryptoObject.randomUUID ===
+        "function"
+    ) {
+      return (
+        cryptoObject.randomUUID()
+      );
+    }
+
+    /*
+     * Fallback para navegadores donde
+     * randomUUID no esté disponible.
+     *
+     * Sigue generando un UUID válido
+     * para poder enviarlo a PostgreSQL.
+     */
+
+    const bytes =
+      new Uint8Array(16);
+
+    if (
+      cryptoObject &&
+      typeof cryptoObject.getRandomValues ===
+        "function"
+    ) {
+      cryptoObject.getRandomValues(
+        bytes
+      );
+    } else {
+      for (
+        let index = 0;
+        index < bytes.length;
+        index += 1
+      ) {
+        bytes[index] =
+          Math.floor(
+            Math.random() * 256
+          );
+      }
+    }
+
+    bytes[6] =
+      (bytes[6] & 0x0f) |
+      0x40;
+
+    bytes[8] =
+      (bytes[8] & 0x3f) |
+      0x80;
+
+    const hex =
+      Array.from(
+        bytes,
+        (byte) =>
+          byte
+            .toString(16)
+            .padStart(2, "0")
+      );
+
+    return [
+      hex.slice(0, 4).join(""),
+      hex.slice(4, 6).join(""),
+      hex.slice(6, 8).join(""),
+      hex.slice(8, 10).join(""),
+      hex.slice(10, 16).join(""),
+    ].join("-");
+  };
+
+
+const isDeviceOffline = () =>
+  typeof navigator !==
+    "undefined" &&
+  navigator.onLine === false;
+
+
+const isNetworkError = (
+  error
+) => {
+  if (isDeviceOffline()) {
+    return true;
+  }
+
+  const content = [
+    error?.message,
+    error?.details,
+    error?.hint,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    content.includes(
+      "failed to fetch"
+    ) ||
+    content.includes(
+      "networkerror"
+    ) ||
+    content.includes(
+      "network request failed"
+    ) ||
+    content.includes(
+      "fetch failed"
+    )
+  );
+};
+
 const TRANSACTION_FIELDS = `
   id,
   user_id,
@@ -43,6 +159,7 @@ const TRANSACTION_FIELDS = `
   category_id,
   category_name,
   date,
+  client_mutation_id,
   created_at,
   updated_at
 `;
@@ -116,18 +233,51 @@ const normalizeTheme = (theme) => {
   return "light";
 };
 
-const mapTransaction = (transaction) => ({
+const mapTransaction = (
+  transaction
+) => ({
   id: transaction.id,
-  userId: transaction.user_id,
-  type: transaction.type,
-  description: transaction.description,
-  amount: Number(transaction.amount) || 0,
-  categoryId: transaction.category_id || null,
+
+  userId:
+    transaction.user_id,
+
+  type:
+    transaction.type,
+
+  description:
+    transaction.description,
+
+  amount:
+    Number(
+      transaction.amount
+    ) || 0,
+
+  categoryId:
+    transaction.category_id ||
+    null,
+
   category:
-    transaction.category_name || UNCATEGORIZED,
-  date: transaction.date,
-  createdAt: transaction.created_at,
-  updatedAt: transaction.updated_at,
+    transaction.category_name ||
+    UNCATEGORIZED,
+
+  date:
+    transaction.date,
+
+  clientMutationId:
+    transaction.client_mutation_id ||
+    null,
+
+  /*
+   * Los movimientos obtenidos desde
+   * Supabase ya están sincronizados.
+   */
+  isPendingSync: false,
+
+  createdAt:
+    transaction.created_at,
+
+  updatedAt:
+    transaction.updated_at,
 });
 
 const mapCategory = (category) => ({
@@ -488,6 +638,9 @@ function FinanceProvider({ children }) {
   financeCacheReady,
   setFinanceCacheReady,
 ] = useState(false);
+
+  const syncInProgressRef =
+  useRef(false);
 
   const currentUserId =
     currentUser?.id || null;
@@ -1195,125 +1348,784 @@ useEffect(() => {
     );
 
   const addMovement = useCallback(
-    async (movement, type) => {
-      const validation =
-        validateMovement(movement);
+  async (movement, type) => {
+    const validation =
+      validateMovement(
+        movement
+      );
 
-      if (!validation.success) {
-        return validation;
-      }
+    if (!validation.success) {
+      return validation;
+    }
 
-      if (
-        movementUsage.hasReachedLimit &&
-        !movementUsage.isPremium
-      ) {
-        return {
-          success: false,
-          code:
-            FREE_LIMIT_ERROR_CODE,
-          message: `Llegaste al límite de ${movementUsage.limit} movimientos mensuales del plan gratuito.`,
-        };
-      }
+    /*
+     * El límite que tenemos cargado
+     * sigue siendo válido como primera
+     * protección.
+     *
+     * Los movimientos offline todavía
+     * no consumen cuota porque todavía
+     * no fueron registrados en Supabase.
+     */
+    if (
+      movementUsage
+        .hasReachedLimit &&
+      !movementUsage.isPremium
+    ) {
+      return {
+        success: false,
 
-      const cleanCategory =
-        String(
-          movement.category ||
-            UNCATEGORIZED
-        ).trim() || UNCATEGORIZED;
+        code:
+          FREE_LIMIT_ERROR_CODE,
 
-      const categoryRecord =
-        findCategoryRecord(
-          cleanCategory,
-          type
-        );
+        message:
+          `Llegaste al límite de ${movementUsage.limit} movimientos mensuales del plan gratuito.`,
+      };
+    }
 
-      const payload = {
-        user_id: currentUserId,
+    const cleanCategory =
+      String(
+        movement.category ||
+          UNCATEGORIZED
+      ).trim() ||
+      UNCATEGORIZED;
+
+    const categoryRecord =
+      findCategoryRecord(
+        cleanCategory,
+        type
+      );
+
+    /*
+     * Generamos el identificador
+     * ANTES de decidir si estamos
+     * online u offline.
+     *
+     * Así, si Supabase recibe el
+     * movimiento pero se corta internet
+     * antes de responder, podremos
+     * reintentarlo después sin duplicarlo.
+     */
+    const clientMutationId =
+      createClientMutationId();
+
+    const description =
+      String(
+        movement.description ||
+          ""
+      ).trim();
+
+    const amount =
+      Number(
+        movement.amount
+      );
+
+    const now =
+      new Date().toISOString();
+
+    const offlineOperation = {
+      id:
+        clientMutationId,
+
+      clientMutationId,
+
+      entity:
+        "transaction",
+
+      action:
+        "create",
+
+      type,
+
+      payload: {
         type,
 
-        description:
-          movement.description.trim(),
+        description,
 
-        amount:
-          Number(movement.amount),
+        amount,
 
-        category_id:
-          categoryRecord?.id || null,
+        categoryId:
+          categoryRecord?.id ||
+          null,
 
-        category_name:
+        categoryName:
           cleanCategory,
 
-        date: validation.date,
-      };
+        date:
+          validation.date,
+      },
 
-      const { data, error } =
-        await supabase
-          .from("transactions")
-          .insert(payload)
-          .select(
-            TRANSACTION_FIELDS
-          )
-          .single();
+      queuedAt:
+        now,
+    };
 
-      if (error) {
-        if (
-          isFreeLimitError(error)
-        ) {
-          await refreshMovementUsage();
+    /*
+     * Este objeto tiene el mismo formato
+     * que utilizan incomes y expenses
+     * dentro de MoneyTrack.
+     */
+    const localMovement = {
+      id:
+        clientMutationId,
 
+      userId:
+        currentUserId,
+
+      type,
+
+      description,
+
+      amount,
+
+      categoryId:
+        categoryRecord?.id ||
+        null,
+
+      category:
+        cleanCategory,
+
+      date:
+        validation.date,
+
+      clientMutationId,
+
+      isPendingSync: true,
+
+      createdAt:
+        now,
+
+      updatedAt:
+        now,
+    };
+
+    /*
+     * Guarda localmente el movimiento
+     * y lo agrega a la cola.
+     */
+    const queueOfflineMovement =
+      async () => {
+        const queued =
+          await addPendingSyncOperation(
+            currentUserId,
+            offlineOperation
+          );
+
+        if (!queued) {
           return {
             success: false,
-            code:
-              FREE_LIMIT_ERROR_CODE,
+
             message:
-              "Llegaste al límite mensual de movimientos del plan gratuito.",
+              "No se pudo guardar el movimiento sin conexión en este dispositivo.",
           };
         }
 
+        if (type === "income") {
+          setIncomes(
+            (
+              currentIncomes
+            ) => {
+              const alreadyExists =
+                currentIncomes.some(
+                  (income) =>
+                    income.id ===
+                    localMovement.id
+                );
+
+              if (
+                alreadyExists
+              ) {
+                return (
+                  currentIncomes
+                );
+              }
+
+              return [
+                localMovement,
+                ...currentIncomes,
+              ];
+            }
+          );
+        } else {
+          setExpenses(
+            (
+              currentExpenses
+            ) => {
+              const alreadyExists =
+                currentExpenses.some(
+                  (expense) =>
+                    expense.id ===
+                    localMovement.id
+                );
+
+              if (
+                alreadyExists
+              ) {
+                return (
+                  currentExpenses
+                );
+              }
+
+              return [
+                localMovement,
+                ...currentExpenses,
+              ];
+            }
+          );
+        }
+
+        return {
+          success: true,
+
+          offline: true,
+
+          pendingSync: true,
+
+          movement:
+            localMovement,
+
+          message:
+            "Movimiento guardado sin conexión. Se sincronizará cuando vuelva internet.",
+        };
+      };
+
+
+    /*
+     * Si el navegador ya sabe que no
+     * tenemos conexión, ni siquiera
+     * intentamos consultar Supabase.
+     */
+    if (isDeviceOffline()) {
+      return (
+        await queueOfflineMovement()
+      );
+    }
+
+
+    /*
+     * Con conexión hacemos el alta
+     * normal.
+     *
+     * Guardamos también
+     * client_mutation_id para que un
+     * eventual reintento sea seguro.
+     */
+    const payload = {
+      user_id:
+        currentUserId,
+
+      type,
+
+      description,
+
+      amount,
+
+      category_id:
+        categoryRecord?.id ||
+        null,
+
+      category_name:
+        cleanCategory,
+
+      date:
+        validation.date,
+
+      client_mutation_id:
+        clientMutationId,
+    };
+
+
+    const { data, error } =
+      await supabase
+        .from(
+          "transactions"
+        )
+        .insert(payload)
+        .select(
+          TRANSACTION_FIELDS
+        )
+        .single();
+
+
+    if (error) {
+      /*
+       * Si realmente es un problema
+       * de conexión, guardamos el mismo
+       * movimiento en la cola.
+       *
+       * Como mantenemos el mismo
+       * clientMutationId, aunque
+       * Supabase lo haya llegado a
+       * insertar, la sincronización
+       * posterior no lo duplicará.
+       */
+      if (
+        isNetworkError(error)
+      ) {
+        return (
+          await queueOfflineMovement()
+        );
+      }
+
+      if (
+        isFreeLimitError(
+          error
+        )
+      ) {
+        await refreshMovementUsage();
+
         return {
           success: false,
+
+          code:
+            FREE_LIMIT_ERROR_CODE,
+
           message:
-            getDatabaseErrorMessage(
-              error,
-              "No se pudo registrar el movimiento."
-            ),
+            "Llegaste al límite mensual de movimientos del plan gratuito.",
         };
       }
 
-      const newMovement =
-        mapTransaction(data);
+      return {
+        success: false,
 
-      if (type === "income") {
-        setIncomes(
-          (currentIncomes) => [
-            newMovement,
-            ...currentIncomes,
-          ]
-        );
-      } else {
-        setExpenses(
-          (currentExpenses) => [
-            newMovement,
-            ...currentExpenses,
-          ]
-        );
+        message:
+          getDatabaseErrorMessage(
+            error,
+            "No se pudo registrar el movimiento."
+          ),
+      };
+    }
+
+
+    const newMovement =
+      mapTransaction(data);
+
+    if (type === "income") {
+      setIncomes(
+        (
+          currentIncomes
+        ) => [
+          newMovement,
+          ...currentIncomes,
+        ]
+      );
+    } else {
+      setExpenses(
+        (
+          currentExpenses
+        ) => [
+          newMovement,
+          ...currentExpenses,
+        ]
+      );
+    }
+
+
+    await refreshMovementUsage();
+
+
+    return {
+      success: true,
+
+      offline: false,
+
+      pendingSync: false,
+
+      movement:
+        newMovement,
+    };
+  },
+  [
+    currentUserId,
+    findCategoryRecord,
+    movementUsage,
+    refreshMovementUsage,
+    validateMovement,
+  ]
+);
+
+  const mergeSyncedTransactionIntoState =
+  useCallback(
+    (syncedMovement) => {
+      if (!syncedMovement) {
+        return;
       }
 
-      await refreshMovementUsage();
+      const mutationId =
+        syncedMovement
+          .clientMutationId;
+
+      const mergeMovement = (
+        currentMovements
+      ) => {
+        /*
+         * Eliminamos:
+         *
+         * - el movimiento local pendiente
+         * - una posible copia previa del
+         *   movimiento real
+         *
+         * y dejamos solamente la versión
+         * confirmada por Supabase.
+         */
+        const remainingMovements =
+          currentMovements.filter(
+            (movement) => {
+              if (
+                movement.id ===
+                syncedMovement.id
+              ) {
+                return false;
+              }
+
+              if (
+                mutationId &&
+                movement.id ===
+                  mutationId
+              ) {
+                return false;
+              }
+
+              if (
+                mutationId &&
+                movement
+                  .clientMutationId ===
+                  mutationId
+              ) {
+                return false;
+              }
+
+              return true;
+            }
+          );
+
+        return [
+          syncedMovement,
+          ...remainingMovements,
+        ];
+      };
+
+      if (
+        syncedMovement.type ===
+        "income"
+      ) {
+        setIncomes(
+          mergeMovement
+        );
+
+        return;
+      }
+
+      if (
+        syncedMovement.type ===
+        "expense"
+      ) {
+        setExpenses(
+          mergeMovement
+        );
+      }
+    },
+    []
+  );
+
+  const syncPendingTransactions =
+  useCallback(async () => {
+    if (!currentUserId) {
+      return {
+        success: false,
+        synced: 0,
+      };
+    }
+
+    /*
+     * Si sabemos que seguimos sin
+     * conexión no hacemos nada.
+     */
+    if (
+      typeof navigator !==
+        "undefined" &&
+      navigator.onLine === false
+    ) {
+      return {
+        success: false,
+        offline: true,
+        synced: 0,
+      };
+    }
+
+    /*
+     * Evita ejecutar dos sincronizaciones
+     * al mismo tiempo.
+     */
+    if (
+      syncInProgressRef.current
+    ) {
+      return {
+        success: false,
+        alreadyRunning: true,
+        synced: 0,
+      };
+    }
+
+    syncInProgressRef.current =
+      true;
+
+    let syncedCount = 0;
+    let failedCount = 0;
+
+    try {
+      const pendingOperations =
+        await getPendingSyncOperations(
+          currentUserId
+        );
+
+      const transactionOperations =
+        pendingOperations.filter(
+          (operation) =>
+            operation?.entity ===
+              "transaction" &&
+            operation?.action ===
+              "create"
+        );
+
+      if (
+        transactionOperations.length ===
+        0
+      ) {
+        return {
+          success: true,
+          synced: 0,
+          failed: 0,
+        };
+      }
+
+      /*
+       * Las procesamos de a una.
+       *
+       * Esto hace más fácil respetar
+       * el límite mensual y mantener
+       * el orden de los movimientos.
+       */
+      for (
+        const operation of
+        transactionOperations
+      ) {
+        const payload =
+          operation.payload || {};
+
+        const clientMutationId =
+          operation
+            .clientMutationId ||
+          operation.id;
+
+        const {
+          data,
+          error,
+        } = await supabase.rpc(
+          "sync_offline_transaction_create",
+          {
+            p_client_mutation_id:
+              clientMutationId,
+
+            p_type:
+              operation.type ||
+              payload.type,
+
+            p_description:
+              payload.description,
+
+            p_amount:
+              Number(
+                payload.amount
+              ),
+
+            p_category_id:
+              payload.categoryId ||
+              null,
+
+            p_category_name:
+              payload.categoryName ||
+              UNCATEGORIZED,
+
+            p_date:
+              payload.date,
+          }
+        );
+
+        if (error) {
+          /*
+           * Si vuelve a fallar internet,
+           * dejamos la operación en la
+           * cola y detenemos el proceso.
+           */
+          if (
+            isNetworkError(error)
+          ) {
+            failedCount += 1;
+            break;
+          }
+
+          /*
+           * Si el servidor rechaza el
+           * movimiento por límite mensual,
+           * tampoco lo borramos.
+           *
+           * El usuario no pierde el
+           * movimiento pendiente.
+           */
+          if (
+            isFreeLimitError(error)
+          ) {
+            failedCount += 1;
+
+            await refreshMovementUsage();
+
+            console.warn(
+              "Un movimiento offline no pudo sincronizarse porque se alcanzó el límite mensual."
+            );
+
+            break;
+          }
+
+          /*
+           * Otro error:
+           * dejamos el movimiento pendiente
+           * para poder revisarlo/reintentarlo.
+           */
+          failedCount += 1;
+
+          console.error(
+            "No se pudo sincronizar un movimiento offline:",
+            error
+          );
+
+          continue;
+        }
+
+        /*
+         * La RPC devuelve la transacción
+         * verdadera guardada en Supabase.
+         */
+        const syncedMovement =
+          mapTransaction(data);
+
+        /*
+         * Reemplazamos la copia local por
+         * la versión real.
+         */
+        mergeSyncedTransactionIntoState(
+          syncedMovement
+        );
+
+        /*
+         * Solo quitamos de IndexedDB
+         * después de que Supabase confirma
+         * que el movimiento existe.
+         */
+        const removed =
+          await removePendingSyncOperation(
+            currentUserId,
+            operation.id
+          );
+
+        if (!removed) {
+          /*
+           * No es crítico:
+           * gracias al client_mutation_id,
+           * un nuevo intento NO creará
+           * otra transacción.
+           */
+          console.warn(
+            "El movimiento se sincronizó, pero no se pudo quitar de la cola local."
+          );
+        }
+
+        syncedCount += 1;
+      }
+
+      if (syncedCount > 0) {
+        /*
+         * La cuota Free se actualiza según
+         * los movimientos que realmente
+         * llegaron al servidor.
+         */
+        await refreshMovementUsage();
+      }
 
       return {
-        success: true,
-        movement: newMovement,
+        success:
+          failedCount === 0,
+
+        synced:
+          syncedCount,
+
+        failed:
+          failedCount,
       };
-    },
-    [
-      currentUserId,
-      findCategoryRecord,
-      movementUsage,
-      refreshMovementUsage,
-      validateMovement,
-    ]
+    } catch (error) {
+      console.error(
+        "Error al sincronizar movimientos pendientes:",
+        error
+      );
+
+      return {
+        success: false,
+        synced:
+          syncedCount,
+        failed:
+          failedCount + 1,
+      };
+    } finally {
+      syncInProgressRef.current =
+        false;
+    }
+  }, [
+    currentUserId,
+    mergeSyncedTransactionIntoState,
+    refreshMovementUsage,
+  ]);
+
+  useEffect(() => {
+  if (
+    !currentUserId ||
+    !financeCacheReady
+  ) {
+    return undefined;
+  }
+
+  const handleOnline = () => {
+    void syncPendingTransactions();
+  };
+
+  window.addEventListener(
+    "online",
+    handleOnline
   );
+
+  /*
+   * También revisamos la cola al abrir
+   * MoneyTrack con conexión.
+   *
+   * Esto cubre el caso en el que el
+   * usuario cerró la aplicación mientras
+   * todavía tenía movimientos pendientes.
+   */
+  if (
+    navigator.onLine
+  ) {
+    void syncPendingTransactions();
+  }
+
+  return () => {
+    window.removeEventListener(
+      "online",
+      handleOnline
+    );
+  };
+}, [
+  currentUserId,
+  financeCacheReady,
+  syncPendingTransactions,
+]);
 
   const updateMovement =
     useCallback(
