@@ -47,15 +47,58 @@ export default defineConfig({
       },
 
       workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
-        navigateFallback: "/index.html",
+  cleanupOutdatedCaches: true,
+  clientsClaim: true,
+  skipWaiting: true,
+  navigateFallback: "/index.html",
 
-        globPatterns: [
-          "**/*.{js,css,html,ico,png,svg,woff,woff2}",
-        ],
+  globPatterns: [
+    "**/*.{js,css,html,ico,png,svg,woff,woff2}",
+  ],
+
+  /*
+   * Bootstrap Icons agrega un identificador
+   * en la URL de sus fuentes, por ejemplo:
+   *
+   * bootstrap-icons.woff2?dd6703...
+   *
+   * Lo ignoramos al buscar el archivo
+   * dentro del precache.
+   */
+  ignoreURLParametersMatching: [
+    /^utm_/,
+    /^fbclid$/,
+    /^dd[0-9a-f]+$/,
+  ],
+
+  /*
+   * Respaldo adicional para cualquier
+   * fuente utilizada por MoneyTrack.
+   */
+  runtimeCaching: [
+    {
+      urlPattern: ({ request }) =>
+        request.destination === "font",
+
+      handler: "CacheFirst",
+
+      options: {
+        cacheName:
+          "moneytrack-fonts-v1",
+
+        expiration: {
+          maxEntries: 20,
+          maxAgeSeconds:
+            60 * 60 * 24 * 365,
+        },
+
+        cacheableResponse: {
+          statuses: [0, 200],
+        },
       },
+    },
+  ],
+},
     }),
   ],
 });
