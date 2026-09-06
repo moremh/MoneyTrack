@@ -642,6 +642,25 @@ function FinanceProvider({ children }) {
   const syncInProgressRef =
   useRef(false);
 
+  const [
+  isOnline,
+  setIsOnline,
+] = useState(() => {
+  if (
+    typeof navigator ===
+    "undefined"
+  ) {
+    return true;
+  }
+
+  return navigator.onLine;
+});
+
+const [
+  isSyncing,
+  setIsSyncing,
+] = useState(false);
+
   const currentUserId =
     currentUser?.id || null;
 
@@ -1869,6 +1888,8 @@ useEffect(() => {
     syncInProgressRef.current =
       true;
 
+    setIsSyncing(true);
+
     let syncedCount = 0;
     let failedCount = 0;
 
@@ -2075,9 +2096,11 @@ useEffect(() => {
           failedCount + 1,
       };
     } finally {
-      syncInProgressRef.current =
-        false;
-    }
+  setIsSyncing(false);
+
+  syncInProgressRef.current =
+    false;
+}
   }, [
     currentUserId,
     mergeSyncedTransactionIntoState,
@@ -3898,6 +3921,38 @@ const deleteGoalMovement =
       refreshCurrentUser,
     ]);
 
+  const pendingSyncCount =
+  useMemo(() => {
+    const pendingIncomes =
+      incomes.filter(
+        (movement) =>
+          movement.isPendingSync
+      ).length;
+
+    const pendingExpenses =
+      expenses.filter(
+        (movement) =>
+          movement.isPendingSync
+      ).length;
+
+    return (
+      pendingIncomes +
+      pendingExpenses
+    );
+  }, [
+    incomes,
+    expenses,
+  ]);
+
+const syncStatus =
+  !isOnline
+    ? "offline"
+    : isSyncing
+      ? "syncing"
+      : pendingSyncCount > 0
+        ? "pending"
+        : "online";
+
   const monthlyMovementCount =
     movementUsage.used;
 
@@ -3929,6 +3984,12 @@ const deleteGoalMovement =
 
     loading,
     errorMessage,
+
+    isOnline,
+    isSyncing,
+    syncStatus,
+    pendingSyncCount,
+    syncPendingTransactions,
 
     movementUsage,
     monthlyMovementCount,
@@ -3983,6 +4044,12 @@ const deleteGoalMovement =
 
     loading,
     errorMessage,
+
+    isOnline,
+    isSyncing,
+    syncStatus,
+    pendingSyncCount,
+    syncPendingTransactions,
 
     movementUsage,
     monthlyMovementCount,

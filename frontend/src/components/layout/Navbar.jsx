@@ -1,21 +1,48 @@
-import { useContext } from "react";
+import {
+  useContext,
+} from "react";
+
 import {
   Link,
   useNavigate,
 } from "react-router-dom";
 
-import { FinanceContext } from "../../context/FinanceContext";
-import { useAuth } from "../../context/AuthContext";
-import { useCommercialCatalog } from "../../hooks/useCommercialCatalog";
+import {
+  FinanceContext,
+} from "../../context/FinanceContext";
+
+import {
+  useAuth,
+} from "../../context/AuthContext";
+
+import {
+  useCommercialCatalog,
+} from "../../hooks/useCommercialCatalog";
 
 import styles from "./Navbar.module.css";
 
-function Navbar({ toggleSidebar }) {
-  const { settings } = useContext(FinanceContext);
-  const { currentUser, logout } = useAuth();
-  const { planMap } = useCommercialCatalog();
+function Navbar({
+  toggleSidebar,
+}) {
+  const {
+    settings,
+    syncStatus,
+    pendingSyncCount,
+  } = useContext(
+    FinanceContext
+  );
 
-  const navigate = useNavigate();
+  const {
+    currentUser,
+    logout,
+  } = useAuth();
+
+  const {
+    planMap,
+  } = useCommercialCatalog();
+
+  const navigate =
+    useNavigate();
 
   const displayName =
     currentUser?.name ||
@@ -25,25 +52,101 @@ function Navbar({ toggleSidebar }) {
   const planLabel =
     currentUser?.role === "admin"
       ? "Administradora"
-      : currentUser?.plan === "premium"
-        ? planMap?.[currentUser.billingCycle]?.name ||
+      : currentUser?.plan ===
+          "premium"
+        ? planMap?.[
+            currentUser.billingCycle
+          ]?.name ||
           "Premium"
         : planMap?.free?.name ||
           "Plan gratuito";
 
   const handleLogout = () => {
     logout();
-    navigate("/login", {
-      replace: true,
-    });
+
+    navigate(
+      "/login",
+      {
+        replace: true,
+      }
+    );
   };
 
+  let syncLabel =
+    "En línea";
+
+  let syncIcon =
+    "bi-cloud-check";
+
+  let syncClass =
+    styles.syncOnline;
+
+  if (
+    syncStatus ===
+    "offline"
+  ) {
+    syncLabel =
+      "Sin conexión";
+
+    syncIcon =
+      "bi-wifi-off";
+
+    syncClass =
+      styles.syncOffline;
+  } else if (
+    syncStatus ===
+    "syncing"
+  ) {
+    syncLabel =
+      "Sincronizando...";
+
+    syncIcon =
+      "bi-arrow-repeat";
+
+    syncClass =
+      styles.syncing;
+  } else if (
+    syncStatus ===
+    "pending"
+  ) {
+    syncLabel =
+      "Pendiente";
+
+    syncIcon =
+      "bi-cloud-arrow-up";
+
+    syncClass =
+      styles.syncPending;
+  }
+
+  const pendingText =
+    pendingSyncCount === 1
+      ? "1 cambio pendiente"
+      : `${pendingSyncCount} cambios pendientes`;
+
+  const syncTitle =
+    pendingSyncCount > 0
+      ? `${syncLabel}. ${pendingText}.`
+      : syncLabel;
+
   return (
-    <header className={styles.navbar}>
-      <div className={styles.left}>
+    <header
+      className={
+        styles.navbar
+      }
+    >
+      <div
+        className={
+          styles.left
+        }
+      >
         <button
-          className={styles.menuButton}
-          onClick={toggleSidebar}
+          className={
+            styles.menuButton
+          }
+          onClick={
+            toggleSidebar
+          }
           type="button"
           aria-label="Abrir o cerrar menú"
         >
@@ -52,16 +155,64 @@ function Navbar({ toggleSidebar }) {
 
         <Link
           to="/"
-          className={styles.brand}
+          className={
+            styles.brand
+          }
         >
           MoneyTrack
         </Link>
       </div>
 
-      <div className={styles.right}>
+      <div
+        className={
+          styles.right
+        }
+      >
+        <div
+          className={`${styles.syncBadge} ${syncClass}`}
+          role="status"
+          aria-live="polite"
+          title={syncTitle}
+        >
+          <i
+            className={`bi ${syncIcon} ${
+              syncStatus ===
+              "syncing"
+                ? styles.syncIconSpinning
+                : ""
+            }`}
+          ></i>
+
+          <span
+            className={
+              styles.syncText
+            }
+          >
+            {syncLabel}
+          </span>
+
+          {pendingSyncCount >
+            0 && (
+            <span
+              className={
+                styles.syncCount
+              }
+              aria-label={
+                pendingText
+              }
+            >
+              {
+                pendingSyncCount
+              }
+            </span>
+          )}
+        </div>
+
         <button
           type="button"
-          className={styles.iconButton}
+          className={
+            styles.iconButton
+          }
           aria-label="Buscar"
         >
           <i className="bi bi-search"></i>
@@ -69,7 +220,9 @@ function Navbar({ toggleSidebar }) {
 
         <button
           type="button"
-          className={styles.iconButton}
+          className={
+            styles.iconButton
+          }
           aria-label="Notificaciones"
         >
           <i className="bi bi-bell"></i>
@@ -77,8 +230,10 @@ function Navbar({ toggleSidebar }) {
 
         <div
           className={`${styles.planBadge} ${
-            currentUser?.plan === "premium" ||
-            currentUser?.role === "admin"
+            currentUser?.plan ===
+              "premium" ||
+            currentUser?.role ===
+              "admin"
               ? styles.premiumPlan
               : styles.freePlan
           }`}
@@ -86,16 +241,26 @@ function Navbar({ toggleSidebar }) {
           {planLabel}
         </div>
 
-        <div className={styles.user}>
+        <div
+          className={
+            styles.user
+          }
+        >
           <i className="bi bi-person-circle"></i>
 
-          <span>{displayName}</span>
+          <span>
+            {displayName}
+          </span>
         </div>
 
         <button
           type="button"
-          className={styles.logoutButton}
-          onClick={handleLogout}
+          className={
+            styles.logoutButton
+          }
+          onClick={
+            handleLogout
+          }
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
         >
