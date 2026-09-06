@@ -176,16 +176,35 @@ const mapGoal = (goal) => {
   };
 };
 
-const mapGoalMovement = (movement) => ({
-  id: movement.id,
-  userId: movement.user_id,
-  goalId: movement.goal_id,
-  type: movement.type,
-  amount: Number(movement.amount) || 0,
-  description: movement.description || "",
-  date: movement.date,
-  createdAt: movement.created_at,
-});
+const mapGoalMovement = (movement) => {
+  const description =
+    movement.description || "";
+
+  return {
+    id: movement.id,
+    userId: movement.user_id,
+    goalId: movement.goal_id,
+    type: movement.type,
+    amount:
+      Number(movement.amount) || 0,
+    description,
+    date: movement.date,
+
+    /*
+     * Este registro fue creado cuando
+     * migramos los ahorros antiguos al
+     * historial. Representa dinero que
+     * ya estaba ahorrado, no un nuevo
+     * movimiento financiero del período.
+     */
+    isOpeningBalance:
+      description ===
+      "Saldo inicial del objetivo",
+
+    createdAt:
+      movement.created_at,
+  };
+};
 
 const mapMovementUsage = (
   data,

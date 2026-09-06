@@ -171,17 +171,21 @@ function Dashboard() {
   const [
     fromDate,
     setFromDate,
-  ] = useState("");
+  ] = useState(() =>
+    getMonthStart()
+  );
 
   const [
     toDate,
     setToDate,
-  ] = useState("");
+  ] = useState(() =>
+    getToday()
+  );
 
   const [
     activePreset,
     setActivePreset,
-  ] = useState("all");
+  ] = useState("month");
 
   const [
     quickMovementType,
@@ -330,46 +334,71 @@ function Dashboard() {
       0
     );
 
+  /*
+   * Este valor representa cuánto dinero
+   * hay ahorrado actualmente en todos
+   * los objetivos. Se muestra aparte y
+   * no se usa directamente para calcular
+   * el balance del período.
+   */
   const totalGoalSavings =
     goals.reduce(
       (accumulator, goal) =>
         accumulator +
         Number(
-          goal.currentAmount ||
-            0
+          goal.currentAmount || 0
         ),
       0
     );
 
   const netSavingsMovement =
-    filteredGoalMovements.reduce(
-      (accumulator, movement) => {
-        const amount = Number(
+  filteredGoalMovements.reduce(
+    (
+      accumulator,
+      movement
+    ) => {
+      /*
+       * Un saldo inicial representa
+       * dinero que ya estaba ahorrado
+       * antes de tener historial.
+       *
+       * No debe volver a afectar
+       * el balance del período.
+       */
+      if (
+        movement.isOpeningBalance ||
+        movement.description ===
+          "Saldo inicial del objetivo"
+      ) {
+        return accumulator;
+      }
+
+      const amount =
+        Number(
           movement.amount || 0
         );
 
-        return movement.type ===
-          "withdrawal"
-          ? accumulator - amount
-          : accumulator + amount;
-      },
-      0
-    );
-
-  const savingsImpactOnBalance =
-    fromDate || toDate
-      ? netSavingsMovement
-      : totalGoalSavings;
+      return movement.type ===
+        "withdrawal"
+        ? accumulator - amount
+        : accumulator + amount;
+    },
+    0
+  );
 
   const balance =
     totalIncome -
     totalExpenses -
-    savingsImpactOnBalance;
+    netSavingsMovement;
 
+  /*
+   * El contador principal representa
+   * ingresos y gastos. Los movimientos
+   * de ahorro se muestran por separado.
+   */
   const totalMovements =
     filteredIncomes.length +
-    filteredExpenses.length +
-    filteredGoalMovements.length;
+    filteredExpenses.length;
 
   const movementsLabel =
     fromDate || toDate
@@ -662,6 +691,16 @@ function Dashboard() {
       ? "Agregar gasto"
       : "Agregar ingreso";
 
+  const chartMode =
+    activePreset === "month"
+      ? "daily"
+      : "monthly";
+
+  const chartTitle =
+    activePreset === "month"
+      ? "Ingresos y gastos del mes"
+      : "Balance por mes";
+
   return (
     <div
       className={
@@ -927,7 +966,7 @@ function Dashboard() {
         }
       >
         <StatCard
-          title="Saldo Total"
+          title="Balance del período"
           value={`$ ${balance.toLocaleString(
             "es-AR"
           )}`}
@@ -954,7 +993,7 @@ function Dashboard() {
         />
 
         <StatCard
-          title="Ahorros"
+          title="Ahorros totales"
           value={`$ ${totalGoalSavings.toLocaleString(
             "es-AR"
           )}`}
@@ -973,7 +1012,7 @@ function Dashboard() {
             styles.chartTitle
           }
         >
-          Balance mensual
+          {chartTitle}
         </h2>
 
         <BalanceChart
@@ -983,6 +1022,12 @@ function Dashboard() {
           expenses={
             filteredExpenses
           }
+          goalMovements={
+            filteredGoalMovements
+          }
+          mode={chartMode}
+          fromDate={fromDate}
+          toDate={toDate}
         />
       </section>
 
