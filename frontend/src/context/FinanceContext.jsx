@@ -13,6 +13,7 @@ import {
   addPendingSyncOperation,
   getFinanceSnapshot,
   getPendingSyncOperations,
+  queueTransactionSyncOperation,
   removePendingSyncOperation,
   saveFinanceSnapshot,
 } from "../lib/offlineStorage";
@@ -432,6 +433,15 @@ const isFreeLimitError = (error) => {
   );
 };
 
+const isOfflineTransactionConflict =
+  (error) => {
+    return getErrorContent(
+      error
+    ).includes(
+      "OFFLINE_TRANSACTION_CONFLICT"
+    );
+  };
+
 const getDatabaseErrorMessage = (
   error,
   fallbackMessage
@@ -661,8 +671,95 @@ const [
   setIsSyncing,
 ] = useState(false);
 
+const [
+  pendingSyncCount,
+  setPendingSyncCount,
+] = useState(0);
+
   const currentUserId =
     currentUser?.id || null;
+
+  const refreshPendingSyncCount =
+    useCallback(async () => {
+      if (!currentUserId) {
+        setPendingSyncCount(0);
+        return 0;
+      }
+
+      const operations =
+        await getPendingSyncOperations(
+          currentUserId
+        );
+
+      const count =
+        operations.filter(
+          (operation) =>
+            operation?.entity ===
+              "transaction" &&
+            [
+              "create",
+              "update",
+              "delete",
+            ].includes(
+              operation?.action
+            )
+        ).length;
+
+      setPendingSyncCount(count);
+
+      return count;
+    }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setPendingSyncCount(0);
+      return;
+    }
+
+    void refreshPendingSyncCount();
+  }, [
+    currentUserId,
+    financeCacheReady,
+    refreshPendingSyncCount,
+  ]);
+
+  useEffect(() => {
+    const handleOnlineState = () => {
+      setIsOnline(true);
+    };
+
+    const handleOfflineState = () => {
+      setIsOnline(false);
+    };
+
+    setIsOnline(
+      typeof navigator === "undefined"
+        ? true
+        : navigator.onLine
+    );
+
+    window.addEventListener(
+      "online",
+      handleOnlineState
+    );
+
+    window.addEventListener(
+      "offline",
+      handleOfflineState
+    );
+
+    return () => {
+      window.removeEventListener(
+        "online",
+        handleOnlineState
+      );
+
+      window.removeEventListener(
+        "offline",
+        handleOfflineState
+      );
+    };
+  }, []);
 
   const incomeCategories =
     useMemo(() => {
@@ -725,6 +822,7 @@ const resetLocalState =
     );
 
     setFinanceCacheReady(false);
+    setPendingSyncCount(0);
 
     setErrorMessage("");
     setLoading(false);
@@ -1538,6 +1636,8 @@ useEffect(() => {
           };
         }
 
+        await refreshPendingSyncCount();
+
         if (type === "income") {
           setIncomes(
             (
@@ -1758,6 +1858,7 @@ useEffect(() => {
     findCategoryRecord,
     movementUsage,
     refreshMovementUsage,
+    refreshPendingSyncCount,
     validateMovement,
   ]
 );
@@ -1855,10 +1956,6 @@ useEffect(() => {
       };
     }
 
-    /*
-     * Si sabemos que seguimos sin
-     * conexión no hacemos nada.
-     */
     if (
       typeof navigator !==
         "undefined" &&
@@ -1871,10 +1968,6 @@ useEffect(() => {
       };
     }
 
-    /*
-     * Evita ejecutar dos sincronizaciones
-     * al mismo tiempo.
-     */
     if (
       syncInProgressRef.current
     ) {
@@ -1904,8 +1997,13 @@ useEffect(() => {
           (operation) =>
             operation?.entity ===
               "transaction" &&
-            operation?.action ===
-              "create"
+            [
+              "create",
+              "update",
+              "delete",
+            ].includes(
+              operation?.action
+            )
         );
 
       if (
@@ -1919,13 +2017,6 @@ useEffect(() => {
         };
       }
 
-      /*
-       * Las procesamos de a una.
-       *
-       * Esto hace más fácil respetar
-       * el límite mensual y mantener
-       * el orden de los movimientos.
-       */
       for (
         const operation of
         transactionOperations
@@ -1933,51 +2024,125 @@ useEffect(() => {
         const payload =
           operation.payload || {};
 
-        const clientMutationId =
-          operation
-            .clientMutationId ||
-          operation.id;
+        let data = null;
+        let error = null;
 
-        const {
-          data,
-          error,
-        } = await supabase.rpc(
-          "sync_offline_transaction_create",
-          {
-            p_client_mutation_id:
-              clientMutationId,
+        if (
+          operation.action ===
+          "create"
+        ) {
+          const result =
+            await supabase.rpc(
+              "sync_offline_transaction_create",
+              {
+                p_client_mutation_id:
+                  operation
+                    .clientMutationId ||
+                  operation.id,
 
-            p_type:
-              operation.type ||
-              payload.type,
+                p_type:
+                  operation.type ||
+                  payload.type,
 
-            p_description:
-              payload.description,
+                p_description:
+                  payload.description,
 
-            p_amount:
-              Number(
-                payload.amount
-              ),
+                p_amount:
+                  Number(
+                    payload.amount
+                  ),
 
-            p_category_id:
-              payload.categoryId ||
-              null,
+                p_category_id:
+                  payload.categoryId ||
+                  null,
 
-            p_category_name:
-              payload.categoryName ||
-              UNCATEGORIZED,
+                p_category_name:
+                  payload.categoryName ||
+                  UNCATEGORIZED,
 
-            p_date:
-              payload.date,
-          }
-        );
+                p_date:
+                  payload.date,
+              }
+            );
+
+          data = result.data;
+          error = result.error;
+        }
+
+        if (
+          operation.action ===
+          "update"
+        ) {
+          const result =
+            await supabase.rpc(
+              "sync_offline_transaction_update",
+              {
+                p_transaction_id:
+                  operation
+                    .transactionId ||
+                  payload
+                    .transactionId,
+
+                p_type:
+                  operation.type ||
+                  payload.type,
+
+                p_description:
+                  payload.description,
+
+                p_amount:
+                  Number(
+                    payload.amount
+                  ),
+
+                p_category_id:
+                  payload.categoryId ||
+                  null,
+
+                p_category_name:
+                  payload.categoryName ||
+                  UNCATEGORIZED,
+
+                p_date:
+                  payload.date,
+
+                p_expected_updated_at:
+                  operation
+                    .expectedUpdatedAt ||
+                  null,
+              }
+            );
+
+          data = result.data;
+          error = result.error;
+        }
+
+        if (
+          operation.action ===
+          "delete"
+        ) {
+          const result =
+            await supabase.rpc(
+              "sync_offline_transaction_delete",
+              {
+                p_transaction_id:
+                  operation
+                    .transactionId ||
+                  payload
+                    .transactionId,
+
+                p_expected_updated_at:
+                  operation
+                    .expectedUpdatedAt ||
+                  null,
+              }
+            );
+
+          data = result.data;
+          error = result.error;
+        }
 
         if (error) {
-          /*
-           * Si vuelve a fallar internet,
-           * dejamos la operación en la
-           * cola y detenemos el proceso.
-           */
           if (
             isNetworkError(error)
           ) {
@@ -1985,16 +2150,12 @@ useEffect(() => {
             break;
           }
 
-          /*
-           * Si el servidor rechaza el
-           * movimiento por límite mensual,
-           * tampoco lo borramos.
-           *
-           * El usuario no pierde el
-           * movimiento pendiente.
-           */
           if (
-            isFreeLimitError(error)
+            operation.action ===
+              "create" &&
+            isFreeLimitError(
+              error
+            )
           ) {
             failedCount += 1;
 
@@ -2004,44 +2165,93 @@ useEffect(() => {
               "Un movimiento offline no pudo sincronizarse porque se alcanzó el límite mensual."
             );
 
-            break;
+            continue;
           }
 
-          /*
-           * Otro error:
-           * dejamos el movimiento pendiente
-           * para poder revisarlo/reintentarlo.
-           */
+          if (
+            isOfflineTransactionConflict(
+              error
+            )
+          ) {
+            failedCount += 1;
+
+            console.warn(
+              "Conflicto detectado al sincronizar una transacción offline:",
+              error
+            );
+
+            continue;
+          }
+
           failedCount += 1;
 
           console.error(
-            "No se pudo sincronizar un movimiento offline:",
+            "No se pudo sincronizar una operación offline:",
             error
           );
 
           continue;
         }
 
-        /*
-         * La RPC devuelve la transacción
-         * verdadera guardada en Supabase.
-         */
-        const syncedMovement =
-          mapTransaction(data);
+        if (
+          operation.action ===
+            "create" ||
+          operation.action ===
+            "update"
+        ) {
+          const rawTransaction =
+            Array.isArray(data)
+              ? data[0]
+              : data;
 
-        /*
-         * Reemplazamos la copia local por
-         * la versión real.
-         */
-        mergeSyncedTransactionIntoState(
-          syncedMovement
-        );
+          if (!rawTransaction) {
+            failedCount += 1;
 
-        /*
-         * Solo quitamos de IndexedDB
-         * después de que Supabase confirma
-         * que el movimiento existe.
-         */
+            console.error(
+              "Supabase no devolvió la transacción sincronizada."
+            );
+
+            continue;
+          }
+
+          const syncedMovement =
+            mapTransaction(
+              rawTransaction
+            );
+
+          mergeSyncedTransactionIntoState(
+            syncedMovement
+          );
+        }
+
+        if (
+          operation.action ===
+          "delete"
+        ) {
+          const transactionId =
+            operation
+              .transactionId ||
+            payload.transactionId;
+
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.filter(
+                (income) =>
+                  income.id !==
+                  transactionId
+              )
+          );
+
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.filter(
+                (expense) =>
+                  expense.id !==
+                  transactionId
+              )
+          );
+        }
+
         const removed =
           await removePendingSyncOperation(
             currentUserId,
@@ -2049,14 +2259,8 @@ useEffect(() => {
           );
 
         if (!removed) {
-          /*
-           * No es crítico:
-           * gracias al client_mutation_id,
-           * un nuevo intento NO creará
-           * otra transacción.
-           */
           console.warn(
-            "El movimiento se sincronizó, pero no se pudo quitar de la cola local."
+            "La operación se sincronizó, pero no pudo eliminarse de la cola local."
           );
         }
 
@@ -2064,11 +2268,6 @@ useEffect(() => {
       }
 
       if (syncedCount > 0) {
-        /*
-         * La cuota Free se actualiza según
-         * los movimientos que realmente
-         * llegaron al servidor.
-         */
         await refreshMovementUsage();
       }
 
@@ -2090,21 +2289,26 @@ useEffect(() => {
 
       return {
         success: false,
+
         synced:
           syncedCount,
+
         failed:
           failedCount + 1,
       };
     } finally {
-  setIsSyncing(false);
+      await refreshPendingSyncCount();
 
-  syncInProgressRef.current =
-    false;
-}
+      setIsSyncing(false);
+
+      syncInProgressRef.current =
+        false;
+    }
   }, [
     currentUserId,
     mergeSyncedTransactionIntoState,
     refreshMovementUsage,
+    refreshPendingSyncCount,
   ]);
 
   useEffect(() => {
@@ -2151,188 +2355,518 @@ useEffect(() => {
 ]);
 
   const updateMovement =
-    useCallback(
-      async (
-        updatedMovement,
-        type
-      ) => {
-        const validation =
-          validateMovement(
-            updatedMovement
-          );
+  useCallback(
+    async (
+      updatedMovement,
+      type
+    ) => {
+      const validation =
+        validateMovement(
+          updatedMovement
+        );
 
-        if (!validation.success) {
-          return validation;
-        }
+      if (!validation.success) {
+        return validation;
+      }
 
-        if (!updatedMovement?.id) {
-          return {
-            success: false,
-            message:
-              "No se encontró el movimiento que deseas editar.",
-          };
-        }
-
-        const cleanCategory =
-          String(
-            updatedMovement.category ||
-              UNCATEGORIZED
-          ).trim() || UNCATEGORIZED;
-
-        const categoryRecord =
-          findCategoryRecord(
-            cleanCategory,
-            type
-          );
-
-        const payload = {
-          type,
-
-          description:
-            updatedMovement.description.trim(),
-
-          amount: Number(
-            updatedMovement.amount
-          ),
-
-          category_id:
-            categoryRecord?.id || null,
-
-          category_name:
-            cleanCategory,
-
-          date: validation.date,
-        };
-
-        const { data, error } =
-          await supabase
-            .from("transactions")
-            .update(payload)
-            .eq(
-              "id",
-              updatedMovement.id
-            )
-            .eq(
-              "user_id",
-              currentUserId
-            )
-            .select(
-              TRANSACTION_FIELDS
-            )
-            .single();
-
-        if (error) {
-          return {
-            success: false,
-            message:
-              getDatabaseErrorMessage(
-                error,
-                "No se pudo actualizar el movimiento."
-              ),
-          };
-        }
-
-        const mappedMovement =
-          mapTransaction(data);
-
-        if (type === "income") {
-          setIncomes(
-            (currentIncomes) =>
-              currentIncomes.map(
-                (income) =>
-                  income.id ===
-                  mappedMovement.id
-                    ? mappedMovement
-                    : income
-              )
-          );
-        } else {
-          setExpenses(
-            (currentExpenses) =>
-              currentExpenses.map(
-                (expense) =>
-                  expense.id ===
-                  mappedMovement.id
-                    ? mappedMovement
-                    : expense
-              )
-          );
-        }
-
+      if (!updatedMovement?.id) {
         return {
-          success: true,
-          movement:
-            mappedMovement,
+          success: false,
+          message:
+            "No se encontró el movimiento que deseas editar.",
         };
-      },
-      [
-        currentUserId,
-        findCategoryRecord,
-        validateMovement,
-      ]
-    );
+      }
 
-  const deleteMovement =
-    useCallback(
-      async (id, type) => {
-        if (!currentUserId || !id) {
-          return {
-            success: false,
-            message:
-              "No se encontró el movimiento.",
-          };
-        }
+      const currentMovements =
+        type === "income"
+          ? incomes
+          : expenses;
 
-        const { error } =
-          await supabase
-            .from("transactions")
-            .delete()
-            .eq("id", id)
-            .eq(
-              "user_id",
-              currentUserId
+      const originalMovement =
+        currentMovements.find(
+          (movement) =>
+            movement.id ===
+            updatedMovement.id
+        );
+
+      if (!originalMovement) {
+        return {
+          success: false,
+          message:
+            "No se encontró el movimiento que deseas editar.",
+        };
+      }
+
+      if (
+        originalMovement
+          .isPendingSync &&
+        syncInProgressRef.current
+      ) {
+        return {
+          success: false,
+          message:
+            "El movimiento se está sincronizando. Esperá unos segundos antes de editarlo.",
+        };
+      }
+
+      const cleanCategory =
+        String(
+          updatedMovement.category ||
+            UNCATEGORIZED
+        ).trim() ||
+        UNCATEGORIZED;
+
+      const categoryRecord =
+        findCategoryRecord(
+          cleanCategory,
+          type
+        );
+
+      const description =
+        String(
+          updatedMovement
+            .description || ""
+        ).trim();
+
+      const amount =
+        Number(
+          updatedMovement.amount
+        );
+
+      const now =
+        new Date().toISOString();
+
+      const expectedUpdatedAt =
+        originalMovement
+          .syncBaseUpdatedAt ||
+        originalMovement
+          .updatedAt ||
+        null;
+
+      const localMovement = {
+        ...originalMovement,
+
+        type,
+        description,
+        amount,
+
+        categoryId:
+          categoryRecord?.id ||
+          null,
+
+        category:
+          cleanCategory,
+
+        date:
+          validation.date,
+
+        isPendingSync: true,
+
+        syncBaseUpdatedAt:
+          expectedUpdatedAt,
+
+        updatedAt:
+          now,
+      };
+
+      const offlineOperation = {
+        id:
+          createClientMutationId(),
+
+        entity:
+          "transaction",
+
+        action:
+          "update",
+
+        transactionId:
+          originalMovement.id,
+
+        type,
+
+        expectedUpdatedAt,
+
+        payload: {
+          transactionId:
+            originalMovement.id,
+
+          type,
+          description,
+          amount,
+
+          categoryId:
+            categoryRecord?.id ||
+            null,
+
+          categoryName:
+            cleanCategory,
+
+          date:
+            validation.date,
+        },
+
+        queuedAt:
+          now,
+      };
+
+      const applyLocalMovement =
+        () => {
+          if (type === "income") {
+            setIncomes(
+              (currentIncomes) =>
+                currentIncomes.map(
+                  (income) =>
+                    income.id ===
+                    localMovement.id
+                      ? localMovement
+                      : income
+                )
+            );
+          } else {
+            setExpenses(
+              (currentExpenses) =>
+                currentExpenses.map(
+                  (expense) =>
+                    expense.id ===
+                    localMovement.id
+                      ? localMovement
+                      : expense
+                )
+            );
+          }
+        };
+
+      const queueOfflineUpdate =
+        async () => {
+          const queued =
+            await queueTransactionSyncOperation(
+              currentUserId,
+              offlineOperation
             );
 
-        if (error) {
+          if (!queued) {
+            return {
+              success: false,
+              message:
+                "No se pudo guardar la edición sin conexión.",
+            };
+          }
+
+          applyLocalMovement();
+
+          await refreshPendingSyncCount();
+
           return {
-            success: false,
+            success: true,
+            offline: true,
+            pendingSync: true,
+            movement:
+              localMovement,
             message:
-              getDatabaseErrorMessage(
-                error,
-                "No se pudo eliminar el movimiento."
-              ),
+              "Cambio guardado sin conexión. Se sincronizará cuando vuelva internet.",
           };
-        }
+        };
 
-        if (type === "income") {
-          setIncomes(
-            (currentIncomes) =>
-              currentIncomes.filter(
-                (income) =>
-                  income.id !== id
-              )
-          );
-        } else {
-          setExpenses(
-            (currentExpenses) =>
-              currentExpenses.filter(
-                (expense) =>
-                  expense.id !== id
-              )
+      if (
+        originalMovement
+          .isPendingSync
+      ) {
+        return (
+          await queueOfflineUpdate()
+        );
+      }
+
+      if (isDeviceOffline()) {
+        return (
+          await queueOfflineUpdate()
+        );
+      }
+
+      const payload = {
+        type,
+        description,
+        amount,
+
+        category_id:
+          categoryRecord?.id ||
+          null,
+
+        category_name:
+          cleanCategory,
+
+        date:
+          validation.date,
+      };
+
+      const { data, error } =
+        await supabase
+          .from("transactions")
+          .update(payload)
+          .eq(
+            "id",
+            originalMovement.id
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .select(
+            TRANSACTION_FIELDS
+          )
+          .single();
+
+      if (error) {
+        if (
+          isNetworkError(error)
+        ) {
+          return (
+            await queueOfflineUpdate()
           );
         }
-
-        await refreshMovementUsage();
 
         return {
-          success: true,
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo actualizar el movimiento."
+            ),
         };
-      },
-      [
-        currentUserId,
-        refreshMovementUsage,
-      ]
-    );
+      }
+
+      const mappedMovement =
+        mapTransaction(data);
+
+      if (type === "income") {
+        setIncomes(
+          (currentIncomes) =>
+            currentIncomes.map(
+              (income) =>
+                income.id ===
+                mappedMovement.id
+                  ? mappedMovement
+                  : income
+            )
+        );
+      } else {
+        setExpenses(
+          (currentExpenses) =>
+            currentExpenses.map(
+              (expense) =>
+                expense.id ===
+                mappedMovement.id
+                  ? mappedMovement
+                  : expense
+            )
+        );
+      }
+
+      return {
+        success: true,
+        offline: false,
+        pendingSync: false,
+        movement:
+          mappedMovement,
+      };
+    },
+    [
+      currentUserId,
+      expenses,
+      findCategoryRecord,
+      incomes,
+      refreshPendingSyncCount,
+      validateMovement,
+    ]
+  );
+
+  const deleteMovement =
+  useCallback(
+    async (id, type) => {
+      if (
+        !currentUserId ||
+        !id
+      ) {
+        return {
+          success: false,
+          message:
+            "No se encontró el movimiento.",
+        };
+      }
+
+      const currentMovements =
+        type === "income"
+          ? incomes
+          : expenses;
+
+      const originalMovement =
+        currentMovements.find(
+          (movement) =>
+            movement.id === id
+        );
+
+      if (!originalMovement) {
+        return {
+          success: false,
+          message:
+            "No se encontró el movimiento.",
+        };
+      }
+
+      if (
+        originalMovement
+          .isPendingSync &&
+        syncInProgressRef.current
+      ) {
+        return {
+          success: false,
+          message:
+            "El movimiento se está sincronizando. Esperá unos segundos antes de eliminarlo.",
+        };
+      }
+
+      const expectedUpdatedAt =
+        originalMovement
+          .syncBaseUpdatedAt ||
+        originalMovement
+          .updatedAt ||
+        null;
+
+      const offlineOperation = {
+        id:
+          createClientMutationId(),
+
+        entity:
+          "transaction",
+
+        action:
+          "delete",
+
+        transactionId:
+          originalMovement.id,
+
+        expectedUpdatedAt,
+
+        payload: {
+          transactionId:
+            originalMovement.id,
+        },
+
+        queuedAt:
+          new Date().toISOString(),
+      };
+
+      const removeLocalMovement =
+        () => {
+          if (type === "income") {
+            setIncomes(
+              (currentIncomes) =>
+                currentIncomes.filter(
+                  (income) =>
+                    income.id !== id
+                )
+            );
+          } else {
+            setExpenses(
+              (currentExpenses) =>
+                currentExpenses.filter(
+                  (expense) =>
+                    expense.id !== id
+                )
+            );
+          }
+        };
+
+      const queueOfflineDelete =
+        async () => {
+          const queued =
+            await queueTransactionSyncOperation(
+              currentUserId,
+              offlineOperation
+            );
+
+          if (!queued) {
+            return {
+              success: false,
+              message:
+                "No se pudo guardar la eliminación sin conexión.",
+            };
+          }
+
+          removeLocalMovement();
+
+          await refreshPendingSyncCount();
+
+          return {
+            success: true,
+            offline: true,
+            pendingSync: true,
+            message:
+              "Movimiento eliminado localmente. El cambio se sincronizará cuando vuelva internet.",
+          };
+        };
+
+      if (
+        originalMovement
+          .isPendingSync
+      ) {
+        return (
+          await queueOfflineDelete()
+        );
+      }
+
+      if (isDeviceOffline()) {
+        return (
+          await queueOfflineDelete()
+        );
+      }
+
+      const { error } =
+        await supabase
+          .from("transactions")
+          .delete()
+          .eq("id", id)
+          .eq(
+            "user_id",
+            currentUserId
+          );
+
+      if (error) {
+        if (
+          isNetworkError(error)
+        ) {
+          return (
+            await queueOfflineDelete()
+          );
+        }
+
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              error,
+              "No se pudo eliminar el movimiento."
+            ),
+        };
+      }
+
+      removeLocalMovement();
+
+      await refreshMovementUsage();
+
+      return {
+        success: true,
+        offline: false,
+        pendingSync: false,
+      };
+    },
+    [
+      currentUserId,
+      expenses,
+      incomes,
+      refreshMovementUsage,
+      refreshPendingSyncCount,
+    ]
+  );
 
   const addIncome = useCallback(
     (income) =>
@@ -3921,28 +4455,6 @@ const deleteGoalMovement =
       refreshCurrentUser,
     ]);
 
-  const pendingSyncCount =
-  useMemo(() => {
-    const pendingIncomes =
-      incomes.filter(
-        (movement) =>
-          movement.isPendingSync
-      ).length;
-
-    const pendingExpenses =
-      expenses.filter(
-        (movement) =>
-          movement.isPendingSync
-      ).length;
-
-    return (
-      pendingIncomes +
-      pendingExpenses
-    );
-  }, [
-    incomes,
-    expenses,
-  ]);
 
 const syncStatus =
   !isOnline

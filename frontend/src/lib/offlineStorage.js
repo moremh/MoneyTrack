@@ -391,16 +391,371 @@ export const getFinanceSnapshot =
   };
 
 /*
- * Cola persistente de sincronización.
+ * ============================================================
+ * COLA PERSISTENTE DE SINCRONIZACIÓN
+ * ============================================================
  *
- * En esta primera etapa guardaremos aquí
- * solamente ingresos y gastos creados
- * mientras no hay conexión.
+ * La cola puede contener:
  *
- * Cada operación debe tener un id único.
- * Para las transacciones usaremos el mismo
- * UUID como id y clientMutationId.
+ * transaction / create
+ * transaction / update
+ * transaction / delete
+ *
+ * Para una misma transacción intentamos mantener
+ * solamente la operación mínima necesaria.
+ *
+ * Ejemplos:
+ *
+ * CREATE + UPDATE
+ * → CREATE con los últimos datos
+ *
+ * CREATE + DELETE
+ * → no queda ninguna operación
+ *
+ * UPDATE + UPDATE
+ * → un solo UPDATE
+ *
+ * UPDATE + DELETE
+ * → un solo DELETE
  */
+
+
+const getTransactionTargetId =
+  (operation) => {
+    if (
+      !operation ||
+      operation.entity !==
+        "transaction"
+    ) {
+      return null;
+    }
+
+    /*
+     * Una transacción creada offline todavía
+     * no tiene id de Supabase.
+     *
+     * Su clientMutationId funciona como
+     * identificador local.
+     */
+    if (
+      operation.action ===
+      "create"
+    ) {
+      return (
+        operation.clientMutationId ||
+        operation.transactionId ||
+        operation.id ||
+        null
+      );
+    }
+
+    /*
+     * UPDATE y DELETE trabajan sobre una
+     * transacción que ya existe.
+     */
+    return (
+      operation.transactionId ||
+      operation.payload
+        ?.transactionId ||
+      null
+    );
+  };
+
+
+const isSameTransactionOperation =
+  (
+    queuedOperation,
+    incomingOperation
+  ) => {
+    if (
+      queuedOperation?.entity !==
+        "transaction" ||
+      incomingOperation?.entity !==
+        "transaction"
+    ) {
+      return false;
+    }
+
+    const queuedTargetId =
+      getTransactionTargetId(
+        queuedOperation
+      );
+
+    const incomingTargetId =
+      getTransactionTargetId(
+        incomingOperation
+      );
+
+    return (
+      Boolean(
+        queuedTargetId
+      ) &&
+      queuedTargetId ===
+        incomingTargetId
+    );
+  };
+
+
+const normalizeSyncOperation =
+  (operation) => {
+    const now =
+      new Date().toISOString();
+
+    return {
+      ...operation,
+
+      queuedAt:
+        operation.queuedAt ||
+        now,
+
+      lastUpdatedAt:
+        now,
+    };
+  };
+
+
+const mergeTransactionOperations =
+  (
+    existingOperation,
+    incomingOperation
+  ) => {
+    const incoming =
+      normalizeSyncOperation(
+        incomingOperation
+      );
+
+    if (!existingOperation) {
+      return incoming;
+    }
+
+    const existing =
+      existingOperation;
+
+
+    /*
+     * ========================================================
+     * CREATE + UPDATE
+     * ========================================================
+     *
+     * La transacción todavía no existe en Supabase.
+     * No necesitamos enviar CREATE y después UPDATE.
+     *
+     * Actualizamos directamente el CREATE pendiente.
+     */
+
+    if (
+      existing.action ===
+        "create" &&
+      incoming.action ===
+        "update"
+    ) {
+      return {
+        ...existing,
+
+        type:
+          incoming.type ||
+          existing.type,
+
+        payload: {
+          ...existing.payload,
+          ...incoming.payload,
+        },
+
+        lastUpdatedAt:
+          new Date().toISOString(),
+      };
+    }
+
+
+    /*
+     * ========================================================
+     * CREATE + DELETE
+     * ========================================================
+     *
+     * Si fue creada offline y eliminada antes de
+     * sincronizarse, no debe llegar nunca a Supabase.
+     */
+
+    if (
+      existing.action ===
+        "create" &&
+      incoming.action ===
+        "delete"
+    ) {
+      return null;
+    }
+
+
+    /*
+     * ========================================================
+     * CREATE + CREATE
+     * ========================================================
+     *
+     * No debería ocurrir normalmente, pero lo hacemos
+     * idempotente por seguridad.
+     */
+
+    if (
+      existing.action ===
+        "create" &&
+      incoming.action ===
+        "create"
+    ) {
+      return {
+        ...existing,
+
+        type:
+          incoming.type ||
+          existing.type,
+
+        payload: {
+          ...existing.payload,
+          ...incoming.payload,
+        },
+
+        lastUpdatedAt:
+          new Date().toISOString(),
+      };
+    }
+
+
+    /*
+     * ========================================================
+     * UPDATE + UPDATE
+     * ========================================================
+     *
+     * Solamente necesitamos sincronizar la última versión.
+     *
+     * Conservamos expectedUpdatedAt del primer UPDATE
+     * porque representa la versión original del servidor.
+     *
+     * Eso permite detectar correctamente conflictos si
+     * otro dispositivo modificó la transacción.
+     */
+
+    if (
+      existing.action ===
+        "update" &&
+      incoming.action ===
+        "update"
+    ) {
+      return {
+        ...existing,
+
+        type:
+          incoming.type ||
+          existing.type,
+
+        payload: {
+          ...existing.payload,
+          ...incoming.payload,
+        },
+
+        expectedUpdatedAt:
+          existing
+            .expectedUpdatedAt ||
+          incoming
+            .expectedUpdatedAt ||
+          null,
+
+        lastUpdatedAt:
+          new Date().toISOString(),
+      };
+    }
+
+
+    /*
+     * ========================================================
+     * UPDATE + DELETE
+     * ========================================================
+     *
+     * Ya no tiene sentido enviar el UPDATE.
+     * Solamente queremos eliminar la transacción.
+     *
+     * Conservamos expectedUpdatedAt original para detectar
+     * modificaciones realizadas desde otro dispositivo.
+     */
+
+    if (
+      existing.action ===
+        "update" &&
+      incoming.action ===
+        "delete"
+    ) {
+      return {
+        ...incoming,
+
+        expectedUpdatedAt:
+          existing
+            .expectedUpdatedAt ||
+          incoming
+            .expectedUpdatedAt ||
+          null,
+
+        queuedAt:
+          existing.queuedAt ||
+          incoming.queuedAt,
+
+        lastUpdatedAt:
+          new Date().toISOString(),
+      };
+    }
+
+
+    /*
+     * ========================================================
+     * DELETE + DELETE
+     * ========================================================
+     *
+     * El DELETE es idempotente.
+     * Mantenemos solamente uno.
+     */
+
+    if (
+      existing.action ===
+        "delete" &&
+      incoming.action ===
+        "delete"
+    ) {
+      return {
+        ...existing,
+
+        lastUpdatedAt:
+          new Date().toISOString(),
+      };
+    }
+
+
+    /*
+     * ========================================================
+     * DELETE + UPDATE
+     * ========================================================
+     *
+     * Una transacción eliminada localmente no debería volver
+     * a editarse desde la interfaz.
+     *
+     * Si llegara a ocurrir por algún estado extraño,
+     * conservamos DELETE.
+     */
+
+    if (
+      existing.action ===
+        "delete" &&
+      incoming.action ===
+        "update"
+    ) {
+      return existing;
+    }
+
+
+    /*
+     * Cualquier combinación inesperada usa
+     * la operación más reciente.
+     */
+
+    return incoming;
+  };
+
 
 export const getPendingSyncOperations =
   async (userId) => {
@@ -420,6 +775,171 @@ export const getPendingSyncOperations =
       : [];
   };
 
+
+/*
+ * ============================================================
+ * GUARDAR / COMBINAR OPERACIÓN DE TRANSACCIÓN
+ * ============================================================
+ */
+
+export const queueTransactionSyncOperation =
+  async (
+    userId,
+    operation
+  ) => {
+    if (
+      !userId ||
+      !operation?.id ||
+      operation?.entity !==
+        "transaction" ||
+      ![
+        "create",
+        "update",
+        "delete",
+      ].includes(
+        operation?.action
+      )
+    ) {
+      return false;
+    }
+
+    const targetId =
+      getTransactionTargetId(
+        operation
+      );
+
+    if (!targetId) {
+      return false;
+    }
+
+    return updateRecord(
+      getSyncQueueKey(userId),
+
+      (currentValue) => {
+        const currentQueue =
+          Array.isArray(
+            currentValue
+          )
+            ? currentValue
+            : [];
+
+        /*
+         * Buscamos si ya existe alguna
+         * operación pendiente para esa
+         * misma transacción.
+         */
+
+        const firstMatchIndex =
+          currentQueue.findIndex(
+            (queuedOperation) =>
+              isSameTransactionOperation(
+                queuedOperation,
+                operation
+              )
+          );
+
+        /*
+         * Si no hay ninguna operación
+         * previa, simplemente agregamos.
+         */
+
+        if (
+          firstMatchIndex === -1
+        ) {
+          return [
+            ...currentQueue,
+            normalizeSyncOperation(
+              operation
+            ),
+          ];
+        }
+
+
+        const existingOperation =
+          currentQueue[
+            firstMatchIndex
+          ];
+
+        const mergedOperation =
+          mergeTransactionOperations(
+            existingOperation,
+            operation
+          );
+
+
+        /*
+         * Puede haber más de una operación vieja
+         * para la misma transacción por versiones
+         * anteriores de MoneyTrack.
+         *
+         * Las limpiamos y dejamos una sola.
+         */
+
+        const nextQueue = [];
+
+        for (
+          let index = 0;
+          index <
+          currentQueue.length;
+          index += 1
+        ) {
+          const queuedOperation =
+            currentQueue[index];
+
+          const sameTransaction =
+            isSameTransactionOperation(
+              queuedOperation,
+              operation
+            );
+
+          if (!sameTransaction) {
+            nextQueue.push(
+              queuedOperation
+            );
+
+            continue;
+          }
+
+          /*
+           * Solamente en la primera coincidencia
+           * colocamos la operación combinada.
+           */
+
+          if (
+            index ===
+              firstMatchIndex &&
+            mergedOperation
+          ) {
+            nextQueue.push(
+              mergedOperation
+            );
+          }
+        }
+
+        /*
+         * Si mergedOperation es null significa:
+         *
+         * CREATE + DELETE
+         *
+         * En ese caso no agregamos nada.
+         */
+
+        return nextQueue;
+      }
+    );
+  };
+
+
+/*
+ * Compatibilidad con el código que ya tenemos.
+ *
+ * addMovement actualmente usa
+ * addPendingSyncOperation().
+ *
+ * Para transacciones lo enviamos al nuevo
+ * sistema inteligente de combinación.
+ */
+
 export const addPendingSyncOperation =
   async (
     userId,
@@ -432,8 +952,27 @@ export const addPendingSyncOperation =
       return false;
     }
 
+    if (
+      operation.entity ===
+      "transaction"
+    ) {
+      return (
+        queueTransactionSyncOperation(
+          userId,
+          operation
+        )
+      );
+    }
+
+    /*
+     * Dejamos soporte genérico por si
+     * más adelante la cola maneja otras
+     * entidades de MoneyTrack.
+     */
+
     return updateRecord(
       getSyncQueueKey(userId),
+
       (currentValue) => {
         const currentQueue =
           Array.isArray(
@@ -455,16 +994,14 @@ export const addPendingSyncOperation =
 
         return [
           ...currentQueue,
-          {
-            ...operation,
-            queuedAt:
-              operation.queuedAt ||
-              new Date().toISOString(),
-          },
+          normalizeSyncOperation(
+            operation
+          ),
         ];
       }
     );
   };
+
 
 export const removePendingSyncOperation =
   async (
@@ -480,6 +1017,7 @@ export const removePendingSyncOperation =
 
     return updateRecord(
       getSyncQueueKey(userId),
+
       (currentValue) => {
         const currentQueue =
           Array.isArray(
@@ -497,6 +1035,64 @@ export const removePendingSyncOperation =
     );
   };
 
+
+/*
+ * Elimina todas las operaciones relacionadas
+ * con una transacción concreta.
+ *
+ * Nos va a servir especialmente cuando una
+ * transacción creada offline se elimina antes
+ * de llegar al servidor.
+ */
+
+export const removePendingTransactionOperations =
+  async (
+    userId,
+    transactionId
+  ) => {
+    if (
+      !userId ||
+      !transactionId
+    ) {
+      return false;
+    }
+
+    return updateRecord(
+      getSyncQueueKey(userId),
+
+      (currentValue) => {
+        const currentQueue =
+          Array.isArray(
+            currentValue
+          )
+            ? currentValue
+            : [];
+
+        return currentQueue.filter(
+          (operation) => {
+            if (
+              operation?.entity !==
+              "transaction"
+            ) {
+              return true;
+            }
+
+            const targetId =
+              getTransactionTargetId(
+                operation
+              );
+
+            return (
+              targetId !==
+              transactionId
+            );
+          }
+        );
+      }
+    );
+  };
+
+
 export const replacePendingSyncOperations =
   async (
     userId,
@@ -504,7 +1100,9 @@ export const replacePendingSyncOperations =
   ) => {
     if (
       !userId ||
-      !Array.isArray(operations)
+      !Array.isArray(
+        operations
+      )
     ) {
       return false;
     }
@@ -514,6 +1112,7 @@ export const replacePendingSyncOperations =
       operations
     );
   };
+
 
 export const clearPendingSyncOperations =
   async (userId) => {
