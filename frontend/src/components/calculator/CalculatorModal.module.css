@@ -261,7 +261,8 @@
 
 .historySection {
   min-height: 0;
-  flex: 1 1 130px;
+  flex: 0 1 160px;
+  overflow: hidden;
   border-top: 1px solid var(--border);
   padding-top: 11px;
 }
@@ -274,7 +275,7 @@
 }
 
 .historyList {
-  min-height: 82px;
+  min-height: 0;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -395,9 +396,7 @@ body[data-theme="dark"] .operatorKey {
   .calculator {
     gap: 11px;
     max-height: calc(100dvh - 88px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: 2px;
+    overflow: hidden;
   }
 
   .title {
@@ -476,6 +475,8 @@ body[data-theme="dark"] .operatorKey {
 
   .historySection {
     min-height: 0;
+    flex-basis: 150px;
+    overflow: hidden;
     padding-top: 10px;
   }
 
