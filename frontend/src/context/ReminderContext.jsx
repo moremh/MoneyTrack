@@ -12,10 +12,18 @@ import {
 import { supabase } from "../lib/supabase";
 
 import {
+  getCurrentPushSubscription,
   hasVapidPublicKey,
   isPushSupported,
   subscribeCurrentDeviceToPush,
+  unsubscribeCurrentDeviceFromPush,
 } from "../lib/pushNotifications";
+
+import {
+  getNotificationPreferences,
+  subscribeNotificationPreferences,
+  updateNotificationPreferences,
+} from "../lib/notificationPreferences";
 
 import { useAuth } from "./AuthContext";
 import {
@@ -395,8 +403,27 @@ const showBrowserReminderNotification =
 
     const options = {
       body,
+      icon:
+        "/pwa-192x192.png",
+      badge:
+        "/favicon-32x32.png",
       tag:
         `moneytrack-reminder-${reminder.id}`,
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [
+        220,
+        100,
+        220,
+        100,
+        320,
+      ],
+      data: {
+        url: "/reminders",
+        reminderId:
+          reminder.id,
+      },
     };
 
     /*
@@ -820,6 +847,23 @@ function ReminderProvider({
 
     return "idle";
   });
+
+  const [
+    notificationPreferences,
+    setNotificationPreferences,
+  ] = useState(
+    getNotificationPreferences
+  );
+
+  useEffect(() => {
+    return subscribeNotificationPreferences(
+      (nextPreferences) => {
+        setNotificationPreferences(
+          nextPreferences
+        );
+      }
+    );
+  }, []);
 
   const [
     reminders,
@@ -1620,6 +1664,167 @@ function ReminderProvider({
       ]
     );
 
+  const applyNotificationPreferenceChanges =
+    useCallback((changes) => {
+      const next =
+        updateNotificationPreferences(
+          changes
+        );
+
+      setNotificationPreferences(
+        next
+      );
+
+      return next;
+    }, []);
+
+  const refreshPushSubscriptionStatus =
+    useCallback(async () => {
+      const permission =
+        getNotificationPermissionValue();
+
+      setNotificationPermission(
+        permission
+      );
+
+      if (
+        !isPushSupported()
+      ) {
+        setPushSubscriptionStatus(
+          "unsupported"
+        );
+
+        return {
+          success: false,
+          status:
+            "unsupported",
+        };
+      }
+
+      if (
+        !hasVapidPublicKey()
+      ) {
+        setPushSubscriptionStatus(
+          "missing-key"
+        );
+
+        return {
+          success: false,
+          status:
+            "missing-key",
+        };
+      }
+
+      if (
+        permission ===
+        "denied"
+      ) {
+        setPushSubscriptionStatus(
+          "permission-denied"
+        );
+
+        return {
+          success: false,
+          status:
+            "permission-denied",
+        };
+      }
+
+      if (
+        permission !==
+        "granted"
+      ) {
+        setPushSubscriptionStatus(
+          "permission-required"
+        );
+
+        return {
+          success: false,
+          status:
+            "permission-required",
+        };
+      }
+
+      const current =
+        await getCurrentPushSubscription();
+
+      if (!current.success) {
+        setPushSubscriptionStatus(
+          "error"
+        );
+
+        return {
+          ...current,
+          status: "error",
+        };
+      }
+
+      const status =
+        current.subscription
+          ? "subscribed"
+          : "not-subscribed";
+
+      setPushSubscriptionStatus(
+        status
+      );
+
+      return {
+        success: true,
+        status,
+        subscription:
+          current.subscription,
+      };
+    }, []);
+
+  const disableCurrentDeviceNotifications =
+    useCallback(async () => {
+      applyNotificationPreferenceChanges({
+        pushEnabled: false,
+      });
+
+      const result =
+        await unsubscribeCurrentDeviceFromPush();
+
+      setPushSubscriptionStatus(
+        result.status ||
+        (
+          result.success
+            ? "not-subscribed"
+            : "error"
+        )
+      );
+
+      return result;
+    }, [
+      applyNotificationPreferenceChanges,
+    ]);
+
+  const setInAppAlertsEnabled =
+    useCallback(
+      (enabled) => {
+        return applyNotificationPreferenceChanges({
+          inAppAlertsEnabled:
+            Boolean(enabled),
+        });
+      },
+      [
+        applyNotificationPreferenceChanges,
+      ]
+    );
+
+  const setNotificationSoundEnabled =
+    useCallback(
+      (enabled) => {
+        return applyNotificationPreferenceChanges({
+          soundEnabled:
+            Boolean(enabled),
+        });
+      },
+      [
+        applyNotificationPreferenceChanges,
+      ]
+    );
+
   const registerCurrentDeviceForPush =
     useCallback(async () => {
       if (
@@ -1670,8 +1875,16 @@ function ReminderProvider({
         )
       );
 
+      if (result.success) {
+        applyNotificationPreferenceChanges({
+          pushEnabled: true,
+        });
+      }
+
       return result;
-    }, []);
+    }, [
+      applyNotificationPreferenceChanges,
+    ]);
 
   const requestNotificationPermission =
     useCallback(async () => {
@@ -1710,6 +1923,10 @@ function ReminderProvider({
           permission ===
           "granted"
         ) {
+          applyNotificationPreferenceChanges({
+            pushEnabled: true,
+          });
+
           const pushResult =
             await registerCurrentDeviceForPush();
 
@@ -1784,14 +2001,28 @@ function ReminderProvider({
         };
       }
     }, [
+      applyNotificationPreferenceChanges,
       registerCurrentDeviceForPush,
     ]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return;
+    }
+
+    void refreshPushSubscriptionStatus();
+  }, [
+    currentUserId,
+    refreshPushSubscriptionStatus,
+  ]);
 
   useEffect(() => {
     if (
       !currentUserId ||
       notificationPermission !==
-        "granted"
+        "granted" ||
+      !notificationPreferences
+        .pushEnabled
     ) {
       return;
     }
@@ -1809,6 +2040,8 @@ function ReminderProvider({
   }, [
     currentUserId,
     notificationPermission,
+    notificationPreferences
+      .pushEnabled,
     registerCurrentDeviceForPush,
   ]);
 
@@ -1915,6 +2148,57 @@ function ReminderProvider({
            * este recordatorio.
            */
           if (!data) {
+            /*
+             * El Cron puede haber tomado el
+             * recordatorio unos milisegundos
+             * antes que esta pestaña. En ese
+             * caso refrescamos esa fila para
+             * que el aviso emergente y la
+             * campana se actualicen igual.
+             */
+            const {
+              data:
+                latestReminder,
+              error:
+                latestError,
+            } = await supabase
+              .from("reminders")
+              .select(
+                REMINDER_FIELDS
+              )
+              .eq(
+                "id",
+                reminder.id
+              )
+              .eq(
+                "user_id",
+                currentUserId
+              )
+              .maybeSingle();
+
+            if (
+              !latestError &&
+              latestReminder
+            ) {
+              const latestMapped =
+                mapReminder(
+                  latestReminder
+                );
+
+              setReminders(
+                (
+                  currentReminders
+                ) =>
+                  currentReminders.map(
+                    (item) =>
+                      item.id ===
+                      latestMapped.id
+                        ? latestMapped
+                        : item
+                  )
+              );
+            }
+
             continue;
           }
 
@@ -1937,8 +2221,10 @@ function ReminderProvider({
           notifiedCount += 1;
 
           if (
+            notificationPreferences
+              .pushEnabled &&
             getNotificationPermissionValue() ===
-            "granted"
+              "granted"
           ) {
             await showBrowserReminderNotification(
               mapped
@@ -1958,6 +2244,8 @@ function ReminderProvider({
     }, [
       currentUserId,
       reminders,
+      notificationPreferences
+        .pushEnabled,
     ]);
 
   useEffect(() => {
@@ -2153,9 +2441,14 @@ function ReminderProvider({
 
         notificationSupported,
         notificationPermission,
+        notificationPreferences,
         pushSubscriptionStatus,
         registerCurrentDeviceForPush,
+        refreshPushSubscriptionStatus,
+        disableCurrentDeviceNotifications,
         requestNotificationPermission,
+        setInAppAlertsEnabled,
+        setNotificationSoundEnabled,
         checkDueReminders,
 
         loadReminders,
@@ -2191,9 +2484,14 @@ function ReminderProvider({
 
         notificationSupported,
         notificationPermission,
+        notificationPreferences,
         pushSubscriptionStatus,
         registerCurrentDeviceForPush,
+        refreshPushSubscriptionStatus,
+        disableCurrentDeviceNotifications,
         requestNotificationPermission,
+        setInAppAlertsEnabled,
+        setNotificationSoundEnabled,
         checkDueReminders,
 
         loadReminders,

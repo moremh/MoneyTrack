@@ -94,16 +94,43 @@ self.addEventListener(
             : "moneytrack-reminder"
         ),
 
+      /*
+       * En navegadores que lo admiten,
+       * renotify vuelve a avisar si llega
+       * una actualización con el mismo tag
+       * y requireInteraction mantiene el
+       * banner visible hasta que la persona
+       * interactúe con él.
+       */
       renotify:
-        Boolean(
-          payload.renotify
-        ),
+        payload.renotify !==
+        false,
 
       requireInteraction:
-        Boolean(
-          payload
-            .requireInteraction
-        ),
+        payload
+          .requireInteraction !==
+        false,
+
+      silent: false,
+
+      vibrate:
+        Array.isArray(
+          payload.vibrate
+        )
+          ? payload.vibrate
+          : [
+              220,
+              100,
+              220,
+              100,
+              320,
+            ],
+
+      timestamp:
+        Number(
+          payload.timestamp
+        ) ||
+        Date.now(),
 
       data: {
         url:

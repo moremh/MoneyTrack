@@ -604,3 +604,88 @@ export const unsubscribeCurrentDeviceFromPush =
         "Las notificaciones Push quedaron desactivadas en este dispositivo.",
     };
   };
+
+export const showTestSystemNotification =
+  async () => {
+    if (
+      !isPushSupported()
+    ) {
+      return {
+        success: false,
+        message:
+          "Este navegador no admite notificaciones del sistema.",
+      };
+    }
+
+    if (
+      window.Notification
+        .permission !==
+      "granted"
+    ) {
+      return {
+        success: false,
+        message:
+          "Primero tenés que permitir las notificaciones.",
+      };
+    }
+
+    const registrationResult =
+      await getRegistration();
+
+    if (
+      !registrationResult
+        .success
+    ) {
+      return registrationResult;
+    }
+
+    try {
+      await registrationResult
+        .registration
+        .showNotification(
+          "MoneyTrack · Prueba",
+          {
+            body:
+              "Si ves este aviso, las notificaciones del sistema están habilitadas en este dispositivo.",
+            icon:
+              "/pwa-192x192.png",
+            badge:
+              "/favicon-32x32.png",
+            tag:
+              "moneytrack-notification-test",
+            renotify: true,
+            requireInteraction:
+              true,
+            silent: false,
+            vibrate: [
+              220,
+              100,
+              220,
+              100,
+              320,
+            ],
+            data: {
+              url: "/settings",
+            },
+          }
+        );
+
+      return {
+        success: true,
+        message:
+          "Notificación de prueba enviada al sistema.",
+      };
+    } catch (error) {
+      console.error(
+        "No se pudo mostrar la notificación de prueba:",
+        error
+      );
+
+      return {
+        success: false,
+        message:
+          "No se pudo mostrar la notificación de prueba.",
+        error,
+      };
+    }
+  };

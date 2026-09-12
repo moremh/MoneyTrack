@@ -13,6 +13,7 @@ import {
   FinanceContext,
 } from "../../context/FinanceContext";
 
+import ReminderAlert from "../reminders/ReminderAlert";
 import SyncConflictModal from "../sync/SyncConflictModal";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
@@ -263,6 +264,8 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <ReminderAlert />
 
       <SyncConflictModal
         open={conflictModalOpen}

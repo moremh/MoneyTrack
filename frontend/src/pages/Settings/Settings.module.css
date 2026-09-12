@@ -156,3 +156,200 @@
     width: 100%;
   }
 }
+.cardTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cardDescription {
+  margin: 6px 0 0;
+  color: var(--text-light);
+  font-size: 0.93rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.statusSuccess {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.statusWarning {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.statusError {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.statusNeutral {
+  background: var(--neutral-button-bg);
+  color: var(--neutral-button-text);
+  border: 1px solid var(--border);
+}
+
+.notificationStatus {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.notificationStatus strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.notificationStatus p {
+  margin: 0;
+  color: var(--text-light);
+  line-height: 1.45;
+}
+
+.notificationIcon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--primary);
+  font-size: 1.15rem;
+}
+
+.notificationActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.notificationActions .saveButton {
+  align-self: auto;
+}
+
+.permissionHelp {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.preferenceList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.preferenceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.preferenceRow + .preferenceRow {
+  border-top: 1px solid var(--border);
+}
+
+.preferenceText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preferenceText strong {
+  color: var(--text);
+}
+
+.preferenceText span {
+  color: var(--text-light);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.toggle {
+  width: 44px;
+  height: 24px;
+  flex: 0 0 44px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.testRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.notificationNote {
+  flex: 1;
+  min-width: 260px;
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 768px) {
+  .cardTitleRow {
+    flex-direction: column;
+  }
+
+  .statusBadge {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .notificationActions {
+    flex-direction: column;
+  }
+
+  .notificationActions .saveButton,
+  .notificationActions .secondaryButton,
+  .testRow .secondaryButton {
+    width: 100%;
+  }
+
+  .preferenceRow {
+    align-items: flex-start;
+  }
+
+  .notificationNote {
+    min-width: 0;
+  }
+}

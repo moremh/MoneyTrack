@@ -329,17 +329,7 @@ Deno.serve(
       } = await supabase
         .from("reminders")
         .select(
-          [
-            "id",
-            "user_id",
-            "title",
-            "description",
-            "reminder_date",
-            "reminder_time",
-            "timezone",
-            "status",
-            "notified_at",
-          ].join(","),
+          "id,user_id,title,description,reminder_date,reminder_time,timezone,status,notified_at",
         )
         .eq(
           "status",
@@ -376,27 +366,20 @@ Deno.serve(
       const now =
         new Date();
 
-      const dueReminders =
+      const dueReminders:
+        ReminderRow[] =
         (
           candidateRows ||
           []
-        )
-          .map(
-            (
-              row,
-            ) =>
-              row as
-                ReminderRow,
-          )
-          .filter(
-            (
+        ).filter(
+          (
+            reminder,
+          ) =>
+            isDue(
               reminder,
-            ) =>
-              isDue(
-                reminder,
-                now,
-              ),
-          );
+              now,
+            ),
+        );
 
       let claimed = 0;
       let sent = 0;
@@ -528,16 +511,28 @@ Deno.serve(
           continue;
         }
 
-        const subscriptions =
+        const subscriptions:
+          PushSubscriptionRow[] =
           (
             subscriptionRows ||
             []
           ).map(
             (
               row,
-            ) =>
-              row as
-                PushSubscriptionRow,
+            ) => ({
+              id:
+                row.id,
+              user_id:
+                row.user_id,
+              endpoint:
+                row.endpoint,
+              p256dh:
+                row.p256dh,
+              auth:
+                row.auth,
+              is_active:
+                row.is_active,
+            }),
           );
 
         if (
@@ -579,6 +574,22 @@ Deno.serve(
 
             tag:
               `moneytrack-reminder-${reminder.id}`,
+
+            renotify: true,
+
+            requireInteraction:
+              true,
+
+            vibrate: [
+              220,
+              100,
+              220,
+              100,
+              320,
+            ],
+
+            timestamp:
+              Date.now(),
 
             data: {
               url:
