@@ -1,0 +1,6 @@
+# Agregar este bloque a supabase/config.toml si el proyecto ya tiene ese archivo.
+# Como la función se protege con x-cron-secret, desactivamos la verificación JWT
+# del gateway solamente para esta función.
+
+[functions.send-reminder-push]
+verify_jwt = false

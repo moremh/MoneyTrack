@@ -1,4 +1,5 @@
 import {
+  useContext,
   useEffect,
   useState,
 } from "react";
@@ -8,6 +9,11 @@ import {
   useLocation,
 } from "react-router-dom";
 
+import {
+  FinanceContext,
+} from "../../context/FinanceContext";
+
+import SyncConflictModal from "../sync/SyncConflictModal";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
 
@@ -29,6 +35,10 @@ const getIsMobileViewport = () => {
 function Layout() {
   const location = useLocation();
 
+  const {
+    syncConflictCount,
+  } = useContext(FinanceContext);
+
   const [
     isMobile,
     setIsMobile,
@@ -43,6 +53,11 @@ function Layout() {
     () => !getIsMobileViewport()
   );
 
+  const [
+    conflictModalOpen,
+    setConflictModalOpen,
+  ] = useState(false);
+
   const toggleSidebar = () => {
     setSidebarOpen(
       (previousValue) =>
@@ -53,6 +68,33 @@ function Layout() {
   const closeSidebar = () => {
     setSidebarOpen(false);
   };
+
+  const openConflictModal = () => {
+    if (syncConflictCount > 0) {
+      setConflictModalOpen(true);
+    }
+  };
+
+  const closeConflictModal = () => {
+    setConflictModalOpen(false);
+  };
+
+  /*
+   * Cuando aparece un conflicto nuevo,
+   * mostramos el modal automáticamente.
+   *
+   * Si la persona lo cierra sin resolverlo,
+   * puede volver a abrirlo desde el estado
+   * de sincronización de la barra superior.
+   */
+  useEffect(() => {
+    if (syncConflictCount > 0) {
+      setConflictModalOpen(true);
+      return;
+    }
+
+    setConflictModalOpen(false);
+  }, [syncConflictCount]);
 
   /*
    * Detecta el cambio entre la vista móvil
@@ -183,6 +225,9 @@ function Layout() {
         toggleSidebar={
           toggleSidebar
         }
+        onOpenSyncConflicts={
+          openConflictModal
+        }
       />
 
       <div
@@ -218,6 +263,11 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <SyncConflictModal
+        open={conflictModalOpen}
+        onClose={closeConflictModal}
+      />
     </>
   );
 }

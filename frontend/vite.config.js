@@ -47,58 +47,76 @@ export default defineConfig({
       },
 
       workbox: {
-  cleanupOutdatedCaches: true,
-  clientsClaim: true,
-  skipWaiting: true,
-  navigateFallback: "/index.html",
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        navigateFallback: "/index.html",
 
-  globPatterns: [
-    "**/*.{js,css,html,ico,png,svg,woff,woff2}",
-  ],
+        /*
+         * El Service Worker generado por Workbox
+         * importa este archivo adicional para
+         * recibir notificaciones Web Push.
+         */
+        importScripts: [
+          "push-sw.js",
+        ],
 
-  /*
-   * Bootstrap Icons agrega un identificador
-   * en la URL de sus fuentes, por ejemplo:
-   *
-   * bootstrap-icons.woff2?dd6703...
-   *
-   * Lo ignoramos al buscar el archivo
-   * dentro del precache.
-   */
-  ignoreURLParametersMatching: [
-    /^utm_/,
-    /^fbclid$/,
-    /^dd[0-9a-f]+$/,
-  ],
+        globPatterns: [
+          "**/*.{js,css,html,ico,png,svg,woff,woff2}",
+        ],
 
-  /*
-   * Respaldo adicional para cualquier
-   * fuente utilizada por MoneyTrack.
-   */
-  runtimeCaching: [
-    {
-      urlPattern: ({ request }) =>
-        request.destination === "font",
+        /*
+         * Bootstrap Icons agrega un identificador
+         * en la URL de sus fuentes, por ejemplo:
+         *
+         * bootstrap-icons.woff2?dd6703...
+         *
+         * Lo ignoramos al buscar el archivo
+         * dentro del precache.
+         */
+        ignoreURLParametersMatching: [
+          /^utm_/,
+          /^fbclid$/,
+          /^dd[0-9a-f]+$/,
+        ],
 
-      handler: "CacheFirst",
+        /*
+         * Respaldo adicional para cualquier
+         * fuente utilizada por MoneyTrack.
+         */
+        runtimeCaching: [
+          {
+            urlPattern: ({
+              request,
+            }) =>
+              request.destination ===
+              "font",
 
-      options: {
-        cacheName:
-          "moneytrack-fonts-v1",
+            handler: "CacheFirst",
 
-        expiration: {
-          maxEntries: 20,
-          maxAgeSeconds:
-            60 * 60 * 24 * 365,
-        },
+            options: {
+              cacheName:
+                "moneytrack-fonts-v1",
 
-        cacheableResponse: {
-          statuses: [0, 200],
-        },
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds:
+                  60 *
+                  60 *
+                  24 *
+                  365,
+              },
+
+              cacheableResponse: {
+                statuses: [
+                  0,
+                  200,
+                ],
+              },
+            },
+          },
+        ],
       },
-    },
-  ],
-},
     }),
   ],
 });

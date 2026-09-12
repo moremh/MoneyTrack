@@ -18,6 +18,7 @@ import Income from "../pages/Income/Income";
 import Expenses from "../pages/Expenses/Expenses";
 import Categories from "../pages/Categories/Categories";
 import Goals from "../pages/Goals/Goals";
+import Reminders from "../pages/Reminders/Reminders";
 import Reports from "../pages/Reports/Reports";
 import Settings from "../pages/Settings/Settings";
 import Plans from "../pages/Plans/Plans";
@@ -28,29 +29,108 @@ function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-        <Route path="/register" element={<Register />} />
+        <Route
+          path="/register"
+          element={<Register />}
+        />
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<Layout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/income" element={<Income />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/plans" element={<Plans />} />
-            <Route path="/account" element={<Account />} />
-            <Route path="/settings" element={<Settings />} />
+        <Route
+          element={
+            <ProtectedRoute />
+          }
+        >
+          <Route
+            element={<Layout />}
+          >
+            <Route
+              path="/"
+              element={
+                <Dashboard />
+              }
+            />
 
-            <Route element={<AdminRoute />}>
-              <Route path="/admin" element={<Admin />} />
+            <Route
+              path="/income"
+              element={<Income />}
+            />
+
+            <Route
+              path="/expenses"
+              element={
+                <Expenses />
+              }
+            />
+
+            <Route
+              path="/categories"
+              element={
+                <Categories />
+              }
+            />
+
+            <Route
+              path="/goals"
+              element={<Goals />}
+            />
+
+            <Route
+              path="/reminders"
+              element={
+                <Reminders />
+              }
+            />
+
+            <Route
+              path="/reports"
+              element={
+                <Reports />
+              }
+            />
+
+            <Route
+              path="/plans"
+              element={<Plans />}
+            />
+
+            <Route
+              path="/account"
+              element={<Account />}
+            />
+
+            <Route
+              path="/settings"
+              element={
+                <Settings />
+              }
+            />
+
+            <Route
+              element={
+                <AdminRoute />
+              }
+            >
+              <Route
+                path="/admin"
+                element={<Admin />}
+              />
             </Route>
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

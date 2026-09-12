@@ -12,10 +12,14 @@ import { supabase } from "../lib/supabase";
 import {
   addPendingSyncOperation,
   getFinanceSnapshot,
+  getPendingSyncConflicts,
   getPendingSyncOperations,
+  markPendingSyncConflict,
+  queueGoalMovementSyncOperation,
   queueTransactionSyncOperation,
   removePendingSyncOperation,
   saveFinanceSnapshot,
+  updatePendingSyncOperation,
 } from "../lib/offlineStorage";
 
 import { useAuth } from "./AuthContext";
@@ -112,14 +116,12 @@ const createClientMutationId =
     ].join("-");
   };
 
-
-const isDeviceOffline = () =>
+  const isDeviceOffline = () =>
   typeof navigator !==
     "undefined" &&
   navigator.onLine === false;
 
-
-const isNetworkError = (
+  const isNetworkError = (
   error
 ) => {
   if (isDeviceOffline()) {
@@ -198,7 +200,9 @@ const GOAL_MOVEMENT_FIELDS = `
   amount,
   description,
   date,
-  created_at
+  client_mutation_id,
+  created_at,
+  updated_at
 `;
 
 const getDefaultMovementUsage = (currentUser) => {
@@ -341,6 +345,16 @@ const mapGoalMovement = (movement) => {
     description,
     date: movement.date,
 
+    clientMutationId:
+      movement.client_mutation_id ||
+      null,
+
+    /*
+     * Los movimientos obtenidos desde
+     * Supabase ya están sincronizados.
+     */
+    isPendingSync: false,
+
     /*
      * Este registro fue creado cuando
      * migramos los ahorros antiguos al
@@ -354,8 +368,235 @@ const mapGoalMovement = (movement) => {
 
     createdAt:
       movement.created_at,
+
+    updatedAt:
+      movement.updated_at,
   };
 };
+
+
+/*
+ * Devuelve el efecto que un movimiento
+ * de ahorro tiene sobre el saldo.
+ *
+ * deposit    => suma
+ * withdrawal => resta
+ */
+const getGoalMovementEffect = (
+  movement
+) => {
+  if (!movement) {
+    return 0;
+  }
+
+  const amount =
+    Number(movement.amount) || 0;
+
+  return movement.type ===
+    "withdrawal"
+    ? -amount
+    : amount;
+};
+
+
+const sortGoalMovements = (
+  movements
+) => {
+  return [...movements].sort(
+    (a, b) => {
+      const dateComparison =
+        String(
+          b?.date || ""
+        ).localeCompare(
+          String(
+            a?.date || ""
+          )
+        );
+
+      if (dateComparison !== 0) {
+        return dateComparison;
+      }
+
+      return String(
+        b?.createdAt || ""
+      ).localeCompare(
+        String(
+          a?.createdAt || ""
+        )
+      );
+    }
+  );
+};
+
+
+/*
+ * Aplica de forma local el cambio de un
+ * movimiento de ahorro sobre los objetivos.
+ *
+ * - CREATE:
+ *   previousMovement = null
+ *
+ * - UPDATE:
+ *   previousMovement = versión anterior
+ *   nextMovement = versión nueva
+ *
+ * - DELETE:
+ *   nextMovement = null
+ *
+ * Esto nos permite mantener los saldos
+ * correctos incluso sin conexión.
+ */
+const calculateGoalsAfterMovementChange =
+  (
+    currentGoals,
+    previousMovement,
+    nextMovement
+  ) => {
+    const goalsArray =
+      Array.isArray(currentGoals)
+        ? currentGoals
+        : [];
+
+    const amountByGoalId =
+      new Map(
+        goalsArray.map(
+          (goal) => [
+            goal.id,
+            Number(
+              goal.currentAmount
+            ) || 0,
+          ]
+        )
+      );
+
+    const affectedGoalIds =
+      new Set();
+
+    const applyDelta = (
+      goalId,
+      delta
+    ) => {
+      if (!goalId) {
+        return true;
+      }
+
+      if (
+        !amountByGoalId.has(
+          goalId
+        )
+      ) {
+        return false;
+      }
+
+      const nextAmount =
+        (
+          amountByGoalId.get(
+            goalId
+          ) || 0
+        ) + delta;
+
+      /*
+       * Evitamos pequeños negativos
+       * causados por precisión decimal.
+       */
+      if (nextAmount < -0.000001) {
+        return false;
+      }
+
+      amountByGoalId.set(
+        goalId,
+        Math.max(
+          nextAmount,
+          0
+        )
+      );
+
+      affectedGoalIds.add(
+        goalId
+      );
+
+      return true;
+    };
+
+    if (previousMovement) {
+      const reversed =
+        applyDelta(
+          previousMovement.goalId,
+          -getGoalMovementEffect(
+            previousMovement
+          )
+        );
+
+      if (!reversed) {
+        return {
+          success: false,
+          goals: goalsArray,
+        };
+      }
+    }
+
+    if (nextMovement) {
+      const applied =
+        applyDelta(
+          nextMovement.goalId,
+          getGoalMovementEffect(
+            nextMovement
+          )
+        );
+
+      if (!applied) {
+        return {
+          success: false,
+          goals: goalsArray,
+        };
+      }
+    }
+
+    const nextGoals =
+      goalsArray.map(
+        (goal) => {
+          if (
+            !affectedGoalIds.has(
+              goal.id
+            )
+          ) {
+            return goal;
+          }
+
+          const currentAmount =
+            amountByGoalId.get(
+              goal.id
+            ) || 0;
+
+          const targetAmount =
+            Number(
+              goal.targetAmount
+            ) || 0;
+
+          return {
+            ...goal,
+
+            currentAmount,
+            savedAmount:
+              currentAmount,
+            saved:
+              currentAmount,
+
+            status:
+              targetAmount > 0 &&
+              currentAmount >=
+                targetAmount
+                ? "completed"
+                : "active",
+          };
+        }
+      );
+
+    return {
+      success: true,
+      goals: nextGoals,
+    };
+  };
 
 const mapMovementUsage = (
   data,
@@ -439,6 +680,35 @@ const isOfflineTransactionConflict =
       error
     ).includes(
       "OFFLINE_TRANSACTION_CONFLICT"
+    );
+  };
+
+const isOfflineTransactionNotFound =
+  (error) => {
+    return getErrorContent(
+      error
+    ).includes(
+      "TRANSACTION_NOT_FOUND"
+    );
+  };
+
+
+const isOfflineGoalMovementConflict =
+  (error) => {
+    return getErrorContent(
+      error
+    ).includes(
+      "OFFLINE_GOAL_MOVEMENT_CONFLICT"
+    );
+  };
+
+
+const isOfflineGoalMovementNotFound =
+  (error) => {
+    return getErrorContent(
+      error
+    ).includes(
+      "GOAL_MOVEMENT_NOT_FOUND"
     );
   };
 
@@ -676,6 +946,11 @@ const [
   setPendingSyncCount,
 ] = useState(0);
 
+const [
+  syncConflicts,
+  setSyncConflicts,
+] = useState([]);
+
   const currentUserId =
     currentUser?.id || null;
 
@@ -694,8 +969,12 @@ const [
       const count =
         operations.filter(
           (operation) =>
-            operation?.entity ===
-              "transaction" &&
+            [
+              "transaction",
+              "goal_movement",
+            ].includes(
+              operation?.entity
+            ) &&
             [
               "create",
               "update",
@@ -710,17 +989,37 @@ const [
       return count;
     }, [currentUserId]);
 
+  const refreshSyncConflicts =
+    useCallback(async () => {
+      if (!currentUserId) {
+        setSyncConflicts([]);
+        return [];
+      }
+
+      const conflicts =
+        await getPendingSyncConflicts(
+          currentUserId
+        );
+
+      setSyncConflicts(conflicts);
+
+      return conflicts;
+    }, [currentUserId]);
+
   useEffect(() => {
     if (!currentUserId) {
       setPendingSyncCount(0);
+      setSyncConflicts([]);
       return;
     }
 
     void refreshPendingSyncCount();
+    void refreshSyncConflicts();
   }, [
     currentUserId,
     financeCacheReady,
     refreshPendingSyncCount,
+    refreshSyncConflicts,
   ]);
 
   useEffect(() => {
@@ -823,6 +1122,7 @@ const resetLocalState =
 
     setFinanceCacheReady(false);
     setPendingSyncCount(0);
+    setSyncConflicts([]);
 
     setErrorMessage("");
     setLoading(false);
@@ -1947,6 +2247,540 @@ useEffect(() => {
     []
   );
 
+  const fetchServerTransaction =
+    useCallback(
+      async (transactionId) => {
+        if (
+          !currentUserId ||
+          !transactionId
+        ) {
+          return {
+            success: false,
+            movement: null,
+            error: null,
+          };
+        }
+
+        const { data, error } =
+          await supabase
+            .from("transactions")
+            .select(
+              TRANSACTION_FIELDS
+            )
+            .eq(
+              "id",
+              transactionId
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .maybeSingle();
+
+        if (error) {
+          return {
+            success: false,
+            movement: null,
+            error,
+          };
+        }
+
+        return {
+          success: true,
+          movement:
+            data
+              ? mapTransaction(data)
+              : null,
+          error: null,
+        };
+      },
+      [currentUserId]
+    );
+
+  const fetchServerGoalMovement =
+    useCallback(
+      async (goalMovementId) => {
+        if (
+          !currentUserId ||
+          !goalMovementId
+        ) {
+          return {
+            success: false,
+            movement: null,
+            error: null,
+          };
+        }
+
+        const { data, error } =
+          await supabase
+            .from("goal_movements")
+            .select(
+              GOAL_MOVEMENT_FIELDS
+            )
+            .eq(
+              "id",
+              goalMovementId
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .maybeSingle();
+
+        if (error) {
+          return {
+            success: false,
+            movement: null,
+            error,
+          };
+        }
+
+        return {
+          success: true,
+          movement:
+            data
+              ? mapGoalMovement(
+                  data
+                )
+              : null,
+          error: null,
+        };
+      },
+      [currentUserId]
+    );
+
+
+  const fetchServerGoal =
+    useCallback(
+      async (goalId) => {
+        if (
+          !currentUserId ||
+          !goalId
+        ) {
+          return {
+            success: false,
+            goal: null,
+            error: null,
+          };
+        }
+
+        const { data, error } =
+          await supabase
+            .from("goals")
+            .select(GOAL_FIELDS)
+            .eq(
+              "id",
+              goalId
+            )
+            .eq(
+              "user_id",
+              currentUserId
+            )
+            .maybeSingle();
+
+        if (error) {
+          return {
+            success: false,
+            goal: null,
+            error,
+          };
+        }
+
+        return {
+          success: true,
+          goal:
+            data
+              ? mapGoal(data)
+              : null,
+          error: null,
+        };
+      },
+      [currentUserId]
+    );
+
+
+  /*
+   * Reconstruye objetivos + historial tomando
+   * Supabase como base y reaplicando encima
+   * las operaciones de ahorro que todavía
+   * siguen pendientes en IndexedDB.
+   *
+   * Esto evita perder el estado optimista si
+   * hay varias operaciones offline al mismo
+   * tiempo o si una de ellas queda en conflicto.
+   */
+  const reconcileGoalStateFromServerAndQueue =
+    useCallback(async () => {
+      if (
+        !currentUserId ||
+        isDeviceOffline()
+      ) {
+        return {
+          success: false,
+          offline:
+            isDeviceOffline(),
+        };
+      }
+
+      const [
+        goalsResult,
+        movementsResult,
+      ] = await Promise.all([
+        supabase
+          .from("goals")
+          .select(GOAL_FIELDS)
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          ),
+
+        supabase
+          .from("goal_movements")
+          .select(
+            GOAL_MOVEMENT_FIELDS
+          )
+          .eq(
+            "user_id",
+            currentUserId
+          )
+          .order(
+            "date",
+            {
+              ascending: false,
+            }
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          ),
+      ]);
+
+      if (
+        goalsResult.error ||
+        movementsResult.error
+      ) {
+        return {
+          success: false,
+          error:
+            goalsResult.error ||
+            movementsResult.error,
+        };
+      }
+
+      let optimisticGoals =
+        (
+          goalsResult.data || []
+        ).map(mapGoal);
+
+      let optimisticMovements =
+        (
+          movementsResult.data || []
+        ).map(mapGoalMovement);
+
+      const pendingOperations =
+        await getPendingSyncOperations(
+          currentUserId
+        );
+
+      const goalOperations =
+        pendingOperations.filter(
+          (operation) =>
+            operation?.entity ===
+              "goal_movement" &&
+            [
+              "create",
+              "update",
+              "delete",
+            ].includes(
+              operation?.action
+            )
+        );
+
+      for (
+        const operation of
+        goalOperations
+      ) {
+        const payload =
+          operation.payload || {};
+
+        if (
+          operation.action ===
+          "create"
+        ) {
+          const mutationId =
+            operation
+              .clientMutationId ||
+            operation.id;
+
+          const serverIndex =
+            optimisticMovements
+              .findIndex(
+                (movement) =>
+                  movement
+                    .clientMutationId ===
+                  mutationId
+              );
+
+          /*
+           * El CREATE pudo haber llegado a
+           * Supabase y haberse cortado la
+           * conexión antes de recibir la
+           * respuesta. En ese caso no debemos
+           * aplicar el saldo dos veces.
+           */
+          if (
+            serverIndex !== -1
+          ) {
+            optimisticMovements[
+              serverIndex
+            ] = {
+              ...optimisticMovements[
+                serverIndex
+              ],
+              isPendingSync: true,
+            };
+
+            continue;
+          }
+
+          const localMovement = {
+            id: mutationId,
+            userId:
+              currentUserId,
+            goalId:
+              operation.goalId ||
+              payload.goalId ||
+              null,
+            type:
+              operation.type ||
+              payload.type,
+            amount:
+              Number(
+                payload.amount
+              ) || 0,
+            description:
+              payload.description ||
+              "",
+            date:
+              payload.date ||
+              "",
+            clientMutationId:
+              mutationId,
+            isPendingSync: true,
+            isOpeningBalance: false,
+            createdAt:
+              operation.queuedAt ||
+              new Date()
+                .toISOString(),
+            updatedAt:
+              operation
+                .lastUpdatedAt ||
+              operation.queuedAt ||
+              new Date()
+                .toISOString(),
+          };
+
+          const goalResult =
+            calculateGoalsAfterMovementChange(
+              optimisticGoals,
+              null,
+              localMovement
+            );
+
+          if (goalResult.success) {
+            optimisticGoals =
+              goalResult.goals;
+          }
+
+          optimisticMovements =
+            sortGoalMovements([
+              localMovement,
+              ...optimisticMovements,
+            ]);
+
+          continue;
+        }
+
+        const goalMovementId =
+          operation
+            .goalMovementId ||
+          operation.movementId ||
+          payload.goalMovementId ||
+          payload.movementId ||
+          null;
+
+        if (!goalMovementId) {
+          continue;
+        }
+
+        const currentIndex =
+          optimisticMovements
+            .findIndex(
+              (movement) =>
+                movement.id ===
+                goalMovementId
+            );
+
+        const previousMovement =
+          currentIndex !== -1
+            ? optimisticMovements[
+                currentIndex
+              ]
+            : null;
+
+        if (
+          operation.action ===
+          "update"
+        ) {
+          const localMovement = {
+            ...(previousMovement ||
+              {}),
+
+            id:
+              goalMovementId,
+            userId:
+              currentUserId,
+            goalId:
+              operation.goalId ||
+              payload.goalId ||
+              previousMovement
+                ?.goalId ||
+              null,
+            type:
+              operation.type ||
+              payload.type ||
+              previousMovement
+                ?.type,
+            amount:
+              Number(
+                payload.amount
+              ) || 0,
+            description:
+              payload.description ||
+              "",
+            date:
+              payload.date ||
+              "",
+            clientMutationId:
+              previousMovement
+                ?.clientMutationId ||
+              operation
+                .clientMutationId ||
+              null,
+            isPendingSync: true,
+            isOpeningBalance:
+              previousMovement
+                ?.isOpeningBalance ||
+              false,
+            syncBaseUpdatedAt:
+              operation
+                .expectedUpdatedAt ||
+              null,
+            createdAt:
+              previousMovement
+                ?.createdAt ||
+              operation.queuedAt ||
+              new Date()
+                .toISOString(),
+            updatedAt:
+              operation
+                .lastUpdatedAt ||
+              new Date()
+                .toISOString(),
+          };
+
+          const goalResult =
+            calculateGoalsAfterMovementChange(
+              optimisticGoals,
+              previousMovement,
+              localMovement
+            );
+
+          if (goalResult.success) {
+            optimisticGoals =
+              goalResult.goals;
+          }
+
+          if (
+            currentIndex === -1
+          ) {
+            optimisticMovements =
+              sortGoalMovements([
+                localMovement,
+                ...optimisticMovements,
+              ]);
+          } else {
+            optimisticMovements =
+              sortGoalMovements(
+                optimisticMovements.map(
+                  (movement) =>
+                    movement.id ===
+                    goalMovementId
+                      ? localMovement
+                      : movement
+                )
+              );
+          }
+
+          continue;
+        }
+
+        if (
+          operation.action ===
+            "delete" &&
+          previousMovement
+        ) {
+          const goalResult =
+            calculateGoalsAfterMovementChange(
+              optimisticGoals,
+              previousMovement,
+              null
+            );
+
+          if (goalResult.success) {
+            optimisticGoals =
+              goalResult.goals;
+          }
+
+          optimisticMovements =
+            optimisticMovements.filter(
+              (movement) =>
+                movement.id !==
+                goalMovementId
+            );
+        }
+      }
+
+      setGoals(
+        optimisticGoals
+      );
+
+      setGoalMovements(
+        sortGoalMovements(
+          optimisticMovements
+        )
+      );
+
+      return {
+        success: true,
+        goals:
+          optimisticGoals,
+        goalMovements:
+          optimisticMovements,
+      };
+    }, [
+      currentUserId,
+    ]);
+
+
   const syncPendingTransactions =
   useCallback(async () => {
     if (!currentUserId) {
@@ -1986,28 +2820,50 @@ useEffect(() => {
     let syncedCount = 0;
     let failedCount = 0;
 
+    let syncedTransactionCount =
+      0;
+
+    let sawGoalMovementOperation =
+      false;
+
     try {
       const pendingOperations =
         await getPendingSyncOperations(
           currentUserId
         );
 
-      const transactionOperations =
+      /*
+       * Mantenemos una sola cola para:
+       *
+       * - ingresos / gastos
+       * - movimientos de ahorro
+       *
+       * Los conflictos no se reintentan
+       * automáticamente hasta que la persona
+       * elija qué versión conservar.
+       */
+      const syncOperations =
         pendingOperations.filter(
           (operation) =>
-            operation?.entity ===
-              "transaction" &&
+            [
+              "transaction",
+              "goal_movement",
+            ].includes(
+              operation?.entity
+            ) &&
             [
               "create",
               "update",
               "delete",
             ].includes(
               operation?.action
-            )
+            ) &&
+            operation?.status !==
+              "conflict"
         );
 
       if (
-        transactionOperations.length ===
+        syncOperations.length ===
         0
       ) {
         return {
@@ -2019,256 +2875,655 @@ useEffect(() => {
 
       for (
         const operation of
-        transactionOperations
+        syncOperations
       ) {
         const payload =
           operation.payload || {};
 
-        let data = null;
-        let error = null;
-
+        /*
+         * ====================================================
+         * INGRESOS / GASTOS
+         * ====================================================
+         */
         if (
-          operation.action ===
-          "create"
+          operation.entity ===
+          "transaction"
         ) {
-          const result =
-            await supabase.rpc(
-              "sync_offline_transaction_create",
-              {
-                p_client_mutation_id:
-                  operation
-                    .clientMutationId ||
-                  operation.id,
+          let data = null;
+          let error = null;
 
-                p_type:
-                  operation.type ||
-                  payload.type,
-
-                p_description:
-                  payload.description,
-
-                p_amount:
-                  Number(
-                    payload.amount
-                  ),
-
-                p_category_id:
-                  payload.categoryId ||
-                  null,
-
-                p_category_name:
-                  payload.categoryName ||
-                  UNCATEGORIZED,
-
-                p_date:
-                  payload.date,
-              }
-            );
-
-          data = result.data;
-          error = result.error;
-        }
-
-        if (
-          operation.action ===
-          "update"
-        ) {
-          const result =
-            await supabase.rpc(
-              "sync_offline_transaction_update",
-              {
-                p_transaction_id:
-                  operation
-                    .transactionId ||
-                  payload
-                    .transactionId,
-
-                p_type:
-                  operation.type ||
-                  payload.type,
-
-                p_description:
-                  payload.description,
-
-                p_amount:
-                  Number(
-                    payload.amount
-                  ),
-
-                p_category_id:
-                  payload.categoryId ||
-                  null,
-
-                p_category_name:
-                  payload.categoryName ||
-                  UNCATEGORIZED,
-
-                p_date:
-                  payload.date,
-
-                p_expected_updated_at:
-                  operation
-                    .expectedUpdatedAt ||
-                  null,
-              }
-            );
-
-          data = result.data;
-          error = result.error;
-        }
-
-        if (
-          operation.action ===
-          "delete"
-        ) {
-          const result =
-            await supabase.rpc(
-              "sync_offline_transaction_delete",
-              {
-                p_transaction_id:
-                  operation
-                    .transactionId ||
-                  payload
-                    .transactionId,
-
-                p_expected_updated_at:
-                  operation
-                    .expectedUpdatedAt ||
-                  null,
-              }
-            );
-
-          data = result.data;
-          error = result.error;
-        }
-
-        if (error) {
           if (
-            isNetworkError(error)
+            operation.action ===
+            "create"
           ) {
-            failedCount += 1;
-            break;
+            const result =
+              await supabase.rpc(
+                "sync_offline_transaction_create",
+                {
+                  p_client_mutation_id:
+                    operation
+                      .clientMutationId ||
+                    operation.id,
+
+                  p_type:
+                    operation.type ||
+                    payload.type,
+
+                  p_description:
+                    payload.description,
+
+                  p_amount:
+                    Number(
+                      payload.amount
+                    ),
+
+                  p_category_id:
+                    payload.categoryId ||
+                    null,
+
+                  p_category_name:
+                    payload.categoryName ||
+                    UNCATEGORIZED,
+
+                  p_date:
+                    payload.date,
+                }
+              );
+
+            data = result.data;
+            error = result.error;
           }
 
           if (
             operation.action ===
-              "create" &&
-            isFreeLimitError(
-              error
-            )
+            "update"
           ) {
+            const result =
+              await supabase.rpc(
+                "sync_offline_transaction_update",
+                {
+                  p_transaction_id:
+                    operation
+                      .transactionId ||
+                    payload
+                      .transactionId,
+
+                  p_type:
+                    operation.type ||
+                    payload.type,
+
+                  p_description:
+                    payload.description,
+
+                  p_amount:
+                    Number(
+                      payload.amount
+                    ),
+
+                  p_category_id:
+                    payload.categoryId ||
+                    null,
+
+                  p_category_name:
+                    payload.categoryName ||
+                    UNCATEGORIZED,
+
+                  p_date:
+                    payload.date,
+
+                  p_expected_updated_at:
+                    operation
+                      .expectedUpdatedAt ||
+                    null,
+                }
+              );
+
+            data = result.data;
+            error = result.error;
+          }
+
+          if (
+            operation.action ===
+            "delete"
+          ) {
+            const result =
+              await supabase.rpc(
+                "sync_offline_transaction_delete",
+                {
+                  p_transaction_id:
+                    operation
+                      .transactionId ||
+                    payload
+                      .transactionId,
+
+                  p_expected_updated_at:
+                    operation
+                      .expectedUpdatedAt ||
+                    null,
+                }
+              );
+
+            data = result.data;
+            error = result.error;
+          }
+
+          if (error) {
+            if (
+              isNetworkError(error)
+            ) {
+              failedCount += 1;
+              break;
+            }
+
+            if (
+              operation.action ===
+                "create" &&
+              isFreeLimitError(
+                error
+              )
+            ) {
+              failedCount += 1;
+
+              await refreshMovementUsage();
+
+              console.warn(
+                "Un movimiento offline no pudo sincronizarse porque se alcanzó el límite mensual."
+              );
+
+              continue;
+            }
+
+            const transactionMissing =
+              operation.action ===
+                "update" &&
+              isOfflineTransactionNotFound(
+                error
+              );
+
+            if (
+              isOfflineTransactionConflict(
+                error
+              ) ||
+              transactionMissing
+            ) {
+              failedCount += 1;
+
+              const transactionId =
+                operation
+                  .transactionId ||
+                payload.transactionId;
+
+              let serverTransaction =
+                null;
+
+              if (transactionId) {
+                const serverResult =
+                  await fetchServerTransaction(
+                    transactionId
+                  );
+
+                if (
+                  !serverResult.success
+                ) {
+                  console.error(
+                    "No se pudo obtener la versión actual del movimiento en conflicto:",
+                    serverResult.error
+                  );
+                } else {
+                  serverTransaction =
+                    serverResult.movement;
+                }
+              }
+
+              const marked =
+                await markPendingSyncConflict(
+                  currentUserId,
+                  operation.id,
+                  {
+                    message:
+                      transactionMissing
+                        ? "Este movimiento ya no existe en la nube. Podés conservar tu versión para volver a crearlo o aceptar la versión de la nube."
+                        : "Este movimiento fue modificado desde otro dispositivo antes de sincronizarse.",
+
+                    serverTransaction,
+                  }
+                );
+
+              if (!marked) {
+                console.error(
+                  "Se detectó un conflicto, pero no se pudo guardar su estado local."
+                );
+              }
+
+              continue;
+            }
+
             failedCount += 1;
 
-            await refreshMovementUsage();
-
-            console.warn(
-              "Un movimiento offline no pudo sincronizarse porque se alcanzó el límite mensual."
+            console.error(
+              "No se pudo sincronizar una operación offline:",
+              error
             );
 
             continue;
           }
 
           if (
-            isOfflineTransactionConflict(
-              error
-            )
+            operation.action ===
+              "create" ||
+            operation.action ===
+              "update"
           ) {
-            failedCount += 1;
+            const rawTransaction =
+              Array.isArray(data)
+                ? data[0]
+                : data;
 
-            console.warn(
-              "Conflicto detectado al sincronizar una transacción offline:",
-              error
+            if (!rawTransaction) {
+              failedCount += 1;
+
+              console.error(
+                "Supabase no devolvió la transacción sincronizada."
+              );
+
+              continue;
+            }
+
+            const syncedMovement =
+              mapTransaction(
+                rawTransaction
+              );
+
+            mergeSyncedTransactionIntoState(
+              syncedMovement
             );
-
-            continue;
           }
 
-          failedCount += 1;
+          if (
+            operation.action ===
+            "delete"
+          ) {
+            const transactionId =
+              operation
+                .transactionId ||
+              payload.transactionId;
 
-          console.error(
-            "No se pudo sincronizar una operación offline:",
-            error
-          );
+            setIncomes(
+              (currentIncomes) =>
+                currentIncomes.filter(
+                  (income) =>
+                    income.id !==
+                    transactionId
+                )
+            );
+
+            setExpenses(
+              (currentExpenses) =>
+                currentExpenses.filter(
+                  (expense) =>
+                    expense.id !==
+                    transactionId
+                )
+            );
+          }
+
+          const removed =
+            await removePendingSyncOperation(
+              currentUserId,
+              operation.id
+            );
+
+          if (!removed) {
+            console.warn(
+              "La operación se sincronizó, pero no pudo eliminarse de la cola local."
+            );
+          }
+
+          syncedCount += 1;
+          syncedTransactionCount +=
+            1;
 
           continue;
         }
 
+        /*
+         * ====================================================
+         * MOVIMIENTOS DE AHORRO
+         * ====================================================
+         */
         if (
-          operation.action ===
-            "create" ||
-          operation.action ===
-            "update"
+          operation.entity ===
+          "goal_movement"
         ) {
-          const rawTransaction =
-            Array.isArray(data)
-              ? data[0]
-              : data;
+          sawGoalMovementOperation =
+            true;
 
-          if (!rawTransaction) {
+          let data = null;
+          let error = null;
+
+          if (
+            operation.action ===
+            "create"
+          ) {
+            const result =
+              await supabase.rpc(
+                "sync_offline_goal_movement_create",
+                {
+                  p_client_mutation_id:
+                    operation
+                      .clientMutationId ||
+                    operation.id,
+
+                  p_goal_id:
+                    operation.goalId ||
+                    payload.goalId,
+
+                  p_type:
+                    operation.type ||
+                    payload.type,
+
+                  p_amount:
+                    Number(
+                      payload.amount
+                    ),
+
+                  p_description:
+                    payload.description ||
+                    null,
+
+                  p_date:
+                    payload.date,
+                }
+              );
+
+            data = result.data;
+            error = result.error;
+          }
+
+          if (
+            operation.action ===
+            "update"
+          ) {
+            const result =
+              await supabase.rpc(
+                "sync_offline_goal_movement_update",
+                {
+                  p_movement_id:
+                    operation
+                      .goalMovementId ||
+                    operation
+                      .movementId ||
+                    payload
+                      .goalMovementId ||
+                    payload
+                      .movementId,
+
+                  p_goal_id:
+                    operation.goalId ||
+                    payload.goalId,
+
+                  p_type:
+                    operation.type ||
+                    payload.type,
+
+                  p_amount:
+                    Number(
+                      payload.amount
+                    ),
+
+                  p_description:
+                    payload.description ||
+                    null,
+
+                  p_date:
+                    payload.date,
+
+                  p_expected_updated_at:
+                    operation
+                      .expectedUpdatedAt ||
+                    null,
+                }
+              );
+
+            data = result.data;
+            error = result.error;
+          }
+
+          if (
+            operation.action ===
+            "delete"
+          ) {
+            const result =
+              await supabase.rpc(
+                "sync_offline_goal_movement_delete",
+                {
+                  p_movement_id:
+                    operation
+                      .goalMovementId ||
+                    operation
+                      .movementId ||
+                    payload
+                      .goalMovementId ||
+                    payload
+                      .movementId,
+
+                  p_expected_updated_at:
+                    operation
+                      .expectedUpdatedAt ||
+                    null,
+                }
+              );
+
+            data = result.data;
+            error = result.error;
+          }
+
+          if (error) {
+            if (
+              isNetworkError(error)
+            ) {
+              failedCount += 1;
+              break;
+            }
+
+            const errorContent =
+              getErrorContent(error);
+
+            const movementMissing =
+              operation.action ===
+                "update" &&
+              isOfflineGoalMovementNotFound(
+                error
+              );
+
+            const balanceChanged =
+              errorContent.includes(
+                "INSUFFICIENT_GOAL_BALANCE"
+              );
+
+            const goalMissing =
+              errorContent.includes(
+                "GOAL_NOT_FOUND"
+              );
+
+            const hasConflict =
+              isOfflineGoalMovementConflict(
+                error
+              ) ||
+              movementMissing ||
+              balanceChanged ||
+              goalMissing;
+
+            if (hasConflict) {
+              failedCount += 1;
+
+              const goalMovementId =
+                operation
+                  .goalMovementId ||
+                operation
+                  .movementId ||
+                payload
+                  .goalMovementId ||
+                payload
+                  .movementId ||
+                null;
+
+              let serverGoalMovement =
+                null;
+
+              let serverGoal = null;
+
+              if (goalMovementId) {
+                const movementResult =
+                  await fetchServerGoalMovement(
+                    goalMovementId
+                  );
+
+                if (
+                  movementResult.success
+                ) {
+                  serverGoalMovement =
+                    movementResult.movement;
+                }
+              }
+
+              const serverGoalId =
+                serverGoalMovement
+                  ?.goalId ||
+                operation.goalId ||
+                payload.goalId ||
+                null;
+
+              if (serverGoalId) {
+                const goalResult =
+                  await fetchServerGoal(
+                    serverGoalId
+                  );
+
+                if (
+                  goalResult.success
+                ) {
+                  serverGoal =
+                    goalResult.goal;
+                }
+              }
+
+              let conflictMessage =
+                "Este movimiento de ahorro fue modificado desde otro dispositivo antes de sincronizarse.";
+
+              if (movementMissing) {
+                conflictMessage =
+                  "Este movimiento de ahorro ya no existe en la nube.";
+              } else if (
+                balanceChanged
+              ) {
+                conflictMessage =
+                  "El saldo del objetivo cambió en la nube y este movimiento ya no puede aplicarse tal como estaba guardado.";
+              } else if (
+                goalMissing
+              ) {
+                conflictMessage =
+                  "El objetivo relacionado con este movimiento ya no existe en la nube.";
+              }
+
+              const marked =
+                await markPendingSyncConflict(
+                  currentUserId,
+                  operation.id,
+                  {
+                    message:
+                      conflictMessage,
+
+                    serverGoalMovement,
+                    serverGoal,
+                  }
+                );
+
+              if (!marked) {
+                console.error(
+                  "Se detectó un conflicto de ahorro, pero no se pudo guardar su estado local."
+                );
+              }
+
+              continue;
+            }
+
             failedCount += 1;
 
             console.error(
-              "Supabase no devolvió la transacción sincronizada."
+              "No se pudo sincronizar una operación de ahorro offline:",
+              error
             );
 
             continue;
           }
 
-          const syncedMovement =
-            mapTransaction(
-              rawTransaction
+          if (
+            operation.action ===
+              "create" ||
+            operation.action ===
+              "update"
+          ) {
+            const rawGoalMovement =
+              Array.isArray(data)
+                ? data[0]
+                : data;
+
+            if (!rawGoalMovement) {
+              failedCount += 1;
+
+              console.error(
+                "Supabase no devolvió el movimiento de ahorro sincronizado."
+              );
+
+              continue;
+            }
+          }
+
+          const removed =
+            await removePendingSyncOperation(
+              currentUserId,
+              operation.id
             );
 
-          mergeSyncedTransactionIntoState(
-            syncedMovement
-          );
+          if (!removed) {
+            console.warn(
+              "El movimiento de ahorro se sincronizó, pero no pudo eliminarse de la cola local."
+            );
+          }
+
+          syncedCount += 1;
         }
-
-        if (
-          operation.action ===
-          "delete"
-        ) {
-          const transactionId =
-            operation
-              .transactionId ||
-            payload.transactionId;
-
-          setIncomes(
-            (currentIncomes) =>
-              currentIncomes.filter(
-                (income) =>
-                  income.id !==
-                  transactionId
-              )
-          );
-
-          setExpenses(
-            (currentExpenses) =>
-              currentExpenses.filter(
-                (expense) =>
-                  expense.id !==
-                  transactionId
-              )
-          );
-        }
-
-        const removed =
-          await removePendingSyncOperation(
-            currentUserId,
-            operation.id
-          );
-
-        if (!removed) {
-          console.warn(
-            "La operación se sincronizó, pero no pudo eliminarse de la cola local."
-          );
-        }
-
-        syncedCount += 1;
       }
 
-      if (syncedCount > 0) {
+      if (
+        syncedTransactionCount > 0
+      ) {
         await refreshMovementUsage();
+      }
+
+      /*
+       * Volvemos a construir los objetivos
+       * desde Supabase y reaplicamos cualquier
+       * operación de ahorro que todavía siga
+       * pendiente o en conflicto.
+       */
+      if (
+        sawGoalMovementOperation &&
+        !isDeviceOffline()
+      ) {
+        const reconcileResult =
+          await reconcileGoalStateFromServerAndQueue();
+
+        if (
+          !reconcileResult.success &&
+          !reconcileResult.offline
+        ) {
+          console.warn(
+            "No se pudo reconciliar el estado de los objetivos después de sincronizar.",
+            reconcileResult.error
+          );
+        }
       }
 
       return {
@@ -2298,6 +3553,7 @@ useEffect(() => {
       };
     } finally {
       await refreshPendingSyncCount();
+      await refreshSyncConflicts();
 
       setIsSyncing(false);
 
@@ -2306,10 +3562,716 @@ useEffect(() => {
     }
   }, [
     currentUserId,
+    fetchServerGoal,
+    fetchServerGoalMovement,
+    fetchServerTransaction,
     mergeSyncedTransactionIntoState,
+    reconcileGoalStateFromServerAndQueue,
     refreshMovementUsage,
     refreshPendingSyncCount,
+    refreshSyncConflicts,
   ]);
+
+  const resolveSyncConflictUseServer =
+    useCallback(
+      async (operationId) => {
+        if (
+          !currentUserId ||
+          !operationId
+        ) {
+          return {
+            success: false,
+            message:
+              "No se encontró el conflicto.",
+          };
+        }
+
+        if (isDeviceOffline()) {
+          return {
+            success: false,
+            offline: true,
+            message:
+              "Necesitás conexión para resolver este conflicto.",
+          };
+        }
+
+        const conflictOperation =
+          syncConflicts.find(
+            (operation) =>
+              operation.id ===
+              operationId
+          );
+
+        if (!conflictOperation) {
+          return {
+            success: false,
+            message:
+              "No se encontró el conflicto.",
+          };
+        }
+
+        /*
+         * ====================================================
+         * CONFLICTO DE MOVIMIENTO DE AHORRO
+         * ====================================================
+         *
+         * Aceptar la nube significa descartar
+         * la operación local y reconstruir
+         * objetivos + historial desde Supabase,
+         * reaplicando solamente las demás
+         * operaciones que sigan pendientes.
+         */
+        if (
+          conflictOperation.entity ===
+          "goal_movement"
+        ) {
+          const removed =
+            await removePendingSyncOperation(
+              currentUserId,
+              operationId
+            );
+
+          if (!removed) {
+            return {
+              success: false,
+              message:
+                "No se pudo descartar el cambio local.",
+            };
+          }
+
+          const reconcileResult =
+            await reconcileGoalStateFromServerAndQueue();
+
+          await refreshPendingSyncCount();
+          await refreshSyncConflicts();
+
+          if (
+            !reconcileResult.success
+          ) {
+            return {
+              success: false,
+              message:
+                "Se descartó el cambio local, pero no se pudo actualizar la información desde la nube.",
+            };
+          }
+
+          return {
+            success: true,
+            message:
+              "Se conservó la versión guardada en la nube.",
+          };
+        }
+
+        /*
+         * ====================================================
+         * CONFLICTO DE INGRESO / GASTO
+         * ====================================================
+         */
+        const transactionId =
+          conflictOperation
+            .transactionId ||
+          conflictOperation
+            .payload
+            ?.transactionId ||
+          null;
+
+        let serverMovement = null;
+
+        if (transactionId) {
+          const serverResult =
+            await fetchServerTransaction(
+              transactionId
+            );
+
+          if (!serverResult.success) {
+            return {
+              success: false,
+              message:
+                "No se pudo obtener la versión actual de la nube. Intentá nuevamente.",
+            };
+          }
+
+          serverMovement =
+            serverResult.movement;
+        }
+
+        const removed =
+          await removePendingSyncOperation(
+            currentUserId,
+            operationId
+          );
+
+        if (!removed) {
+          return {
+            success: false,
+            message:
+              "No se pudo descartar el cambio local.",
+          };
+        }
+
+        if (serverMovement) {
+          mergeSyncedTransactionIntoState(
+            serverMovement
+          );
+        } else if (transactionId) {
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.filter(
+                (income) =>
+                  income.id !==
+                  transactionId
+              )
+          );
+
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.filter(
+                (expense) =>
+                  expense.id !==
+                  transactionId
+              )
+          );
+        }
+
+        await refreshPendingSyncCount();
+        await refreshSyncConflicts();
+
+        return {
+          success: true,
+          movement: serverMovement,
+          message:
+            serverMovement
+              ? "Se conservó la versión guardada en la nube."
+              : "El movimiento ya no existe en la nube y se descartó el cambio local.",
+        };
+      },
+      [
+        currentUserId,
+        fetchServerTransaction,
+        mergeSyncedTransactionIntoState,
+        reconcileGoalStateFromServerAndQueue,
+        refreshPendingSyncCount,
+        refreshSyncConflicts,
+        syncConflicts,
+      ]
+    );
+
+
+  const resolveSyncConflictKeepLocal =
+    useCallback(
+      async (operationId) => {
+        if (
+          !currentUserId ||
+          !operationId
+        ) {
+          return {
+            success: false,
+            message:
+              "No se encontró el conflicto.",
+          };
+        }
+
+        if (isDeviceOffline()) {
+          return {
+            success: false,
+            offline: true,
+            message:
+              "Necesitás conexión para resolver este conflicto.",
+          };
+        }
+
+        const conflictOperation =
+          syncConflicts.find(
+            (operation) =>
+              operation.id ===
+              operationId
+          );
+
+        if (!conflictOperation) {
+          return {
+            success: false,
+            message:
+              "No se encontró el conflicto.",
+          };
+        }
+
+        /*
+         * ====================================================
+         * CONFLICTO DE MOVIMIENTO DE AHORRO
+         * ====================================================
+         */
+        if (
+          conflictOperation.entity ===
+          "goal_movement"
+        ) {
+          const payload =
+            conflictOperation
+              .payload || {};
+
+          const goalMovementId =
+            conflictOperation
+              .goalMovementId ||
+            conflictOperation
+              .movementId ||
+            payload
+              .goalMovementId ||
+            payload
+              .movementId ||
+            null;
+
+          const targetGoalId =
+            conflictOperation
+              .goalId ||
+            payload.goalId ||
+            null;
+
+          /*
+           * El objetivo tiene que seguir
+           * existiendo para poder conservar
+           * un aporte/retiro local.
+           */
+          if (targetGoalId) {
+            const goalResult =
+              await fetchServerGoal(
+                targetGoalId
+              );
+
+            if (
+              !goalResult.success
+            ) {
+              return {
+                success: false,
+                message:
+                  "No se pudo comprobar el objetivo en la nube.",
+              };
+            }
+
+            if (!goalResult.goal) {
+              return {
+                success: false,
+                message:
+                  "No se puede conservar este movimiento porque el objetivo ya no existe en la nube.",
+              };
+            }
+          }
+
+          let serverGoalMovement =
+            null;
+
+          if (goalMovementId) {
+            const movementResult =
+              await fetchServerGoalMovement(
+                goalMovementId
+              );
+
+            if (
+              !movementResult.success
+            ) {
+              return {
+                success: false,
+                message:
+                  "No se pudo obtener la versión actual del movimiento de ahorro.",
+              };
+            }
+
+            serverGoalMovement =
+              movementResult.movement;
+          }
+
+          if (
+            conflictOperation.action ===
+            "create"
+          ) {
+            /*
+             * CREATE no necesita rebase de
+             * updated_at. Quitamos el conflicto
+             * y volvemos a intentarlo.
+             */
+            const updated =
+              await updatePendingSyncOperation(
+                currentUserId,
+                operationId,
+                {
+                  status:
+                    "pending",
+                  conflict:
+                    null,
+                }
+              );
+
+            if (!updated) {
+              return {
+                success: false,
+                message:
+                  "No se pudo preparar el movimiento para volver a sincronizarlo.",
+              };
+            }
+          } else if (
+            serverGoalMovement
+          ) {
+            /*
+             * La persona eligió su versión.
+             * Rebasamos contra el updated_at
+             * actual y dejamos que Supabase
+             * vuelva a validar el movimiento.
+             */
+            const updated =
+              await updatePendingSyncOperation(
+                currentUserId,
+                operationId,
+                {
+                  status:
+                    "pending",
+                  conflict:
+                    null,
+
+                  expectedUpdatedAt:
+                    serverGoalMovement
+                      .updatedAt ||
+                    null,
+                }
+              );
+
+            if (!updated) {
+              return {
+                success: false,
+                message:
+                  "No se pudo preparar el cambio para volver a sincronizarlo.",
+              };
+            }
+          } else if (
+            conflictOperation.action ===
+            "update"
+          ) {
+            /*
+             * El movimiento original fue
+             * eliminado desde otro dispositivo.
+             * Si se conserva la versión local,
+             * lo recreamos como un movimiento
+             * nuevo e idempotente.
+             */
+            const recreateMutationId =
+              createClientMutationId();
+
+            const updated =
+              await updatePendingSyncOperation(
+                currentUserId,
+                operationId,
+                {
+                  action:
+                    "create",
+
+                  clientMutationId:
+                    recreateMutationId,
+
+                  goalMovementId:
+                    null,
+
+                  movementId:
+                    null,
+
+                  expectedUpdatedAt:
+                    null,
+
+                  status:
+                    "pending",
+
+                  conflict:
+                    null,
+                }
+              );
+
+            if (!updated) {
+              return {
+                success: false,
+                message:
+                  "No se pudo preparar el movimiento para volver a crearlo.",
+              };
+            }
+
+            /*
+             * Permitimos que la reconciliación
+             * identifique la versión local con
+             * el nuevo clientMutationId.
+             */
+            setGoalMovements(
+              (currentMovements) =>
+                currentMovements.map(
+                  (movement) =>
+                    movement.id ===
+                    goalMovementId
+                      ? {
+                          ...movement,
+
+                          clientMutationId:
+                            recreateMutationId,
+
+                          isPendingSync:
+                            true,
+
+                          syncBaseUpdatedAt:
+                            null,
+                        }
+                      : movement
+                )
+            );
+          } else if (
+            conflictOperation.action ===
+            "delete"
+          ) {
+            /*
+             * Si ya no existe en la nube,
+             * el resultado deseado del DELETE
+             * ya está cumplido.
+             */
+            await removePendingSyncOperation(
+              currentUserId,
+              operationId
+            );
+
+            await reconcileGoalStateFromServerAndQueue();
+            await refreshPendingSyncCount();
+            await refreshSyncConflicts();
+
+            return {
+              success: true,
+              message:
+                "El movimiento de ahorro ya estaba eliminado en la nube.",
+            };
+          } else {
+            return {
+              success: false,
+              message:
+                "No se pudo conservar esta versión local.",
+            };
+          }
+
+          await refreshPendingSyncCount();
+          await refreshSyncConflicts();
+
+          const syncResult =
+            await syncPendingTransactions();
+
+          if (!syncResult.success) {
+            return {
+              success: false,
+              pendingSync: true,
+              message:
+                "Tu versión quedó guardada, pero Supabase todavía no pudo aplicarla. Revisá el conflicto antes de continuar.",
+            };
+          }
+
+          return {
+            success: true,
+            message:
+              serverGoalMovement
+                ? "Se conservó tu versión y se sincronizó correctamente."
+                : "Se guardó tu versión local correctamente.",
+          };
+        }
+
+        /*
+         * ====================================================
+         * CONFLICTO DE INGRESO / GASTO
+         * ====================================================
+         */
+        const transactionId =
+          conflictOperation
+            .transactionId ||
+          conflictOperation
+            .payload
+            ?.transactionId ||
+          null;
+
+        let serverMovement = null;
+
+        if (transactionId) {
+          const serverResult =
+            await fetchServerTransaction(
+              transactionId
+            );
+
+          if (!serverResult.success) {
+            return {
+              success: false,
+              message:
+                "No se pudo obtener la versión actual de la nube. Intentá nuevamente.",
+            };
+          }
+
+          serverMovement =
+            serverResult.movement;
+        }
+
+        /*
+         * Si la transacción todavía existe,
+         * reintentamos tomando como base la
+         * versión más reciente del servidor.
+         */
+        if (serverMovement) {
+          const updated =
+            await updatePendingSyncOperation(
+              currentUserId,
+              operationId,
+              {
+                status:
+                  "pending",
+                conflict:
+                  null,
+
+                expectedUpdatedAt:
+                  serverMovement
+                    .updatedAt ||
+                  null,
+              }
+            );
+
+          if (!updated) {
+            return {
+              success: false,
+              message:
+                "No se pudo preparar el cambio para volver a sincronizarlo.",
+            };
+          }
+        } else if (
+          conflictOperation.action ===
+          "update"
+        ) {
+          /*
+           * El movimiento fue eliminado en
+           * otro dispositivo. Si la persona
+           * conserva su versión, lo recreamos.
+           */
+          const recreateMutationId =
+            conflictOperation
+              .clientMutationId ||
+            conflictOperation.id;
+
+          const updated =
+            await updatePendingSyncOperation(
+              currentUserId,
+              operationId,
+              {
+                action:
+                  "create",
+
+                clientMutationId:
+                  recreateMutationId,
+
+                transactionId:
+                  null,
+
+                expectedUpdatedAt:
+                  null,
+
+                status:
+                  "pending",
+
+                conflict:
+                  null,
+              }
+            );
+
+          if (!updated) {
+            return {
+              success: false,
+              message:
+                "No se pudo preparar el movimiento para volver a crearlo.",
+            };
+          }
+
+          const markForRecreate =
+            (movement) =>
+              movement.id ===
+              transactionId
+                ? {
+                    ...movement,
+
+                    clientMutationId:
+                      recreateMutationId,
+
+                    isPendingSync:
+                      true,
+
+                    syncBaseUpdatedAt:
+                      null,
+                  }
+                : movement;
+
+          setIncomes(
+            (currentIncomes) =>
+              currentIncomes.map(
+                markForRecreate
+              )
+          );
+
+          setExpenses(
+            (currentExpenses) =>
+              currentExpenses.map(
+                markForRecreate
+              )
+          );
+        } else if (
+          conflictOperation.action ===
+          "delete"
+        ) {
+          await removePendingSyncOperation(
+            currentUserId,
+            operationId
+          );
+
+          await refreshPendingSyncCount();
+          await refreshSyncConflicts();
+
+          return {
+            success: true,
+            message:
+              "El movimiento ya estaba eliminado en la nube.",
+          };
+        } else {
+          return {
+            success: false,
+            message:
+              "No se pudo conservar esta versión local.",
+          };
+        }
+
+        await refreshPendingSyncCount();
+        await refreshSyncConflicts();
+
+        const syncResult =
+          await syncPendingTransactions();
+
+        if (!syncResult.success) {
+          return {
+            success: false,
+            pendingSync: true,
+            message:
+              "Tu versión quedó guardada y volverá a sincronizarse cuando sea posible.",
+          };
+        }
+
+        return {
+          success: true,
+          message:
+            serverMovement
+              ? "Se conservó tu versión y se sincronizó correctamente."
+              : "Se volvió a crear tu versión del movimiento y se sincronizó correctamente.",
+        };
+      },
+      [
+        currentUserId,
+        fetchServerGoal,
+        fetchServerGoalMovement,
+        fetchServerTransaction,
+        reconcileGoalStateFromServerAndQueue,
+        refreshPendingSyncCount,
+        refreshSyncConflicts,
+        syncConflicts,
+        syncPendingTransactions,
+      ]
+    );
+
 
   useEffect(() => {
   if (
@@ -3834,21 +5796,201 @@ const updateGoal = useCallback(
           };
         }
 
+        const clientMutationId =
+          createClientMutationId();
+
+        const now =
+          new Date()
+            .toISOString();
+
+        const localMovement = {
+          id:
+            clientMutationId,
+
+          userId:
+            currentUserId,
+
+          goalId,
+          type,
+          amount,
+          description,
+          date:
+            movementDate,
+
+          clientMutationId,
+
+          isPendingSync: true,
+          isOpeningBalance: false,
+
+          syncBaseUpdatedAt:
+            null,
+
+          createdAt:
+            now,
+
+          updatedAt:
+            now,
+        };
+
+        const offlineOperation = {
+          id:
+            clientMutationId,
+
+          clientMutationId,
+
+          entity:
+            "goal_movement",
+
+          action:
+            "create",
+
+          goalId,
+          type,
+
+          payload: {
+            goalId,
+            type,
+            amount,
+
+            description:
+              description ||
+              null,
+
+            date:
+              movementDate,
+          },
+
+          queuedAt:
+            now,
+        };
+
+        const localGoalResult =
+          calculateGoalsAfterMovementChange(
+            goals,
+            null,
+            localMovement
+          );
+
+        if (
+          !localGoalResult.success
+        ) {
+          return {
+            success: false,
+            message:
+              "No se pudo actualizar el saldo del objetivo.",
+          };
+        }
+
+        const applyLocalMovement =
+          () => {
+            setGoals(
+              localGoalResult.goals
+            );
+
+            setGoalMovements(
+              (currentMovements) => {
+                const withoutDuplicate =
+                  currentMovements.filter(
+                    (
+                      currentMovement
+                    ) =>
+                      currentMovement.id !==
+                      localMovement.id &&
+                      currentMovement
+                        .clientMutationId !==
+                      clientMutationId
+                  );
+
+                return (
+                  sortGoalMovements([
+                    localMovement,
+                    ...withoutDuplicate,
+                  ])
+                );
+              }
+            );
+          };
+
+        const queueOfflineMovement =
+          async () => {
+            const queued =
+              await addPendingSyncOperation(
+                currentUserId,
+                offlineOperation
+              );
+
+            if (!queued) {
+              return {
+                success: false,
+                message:
+                  "No se pudo guardar el movimiento de ahorro sin conexión.",
+              };
+            }
+
+            applyLocalMovement();
+
+            await refreshPendingSyncCount();
+
+            return {
+              success: true,
+              offline: true,
+              pendingSync: true,
+              movement:
+                localMovement,
+              message:
+                "Movimiento de ahorro guardado sin conexión. Se sincronizará cuando vuelva internet.",
+            };
+          };
+
+        if (isDeviceOffline()) {
+          return (
+            await queueOfflineMovement()
+          );
+        }
+
+        /*
+         * Usamos el RPC idempotente incluso
+         * cuando hay conexión.
+         *
+         * Si Supabase procesa el movimiento
+         * pero la respuesta se pierde, el
+         * mismo clientMutationId impide que
+         * se duplique al reintentarlo.
+         */
         const { data, error } =
           await supabase.rpc(
-            "record_goal_movement",
+            "sync_offline_goal_movement_create",
             {
-              p_goal_id: goalId,
-              p_type: type,
-              p_amount: amount,
+              p_client_mutation_id:
+                clientMutationId,
+
+              p_goal_id:
+                goalId,
+
+              p_type:
+                type,
+
+              p_amount:
+                amount,
+
               p_description:
-                description || null,
+                description ||
+                null,
+
               p_date:
                 movementDate,
             }
           );
 
         if (error) {
+          if (
+            isNetworkError(error)
+          ) {
+            return (
+              await queueOfflineMovement()
+            );
+          }
+
           return {
             success: false,
             message:
@@ -3871,301 +6013,669 @@ const updateGoal = useCallback(
               )
             : null;
 
-        const {
-          data: updatedGoalData,
-          error: updatedGoalError,
-        } = await supabase
-          .from("goals")
-          .select(GOAL_FIELDS)
-          .eq(
-            "id",
-            goalId
-          )
-          .eq(
-            "user_id",
-            currentUserId
-          )
-          .single();
-
-        let mappedGoal = null;
+        const reconcileResult =
+          await reconcileGoalStateFromServerAndQueue();
 
         if (
-          !updatedGoalError &&
-          updatedGoalData
+          !reconcileResult.success
         ) {
-          mappedGoal =
-            mapGoal(
-              updatedGoalData
+          /*
+           * La operación ya se guardó en
+           * Supabase. Si falla la recarga no
+           * devolvemos un falso error de alta.
+           */
+          if (mappedMovement) {
+            setGoalMovements(
+              (
+                currentMovements
+              ) =>
+                sortGoalMovements([
+                  mappedMovement,
+
+                  ...currentMovements.filter(
+                    (
+                      currentMovement
+                    ) =>
+                      currentMovement.id !==
+                        mappedMovement.id &&
+                      currentMovement
+                        .clientMutationId !==
+                        clientMutationId
+                  ),
+                ])
             );
-
-          setGoals(
-            (currentGoals) =>
-              currentGoals.map(
-                (goal) =>
-                  goal.id ===
-                  mappedGoal.id
-                    ? mappedGoal
-                    : goal
-              )
-          );
-        } else {
-          void loadFinanceData();
+          }
         }
 
-        if (mappedMovement) {
-          setGoalMovements(
-            (currentMovements) =>
-              [
-                mappedMovement,
-                ...currentMovements.filter(
-                  (currentMovement) =>
-                    currentMovement.id !==
-                    mappedMovement.id
-                ),
-              ].sort((a, b) => {
-                const dateComparison =
-                  String(b.date || "").localeCompare(
-                    String(a.date || "")
-                  );
-
-                if (dateComparison !== 0) {
-                  return dateComparison;
-                }
-
-                return String(
-                  b.createdAt || ""
-                ).localeCompare(
-                  String(a.createdAt || "")
-                );
-              })
+        const goalResult =
+          await fetchServerGoal(
+            goalId
           );
-        } else {
-          void loadFinanceData();
-        }
 
         return {
           success: true,
+          offline: false,
+          pendingSync: false,
           movement:
             mappedMovement,
           goal:
-            mappedGoal,
+            goalResult.success
+              ? goalResult.goal
+              : null,
         };
       },
       [
         currentUserId,
+        fetchServerGoal,
         goals,
-        loadFinanceData,
+        reconcileGoalStateFromServerAndQueue,
+        refreshPendingSyncCount,
       ]
     );
 
+
   const updateGoalMovement =
-  useCallback(
-    async (updatedMovement) => {
-      if (
-        !currentUserId ||
-        !updatedMovement?.id
-      ) {
-        return {
-          success: false,
-          message:
-            "No se encontró el movimiento de ahorro.",
-        };
-      }
+    useCallback(
+      async (
+        updatedMovement
+      ) => {
+        if (
+          !currentUserId ||
+          !updatedMovement?.id
+        ) {
+          return {
+            success: false,
+            message:
+              "No se encontró el movimiento de ahorro.",
+          };
+        }
 
-      const goalId = String(
-        updatedMovement?.goalId ||
-          updatedMovement?.goal_id ||
-          ""
-      ).trim();
+        const originalMovement =
+          goalMovements.find(
+            (movement) =>
+              movement.id ===
+              updatedMovement.id
+          );
 
-      const type = String(
-        updatedMovement?.type || ""
-      )
-        .trim()
-        .toLowerCase();
+        if (!originalMovement) {
+          return {
+            success: false,
+            message:
+              "No se encontró el movimiento de ahorro.",
+          };
+        }
 
-      const amount = Number(
-        updatedMovement?.amount
-      );
+        if (
+          originalMovement
+            .isPendingSync &&
+          syncInProgressRef.current
+        ) {
+          return {
+            success: false,
+            message:
+              "El movimiento de ahorro se está sincronizando. Esperá unos segundos antes de editarlo.",
+          };
+        }
 
-      const description = String(
-        updatedMovement?.description || ""
-      ).trim();
+        const goalId = String(
+          updatedMovement
+            ?.goalId ||
+            updatedMovement
+              ?.goal_id ||
+            ""
+        ).trim();
 
-      const movementDate = String(
-        updatedMovement?.date || ""
-      ).trim();
-
-      if (!goalId) {
-        return {
-          success: false,
-          message:
-            "Seleccioná un objetivo de ahorro.",
-        };
-      }
-
-      if (
-        type !== "deposit" &&
-        type !== "withdrawal"
-      ) {
-        return {
-          success: false,
-          message:
-            "Seleccioná si es un aporte o un retiro.",
-        };
-      }
-
-      if (
-        !Number.isFinite(amount) ||
-        amount <= 0
-      ) {
-        return {
-          success: false,
-          message:
-            "El monto debe ser mayor a 0.",
-        };
-      }
-
-      if (!movementDate) {
-        return {
-          success: false,
-          message:
-            "La fecha es obligatoria.",
-        };
-      }
-
-      if (
-        !isValidDateString(
-          movementDate
+        const type = String(
+          updatedMovement?.type ||
+            ""
         )
-      ) {
-        return {
-          success: false,
-          message:
-            "La fecha del movimiento no es válida.",
-        };
-      }
+          .trim()
+          .toLowerCase();
 
-      if (
-        movementDate >
-        getLocalToday()
-      ) {
-        return {
-          success: false,
-          message:
-            "La fecha del movimiento no puede ser posterior a hoy.",
-        };
-      }
-
-      const { data, error } =
-        await supabase.rpc(
-          "update_goal_movement",
-          {
-            p_movement_id:
-              updatedMovement.id,
-            p_goal_id: goalId,
-            p_type: type,
-            p_amount: amount,
-            p_description:
-              description || null,
-            p_date: movementDate,
-          }
+        const amount = Number(
+          updatedMovement?.amount
         );
 
-      if (error) {
-        return {
-          success: false,
-          message:
-            getDatabaseErrorMessage(
-              error,
-              "No se pudo actualizar el movimiento de ahorro."
-            ),
+        const description =
+          String(
+            updatedMovement
+              ?.description ||
+              ""
+          ).trim();
+
+        const movementDate =
+          String(
+            updatedMovement
+              ?.date ||
+              ""
+          ).trim();
+
+        if (!goalId) {
+          return {
+            success: false,
+            message:
+              "Seleccioná un objetivo de ahorro.",
+          };
+        }
+
+        if (
+          type !== "deposit" &&
+          type !== "withdrawal"
+        ) {
+          return {
+            success: false,
+            message:
+              "Seleccioná si es un aporte o un retiro.",
+          };
+        }
+
+        if (
+          !Number.isFinite(
+            amount
+          ) ||
+          amount <= 0
+        ) {
+          return {
+            success: false,
+            message:
+              "El monto debe ser mayor a 0.",
+          };
+        }
+
+        if (!movementDate) {
+          return {
+            success: false,
+            message:
+              "La fecha es obligatoria.",
+          };
+        }
+
+        if (
+          !isValidDateString(
+            movementDate
+          )
+        ) {
+          return {
+            success: false,
+            message:
+              "La fecha del movimiento no es válida.",
+          };
+        }
+
+        if (
+          movementDate >
+          getLocalToday()
+        ) {
+          return {
+            success: false,
+            message:
+              "La fecha del movimiento no puede ser posterior a hoy.",
+          };
+        }
+
+        if (
+          !goals.some(
+            (goal) =>
+              goal.id === goalId
+          )
+        ) {
+          return {
+            success: false,
+            message:
+              "No se encontró el objetivo seleccionado.",
+          };
+        }
+
+        const expectedUpdatedAt =
+          originalMovement
+            .syncBaseUpdatedAt ||
+          originalMovement
+            .updatedAt ||
+          null;
+
+        const now =
+          new Date()
+            .toISOString();
+
+        const localMovement = {
+          ...originalMovement,
+
+          goalId,
+          type,
+          amount,
+          description,
+
+          date:
+            movementDate,
+
+          isPendingSync:
+            true,
+
+          syncBaseUpdatedAt:
+            expectedUpdatedAt,
+
+          updatedAt:
+            now,
         };
-      }
 
-      const rawMovement =
-        Array.isArray(data)
-          ? data[0]
-          : data;
+        const localGoalResult =
+          calculateGoalsAfterMovementChange(
+            goals,
+            originalMovement,
+            localMovement
+          );
 
-      const mappedMovement =
-        rawMovement
-          ? mapGoalMovement(
-              rawMovement
-            )
-          : null;
+        if (
+          !localGoalResult.success
+        ) {
+          return {
+            success: false,
+            message:
+              "Este cambio dejaría un objetivo con saldo negativo. Revisá el monto o el tipo de movimiento.",
+          };
+        }
 
-      /*
-       * La función SQL puede modificar
-       * uno o incluso dos objetivos,
-       * por eso recargamos los datos
-       * financieros después de editar.
-       */
-      await loadFinanceData();
+        const offlineOperation = {
+          id:
+            createClientMutationId(),
 
-      return {
-        success: true,
-        movement:
-          mappedMovement,
-      };
-    },
-    [
-      currentUserId,
-      loadFinanceData,
-    ]
-  );
+          entity:
+            "goal_movement",
 
-const deleteGoalMovement =
-  useCallback(
-    async (movementId) => {
-      if (
-        !currentUserId ||
-        !movementId
-      ) {
-        return {
-          success: false,
-          message:
-            "No se encontró el movimiento de ahorro.",
+          action:
+            "update",
+
+          goalMovementId:
+            originalMovement.id,
+
+          goalId,
+          type,
+
+          expectedUpdatedAt,
+
+          payload: {
+            goalMovementId:
+              originalMovement.id,
+
+            goalId,
+            type,
+            amount,
+
+            description:
+              description ||
+              null,
+
+            date:
+              movementDate,
+          },
+
+          queuedAt:
+            now,
         };
-      }
 
-      const { error } =
-        await supabase.rpc(
-          "delete_goal_movement",
-          {
-            p_movement_id:
-              movementId,
+        const applyLocalMovement =
+          () => {
+            setGoals(
+              localGoalResult.goals
+            );
+
+            setGoalMovements(
+              (
+                currentMovements
+              ) =>
+                sortGoalMovements(
+                  currentMovements.map(
+                    (movement) =>
+                      movement.id ===
+                      localMovement.id
+                        ? localMovement
+                        : movement
+                  )
+                )
+            );
+          };
+
+        const queueOfflineUpdate =
+          async () => {
+            const queued =
+              await queueGoalMovementSyncOperation(
+                currentUserId,
+                offlineOperation
+              );
+
+            if (!queued) {
+              return {
+                success: false,
+                message:
+                  "No se pudo guardar la edición del ahorro sin conexión.",
+              };
+            }
+
+            applyLocalMovement();
+
+            await refreshPendingSyncCount();
+
+            return {
+              success: true,
+              offline: true,
+              pendingSync: true,
+              movement:
+                localMovement,
+              message:
+                "Cambio de ahorro guardado sin conexión. Se sincronizará cuando vuelva internet.",
+            };
+          };
+
+        /*
+         * Si ya existe una operación
+         * pendiente, la combinamos con la
+         * nueva edición aunque haya vuelto
+         * internet.
+         */
+        if (
+          originalMovement
+            .isPendingSync
+        ) {
+          return (
+            await queueOfflineUpdate()
+          );
+        }
+
+        if (isDeviceOffline()) {
+          return (
+            await queueOfflineUpdate()
+          );
+        }
+
+        const { data, error } =
+          await supabase.rpc(
+            "update_goal_movement",
+            {
+              p_movement_id:
+                originalMovement.id,
+
+              p_goal_id:
+                goalId,
+
+              p_type:
+                type,
+
+              p_amount:
+                amount,
+
+              p_description:
+                description ||
+                null,
+
+              p_date:
+                movementDate,
+            }
+          );
+
+        if (error) {
+          if (
+            isNetworkError(error)
+          ) {
+            return (
+              await queueOfflineUpdate()
+            );
           }
-        );
 
-      if (error) {
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo actualizar el movimiento de ahorro."
+              ),
+          };
+        }
+
+        const rawMovement =
+          Array.isArray(data)
+            ? data[0]
+            : data;
+
+        const mappedMovement =
+          rawMovement
+            ? mapGoalMovement(
+                rawMovement
+              )
+            : null;
+
+        await reconcileGoalStateFromServerAndQueue();
+
         return {
-          success: false,
-          message:
-            getDatabaseErrorMessage(
-              error,
-              "No se pudo eliminar el movimiento de ahorro."
-            ),
+          success: true,
+          offline: false,
+          pendingSync: false,
+          movement:
+            mappedMovement,
         };
-      }
+      },
+      [
+        currentUserId,
+        goalMovements,
+        goals,
+        reconcileGoalStateFromServerAndQueue,
+        refreshPendingSyncCount,
+      ]
+    );
 
-      /*
-       * Al eliminar un movimiento,
-       * Supabase recalcula el monto
-       * del objetivo. Recargamos para
-       * reflejarlo inmediatamente.
-       */
-      await loadFinanceData();
 
-      return {
-        success: true,
-      };
-    },
-    [
-      currentUserId,
-      loadFinanceData,
-    ]
-  );
+  const deleteGoalMovement =
+    useCallback(
+      async (movementId) => {
+        if (
+          !currentUserId ||
+          !movementId
+        ) {
+          return {
+            success: false,
+            message:
+              "No se encontró el movimiento de ahorro.",
+          };
+        }
+
+        const originalMovement =
+          goalMovements.find(
+            (movement) =>
+              movement.id ===
+              movementId
+          );
+
+        if (!originalMovement) {
+          return {
+            success: false,
+            message:
+              "No se encontró el movimiento de ahorro.",
+          };
+        }
+
+        if (
+          originalMovement
+            .isPendingSync &&
+          syncInProgressRef.current
+        ) {
+          return {
+            success: false,
+            message:
+              "El movimiento de ahorro se está sincronizando. Esperá unos segundos antes de eliminarlo.",
+          };
+        }
+
+        const localGoalResult =
+          calculateGoalsAfterMovementChange(
+            goals,
+            originalMovement,
+            null
+          );
+
+        if (
+          !localGoalResult.success
+        ) {
+          return {
+            success: false,
+            message:
+              "No podés eliminar este movimiento porque dejaría el objetivo con saldo negativo.",
+          };
+        }
+
+        const expectedUpdatedAt =
+          originalMovement
+            .syncBaseUpdatedAt ||
+          originalMovement
+            .updatedAt ||
+          null;
+
+        const now =
+          new Date()
+            .toISOString();
+
+        const offlineOperation = {
+          id:
+            createClientMutationId(),
+
+          entity:
+            "goal_movement",
+
+          action:
+            "delete",
+
+          goalMovementId:
+            originalMovement.id,
+
+          goalId:
+            originalMovement.goalId,
+
+          expectedUpdatedAt,
+
+          payload: {
+            goalMovementId:
+              originalMovement.id,
+
+            goalId:
+              originalMovement.goalId,
+          },
+
+          queuedAt:
+            now,
+        };
+
+        const applyLocalDelete =
+          () => {
+            setGoals(
+              localGoalResult.goals
+            );
+
+            setGoalMovements(
+              (
+                currentMovements
+              ) =>
+                currentMovements.filter(
+                  (movement) =>
+                    movement.id !==
+                    movementId
+                )
+            );
+          };
+
+        const queueOfflineDelete =
+          async () => {
+            const queued =
+              await queueGoalMovementSyncOperation(
+                currentUserId,
+                offlineOperation
+              );
+
+            if (!queued) {
+              return {
+                success: false,
+                message:
+                  "No se pudo guardar la eliminación del ahorro sin conexión.",
+              };
+            }
+
+            applyLocalDelete();
+
+            await refreshPendingSyncCount();
+
+            return {
+              success: true,
+              offline: true,
+              pendingSync: true,
+              message:
+                "El movimiento se eliminó en este dispositivo y el cambio se sincronizará cuando vuelva internet.",
+            };
+          };
+
+        /*
+         * CREATE + DELETE desaparecerá de
+         * la cola automáticamente.
+         *
+         * UPDATE + DELETE quedará reducido
+         * a un único DELETE.
+         */
+        if (
+          originalMovement
+            .isPendingSync
+        ) {
+          return (
+            await queueOfflineDelete()
+          );
+        }
+
+        if (isDeviceOffline()) {
+          return (
+            await queueOfflineDelete()
+          );
+        }
+
+        const { error } =
+          await supabase.rpc(
+            "delete_goal_movement",
+            {
+              p_movement_id:
+                movementId,
+            }
+          );
+
+        if (error) {
+          if (
+            isNetworkError(error)
+          ) {
+            return (
+              await queueOfflineDelete()
+            );
+          }
+
+          return {
+            success: false,
+            message:
+              getDatabaseErrorMessage(
+                error,
+                "No se pudo eliminar el movimiento de ahorro."
+              ),
+          };
+        }
+
+        await reconcileGoalStateFromServerAndQueue();
+
+        return {
+          success: true,
+          offline: false,
+          pendingSync: false,
+        };
+      },
+      [
+        currentUserId,
+        goalMovements,
+        goals,
+        reconcileGoalStateFromServerAndQueue,
+        refreshPendingSyncCount,
+      ]
+    );
+
 
   const updateSettings =
     useCallback(
@@ -4456,14 +6966,22 @@ const deleteGoalMovement =
     ]);
 
 
+const syncConflictCount =
+  syncConflicts.length;
+
+const hasSyncConflicts =
+  syncConflictCount > 0;
+
 const syncStatus =
   !isOnline
     ? "offline"
     : isSyncing
       ? "syncing"
-      : pendingSyncCount > 0
-        ? "pending"
-        : "online";
+      : hasSyncConflicts
+        ? "conflict"
+        : pendingSyncCount > 0
+          ? "pending"
+          : "online";
 
   const monthlyMovementCount =
     movementUsage.used;
@@ -4501,7 +7019,13 @@ const syncStatus =
     isSyncing,
     syncStatus,
     pendingSyncCount,
+    syncConflictCount,
+    hasSyncConflicts,
+    syncConflicts,
     syncPendingTransactions,
+    refreshSyncConflicts,
+    resolveSyncConflictUseServer,
+    resolveSyncConflictKeepLocal,
 
     movementUsage,
     monthlyMovementCount,
@@ -4561,7 +7085,13 @@ const syncStatus =
     isSyncing,
     syncStatus,
     pendingSyncCount,
+    syncConflictCount,
+    hasSyncConflicts,
+    syncConflicts,
     syncPendingTransactions,
+    refreshSyncConflicts,
+    resolveSyncConflictUseServer,
+    resolveSyncConflictKeepLocal,
 
     movementUsage,
     monthlyMovementCount,

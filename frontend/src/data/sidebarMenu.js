@@ -25,6 +25,11 @@ const sidebarMenu = [
     icon: "bi bi-bullseye",
   },
   {
+    title: "Recordatorios",
+    path: "/reminders",
+    icon: "bi bi-bell",
+  },
+  {
     title: "Reportes",
     path: "/reports",
     icon: "bi bi-bar-chart",
