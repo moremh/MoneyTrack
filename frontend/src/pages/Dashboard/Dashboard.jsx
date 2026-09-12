@@ -17,6 +17,7 @@ import SavingsGoals from "../../components/dashboard/SavingsGoals/SavingsGoals";
 
 import IncomeForm from "../../components/income/IncomeForm/IncomeForm";
 import Modal from "../../components/common/Modal/Modal";
+import CalculatorModal from "../../components/calculator/CalculatorModal";
 
 import PremiumLimitModal from "../../components/premium/PremiumLimitModal/PremiumLimitModal";
 
@@ -191,6 +192,16 @@ function Dashboard() {
     quickMovementType,
     setQuickMovementType,
   ] = useState(null);
+
+  const [
+    quickMovementAmount,
+    setQuickMovementAmount,
+  ] = useState("");
+
+  const [
+    showCalculatorModal,
+    setShowCalculatorModal,
+  ] = useState(false);
 
   const [
     showSavingsModal,
@@ -517,30 +528,81 @@ function Dashboard() {
   };
 
   const openIncomeForm = () => {
+    setQuickMovementAmount("");
     setQuickMovementType(
       "income"
     );
   };
 
   const openExpenseForm = () => {
+    setQuickMovementAmount("");
     setQuickMovementType(
       "expense"
     );
   };
 
-  const openSavingsForm = () => {
+  const prepareSavingsForm = (
+    initialAmount = ""
+  ) => {
     setSavingsGoalId(
       goals[0]?.id || ""
     );
     setSavingsMovementType(
       "deposit"
     );
-    setSavingsAmount("");
+    setSavingsAmount(
+      initialAmount === ""
+        ? ""
+        : formatAmountInput(
+            initialAmount
+          )
+    );
     setSavingsDescription("");
     setSavingsDate(getToday());
     setSavingsError("");
     setIsSavingMovement(false);
     setShowSavingsModal(true);
+  };
+
+  const openSavingsForm = () => {
+    prepareSavingsForm();
+  };
+
+  const openCalculator = () => {
+    setShowCalculatorModal(true);
+  };
+
+  const closeCalculator = () => {
+    setShowCalculatorModal(false);
+  };
+
+  const handleCalculatorUseResult = (
+    type,
+    amount
+  ) => {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return;
+    }
+
+    setShowCalculatorModal(false);
+
+    if (type === "savings") {
+      prepareSavingsForm(amount);
+      return;
+    }
+
+    setQuickMovementAmount(
+      amount
+    );
+
+    setQuickMovementType(
+      type === "expense"
+        ? "expense"
+        : "income"
+    );
   };
 
   const closeSavingsForm = () => {
@@ -556,6 +618,7 @@ function Dashboard() {
     setQuickMovementType(
       null
     );
+    setQuickMovementAmount("");
   };
 
   const handleQuickAddIncome =
@@ -777,6 +840,20 @@ function Dashboard() {
 
           <span>
             Agregar ahorro
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.quickActionButton} ${styles.calculatorAction}`}
+          onClick={
+            openCalculator
+          }
+        >
+          <i className="bi bi-calculator"></i>
+
+          <span>
+            Calculadora
           </span>
         </button>
       </section>
@@ -1069,6 +1146,20 @@ function Dashboard() {
         />
       </section>
 
+      {showCalculatorModal && (
+        <Modal
+          onClose={
+            closeCalculator
+          }
+        >
+          <CalculatorModal
+            onUseResult={
+              handleCalculatorUseResult
+            }
+          />
+        </Modal>
+      )}
+
       {quickMovementType && (
         <Modal
           onClose={
@@ -1086,6 +1177,9 @@ function Dashboard() {
           <IncomeForm
             type={
               quickMovementType
+            }
+            initialAmount={
+              quickMovementAmount
             }
             onAdd={
               quickMovementType ===

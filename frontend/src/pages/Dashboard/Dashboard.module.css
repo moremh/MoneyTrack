@@ -129,6 +129,19 @@
     );
 }
 
+.calculatorAction {
+  background: #7c3aed;
+
+  box-shadow:
+    0 5px 14px
+    rgba(
+      124,
+      58,
+      237,
+      0.24
+    );
+}
+
 .modalTitle {
   margin: 0 0 20px;
 
@@ -679,18 +692,27 @@
   }
 
   .quickActions {
-  justify-content: center;
+    display: grid;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+    gap: 10px;
 
-  gap: 10px;
-}
+    width: min(100%, 420px);
 
-.quickActionButton {
-  min-height: 42px;
+    margin-inline: auto;
+  }
 
-  padding: 10px 14px;
+  .quickActionButton {
+    width: 100%;
+    min-height: 42px;
 
-  font-size: 0.88rem;
-}
+    padding: 10px 12px;
+
+    font-size: 0.86rem;
+  }
 
   .savingsGoalInfo {
     align-items: flex-start;
@@ -729,12 +751,12 @@
   }
 
   .quickActions {
-  gap: 8px;
-}
+    gap: 8px;
+  }
 
-.quickActionButton {
-  padding: 10px 12px;
+  .quickActionButton {
+    padding: 10px 8px;
 
-  font-size: 0.82rem;
-}
+    font-size: 0.8rem;
+  }
 }

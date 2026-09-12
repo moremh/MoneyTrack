@@ -26,6 +26,7 @@ import styles from "./IncomeForm.module.css";
 function IncomeForm({
   onAdd,
   initialData,
+  initialAmount = "",
   type = "income",
   onLimitReached,
 }) {
@@ -106,7 +107,15 @@ function IncomeForm({
       );
     } else {
       setDescription("");
-      setAmount("");
+      setAmount(
+        initialAmount === "" ||
+        initialAmount === null ||
+        initialAmount === undefined
+          ? ""
+          : formatStoredAmount(
+              initialAmount
+            )
+      );
       setCategory("");
 
       setDate(
@@ -117,7 +126,10 @@ function IncomeForm({
     setErrorMessage("");
     setSuccessMessage("");
     setIsSubmitting(false);
-  }, [initialData]);
+  }, [
+    initialData,
+    initialAmount,
+  ]);
 
   const handleSubmit = async (
     event
