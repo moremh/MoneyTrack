@@ -1,16 +1,801 @@
 import {
   useContext,
+  useMemo,
   useState,
 } from "react";
 
 import { FinanceContext } from "../../context/FinanceContext";
 
+import {
+  CATEGORY_ICONS,
+  CATEGORY_QUICK_COLORS,
+  getCategoryDisplayColor,
+  getCategoryDisplayIcon,
+  getContrastTextColor,
+  getDefaultCategoryIcon,
+  getRandomCategoryColor,
+} from "../../utils/categoryCustomization";
+
 import styles from "./Categories.module.css";
+
+function createDraft(type) {
+  return {
+    name: "",
+    color: getRandomCategoryColor(),
+    icon: getDefaultCategoryIcon(type),
+  };
+}
+
+function CategoryStylePicker({
+  color,
+  icon,
+  onColorChange,
+  onIconChange,
+  disabled = false,
+}) {
+  return (
+    <div className={styles.stylePicker}>
+      <div className={styles.pickerGroup}>
+        <span className={styles.pickerLabel}>
+          Ícono
+        </span>
+
+        <div
+          className={styles.iconGrid}
+          role="group"
+          aria-label="Elegir ícono de la categoría"
+        >
+          {CATEGORY_ICONS.map((option) => {
+            const selected =
+              option.value === icon;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`${styles.iconOption} ${
+                  selected
+                    ? styles.selectedIconOption
+                    : ""
+                }`}
+                onClick={() =>
+                  onIconChange(option.value)
+                }
+                disabled={disabled}
+                title={option.label}
+                aria-label={option.label}
+                aria-pressed={selected}
+              >
+                <i className={option.value}></i>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className={styles.pickerGroup}>
+        <span className={styles.pickerLabel}>
+          Color
+        </span>
+
+        <div
+          className={styles.colorControls}
+          role="group"
+          aria-label="Elegir color de la categoría"
+        >
+          <div className={styles.colorGrid}>
+            {CATEGORY_QUICK_COLORS.map(
+              (option) => {
+                const selected =
+                  option.toLowerCase() ===
+                  String(color || "").toLowerCase();
+
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`${styles.colorOption} ${
+                      selected
+                        ? styles.selectedColorOption
+                        : ""
+                    }`}
+                    style={{
+                      "--swatch-color": option,
+                    }}
+                    onClick={() =>
+                      onColorChange(option)
+                    }
+                    disabled={disabled}
+                    aria-label={`Elegir color ${option}`}
+                    aria-pressed={selected}
+                  >
+                    <span></span>
+                  </button>
+                );
+              }
+            )}
+          </div>
+
+          <label
+            className={`${styles.moreColorsButton} ${
+              disabled
+                ? styles.disabledControl
+                : ""
+            }`}
+          >
+            <i className="bi bi-palette"></i>
+            <span>Más colores</span>
+
+            <input
+              className={styles.nativeColorInput}
+              type="color"
+              value={color}
+              onChange={(event) =>
+                onColorChange(event.target.value)
+              }
+              disabled={disabled}
+              aria-label="Abrir selector de colores"
+            />
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryPreview({
+  name,
+  color,
+  icon,
+  type,
+}) {
+  const safeColor =
+    getCategoryDisplayColor({
+      name,
+      color,
+      type,
+    });
+
+  const safeIcon =
+    icon || getDefaultCategoryIcon(type);
+
+  return (
+    <div className={styles.previewRow}>
+      <span className={styles.previewLabel}>
+        Vista previa
+      </span>
+
+      <span
+        className={styles.previewBadge}
+        style={{
+          "--category-color": safeColor,
+          "--category-text":
+            getContrastTextColor(safeColor),
+        }}
+      >
+        <i className={safeIcon}></i>
+        <span>
+          {name.trim() || "Nueva categoría"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function CategorySection({
+  type,
+  title,
+  categories,
+  onAdd,
+  onUpdate,
+  onDelete,
+}) {
+  const [draft, setDraft] = useState(() =>
+    createDraft(type)
+  );
+
+  const [editingName, setEditingName] =
+    useState(null);
+
+  const [editDraft, setEditDraft] =
+    useState(null);
+
+  const [message, setMessage] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  const [action, setAction] =
+    useState("");
+
+  const isBusy = Boolean(action);
+
+  const typeLabel =
+    type === "income"
+      ? "ingreso"
+      : "gasto";
+
+  const clearMessages = () => {
+    setMessage("");
+    setError("");
+  };
+
+  const hasDuplicateName = (
+    name,
+    ignoredName = null
+  ) => {
+    const normalized =
+      name.trim().toLowerCase();
+
+    return categories.some((category) => {
+      if (
+        ignoredName &&
+        category.name.toLowerCase() ===
+          ignoredName.toLowerCase()
+      ) {
+        return false;
+      }
+
+      return (
+        category.name.toLowerCase() ===
+        normalized
+      );
+    });
+  };
+
+  const handleAdd = async (event) => {
+    event.preventDefault();
+
+    if (isBusy) {
+      return;
+    }
+
+    clearMessages();
+
+    const name = draft.name.trim();
+
+    if (!name) {
+      setError(
+        `Debes escribir un nombre para la categoría de ${typeLabel}.`
+      );
+      return;
+    }
+
+    if (hasDuplicateName(name)) {
+      setError(
+        `Esa categoría de ${typeLabel} ya existe.`
+      );
+      return;
+    }
+
+    setAction("add");
+
+    try {
+      const result = await onAdd({
+        name,
+        color: draft.color,
+        icon: draft.icon,
+      });
+
+      if (!result?.success) {
+        setError(
+          result?.message ||
+            `No se pudo agregar la categoría de ${typeLabel}.`
+        );
+        return;
+      }
+
+      setDraft(createDraft(type));
+
+      setMessage(
+        result.message ||
+          `Categoría de ${typeLabel} agregada correctamente.`
+      );
+    } catch (caughtError) {
+      console.error(
+        `No se pudo agregar la categoría de ${typeLabel}:`,
+        caughtError
+      );
+
+      setError(
+        `No se pudo agregar la categoría de ${typeLabel}. Volvé a intentarlo.`
+      );
+    } finally {
+      setAction("");
+    }
+  };
+
+  const startEdit = (category) => {
+    if (isBusy || category.isProtected) {
+      return;
+    }
+
+    clearMessages();
+
+    setEditingName(category.name);
+    setEditDraft({
+      name: category.name,
+      color: getCategoryDisplayColor(category),
+      icon: getCategoryDisplayIcon(
+        category,
+        type
+      ),
+    });
+  };
+
+  const cancelEdit = () => {
+    if (isBusy) {
+      return;
+    }
+
+    setEditingName(null);
+    setEditDraft(null);
+    clearMessages();
+  };
+
+  const saveEdit = async (
+    originalCategory
+  ) => {
+    if (isBusy || !editDraft) {
+      return;
+    }
+
+    clearMessages();
+
+    const name =
+      editDraft.name.trim();
+
+    if (!name) {
+      setError(
+        "El nombre de la categoría no puede estar vacío."
+      );
+      return;
+    }
+
+    if (
+      hasDuplicateName(
+        name,
+        originalCategory.name
+      )
+    ) {
+      setError(
+        `Ya existe otra categoría de ${typeLabel} con ese nombre.`
+      );
+      return;
+    }
+
+    const originalColor =
+      getCategoryDisplayColor(
+        originalCategory
+      );
+
+    const originalIcon =
+      getCategoryDisplayIcon(
+        originalCategory,
+        type
+      );
+
+    if (
+      name.toLowerCase() ===
+        originalCategory.name.toLowerCase() &&
+      editDraft.color === originalColor &&
+      editDraft.icon === originalIcon
+    ) {
+      cancelEdit();
+      return;
+    }
+
+    setAction(
+      `edit-${originalCategory.name}`
+    );
+
+    try {
+      const result = await onUpdate(
+        originalCategory.name,
+        {
+          name,
+          color: editDraft.color,
+          icon: editDraft.icon,
+        }
+      );
+
+      if (!result?.success) {
+        setError(
+          result?.message ||
+            `No se pudo actualizar la categoría de ${typeLabel}.`
+        );
+        return;
+      }
+
+      setEditingName(null);
+      setEditDraft(null);
+
+      setMessage(
+        result.message ||
+          `Categoría de ${typeLabel} actualizada correctamente.`
+      );
+    } catch (caughtError) {
+      console.error(
+        `No se pudo actualizar la categoría de ${typeLabel}:`,
+        caughtError
+      );
+
+      setError(
+        `No se pudo actualizar la categoría de ${typeLabel}. Volvé a intentarlo.`
+      );
+    } finally {
+      setAction("");
+    }
+  };
+
+  const handleDelete = async (
+    category
+  ) => {
+    if (isBusy || category.isProtected) {
+      return;
+    }
+
+    clearMessages();
+
+    const confirmed = window.confirm(
+      `¿Seguro que deseas eliminar la categoría "${category.name}"? Los movimientos asociados pasarán a la categoría General.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setAction(`delete-${category.name}`);
+
+    try {
+      const result = await onDelete(
+        category.name
+      );
+
+      if (!result?.success) {
+        setError(
+          result?.message ||
+            `No se pudo eliminar la categoría de ${typeLabel}.`
+        );
+        return;
+      }
+
+      if (editingName === category.name) {
+        setEditingName(null);
+        setEditDraft(null);
+      }
+
+      setMessage(
+        result.message ||
+          `Categoría de ${typeLabel} eliminada correctamente.`
+      );
+    } catch (caughtError) {
+      console.error(
+        `No se pudo eliminar la categoría de ${typeLabel}:`,
+        caughtError
+      );
+
+      setError(
+        `No se pudo eliminar la categoría de ${typeLabel}. Volvé a intentarlo.`
+      );
+    } finally {
+      setAction("");
+    }
+  };
+
+  return (
+    <section
+      className={styles.card}
+      aria-busy={isBusy}
+    >
+      <div className={styles.cardHeader}>
+        <div>
+          <h2 className={styles.cardTitle}>
+            {title}
+          </h2>
+
+          <p className={styles.cardHint}>
+            El color y el ícono son opcionales. Si no los cambiás, MoneyTrack usa una opción automática.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          className={`${styles.message} ${styles.errorMessage}`}
+          role="alert"
+        >
+          <i className="bi bi-exclamation-circle"></i>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {message && (
+        <div
+          className={`${styles.message} ${styles.successMessage}`}
+          role="status"
+        >
+          <i className="bi bi-check-circle"></i>
+          <span>{message}</span>
+        </div>
+      )}
+
+      <form
+        className={styles.createBox}
+        onSubmit={handleAdd}
+      >
+        <div className={styles.addRow}>
+          <input
+            className={styles.input}
+            type="text"
+            placeholder={`Nueva categoría de ${typeLabel}`}
+            value={draft.name}
+            onChange={(event) => {
+              setDraft((current) => ({
+                ...current,
+                name: event.target.value,
+              }));
+              clearMessages();
+            }}
+            disabled={isBusy}
+          />
+
+          <button
+            className={styles.addButton}
+            type="submit"
+            disabled={isBusy}
+          >
+            <i
+              className={
+                action === "add"
+                  ? "bi bi-hourglass-split"
+                  : "bi bi-plus-circle"
+              }
+            ></i>
+
+            {action === "add"
+              ? "Agregando..."
+              : "Agregar"}
+          </button>
+        </div>
+
+        <details
+          className={styles.customizationDetails}
+        >
+          <summary>
+            <i className="bi bi-palette2"></i>
+            Personalizar color e ícono
+          </summary>
+
+          <div className={styles.customizationContent}>
+            <CategoryStylePicker
+              color={draft.color}
+              icon={draft.icon}
+              onColorChange={(color) =>
+                setDraft((current) => ({
+                  ...current,
+                  color,
+                }))
+              }
+              onIconChange={(icon) =>
+                setDraft((current) => ({
+                  ...current,
+                  icon,
+                }))
+              }
+              disabled={isBusy}
+            />
+
+            <CategoryPreview
+              name={draft.name}
+              color={draft.color}
+              icon={draft.icon}
+              type={type}
+            />
+          </div>
+        </details>
+      </form>
+
+      <div className={styles.list}>
+        {categories.map((category) => {
+          const isEditing =
+            editingName === category.name;
+
+          const isSaving =
+            action === `edit-${category.name}`;
+
+          const isDeleting =
+            action === `delete-${category.name}`;
+
+          const displayColor =
+            getCategoryDisplayColor(category);
+
+          const displayIcon =
+            getCategoryDisplayIcon(
+              category,
+              type
+            );
+
+          return (
+            <div
+              key={category.id || category.name}
+              className={`${styles.item} ${
+                isEditing
+                  ? styles.editingItem
+                  : ""
+              }`}
+            >
+              {isEditing && editDraft ? (
+                <div className={styles.editPanel}>
+                  <input
+                    className={styles.editInput}
+                    type="text"
+                    value={editDraft.name}
+                    onChange={(event) => {
+                      setEditDraft((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }));
+                      clearMessages();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelEdit();
+                      }
+                    }}
+                    disabled={isBusy}
+                    autoFocus
+                  />
+
+                  <CategoryStylePicker
+                    color={editDraft.color}
+                    icon={editDraft.icon}
+                    onColorChange={(color) =>
+                      setEditDraft((current) => ({
+                        ...current,
+                        color,
+                      }))
+                    }
+                    onIconChange={(icon) =>
+                      setEditDraft((current) => ({
+                        ...current,
+                        icon,
+                      }))
+                    }
+                    disabled={isBusy}
+                  />
+
+                  <CategoryPreview
+                    name={editDraft.name}
+                    color={editDraft.color}
+                    icon={editDraft.icon}
+                    type={type}
+                  />
+
+                  <div className={styles.editActions}>
+                    <button
+                      className={styles.saveButton}
+                      type="button"
+                      onClick={() =>
+                        void saveEdit(category)
+                      }
+                      disabled={isBusy}
+                    >
+                      <i
+                        className={
+                          isSaving
+                            ? "bi bi-hourglass-split"
+                            : "bi bi-check-lg"
+                        }
+                      ></i>
+                      {isSaving
+                        ? "Guardando..."
+                        : "Guardar"}
+                    </button>
+
+                    <button
+                      className={styles.cancelButton}
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={isBusy}
+                    >
+                      <i className="bi bi-x-lg"></i>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.itemMain}>
+                    <span
+                      className={styles.categoryIcon}
+                      style={{
+                        "--category-color":
+                          displayColor,
+                        "--category-text":
+                          getContrastTextColor(
+                            displayColor
+                          ),
+                      }}
+                    >
+                      <i className={displayIcon}></i>
+                    </span>
+
+                    <div className={styles.itemText}>
+                      <span className={styles.itemName}>
+                        {category.name}
+                      </span>
+
+                      {category.isProtected && (
+                        <span className={styles.systemLabel}>
+                          Categoría general
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={styles.actions}>
+                    <button
+                      className={styles.iconButton}
+                      type="button"
+                      onClick={() =>
+                        startEdit(category)
+                      }
+                      disabled={
+                        category.isProtected ||
+                        isBusy
+                      }
+                      title={
+                        category.isProtected
+                          ? "La categoría General no se puede editar"
+                          : "Editar"
+                      }
+                      aria-label={`Editar categoría ${category.name}`}
+                    >
+                      <i className="bi bi-pencil"></i>
+                    </button>
+
+                    <button
+                      className={`${styles.iconButton} ${styles.deleteButton}`}
+                      type="button"
+                      onClick={() =>
+                        void handleDelete(category)
+                      }
+                      disabled={
+                        category.isProtected ||
+                        isBusy
+                      }
+                      title={
+                        category.isProtected
+                          ? "La categoría General no se puede eliminar"
+                          : "Eliminar"
+                      }
+                      aria-label={`Eliminar categoría ${category.name}`}
+                    >
+                      <i
+                        className={
+                          isDeleting
+                            ? "bi bi-hourglass-split"
+                            : "bi bi-trash"
+                        }
+                      ></i>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function Categories() {
   const {
-    incomeCategories,
-    expenseCategories,
+    categoryRecords = [],
 
     addIncomeCategory,
     deleteIncomeCategory,
@@ -21,653 +806,49 @@ function Categories() {
     updateExpenseCategory,
   } = useContext(FinanceContext);
 
-  const [
-    newIncomeCategory,
-    setNewIncomeCategory,
-  ] = useState("");
-
-  const [
-    newExpenseCategory,
-    setNewExpenseCategory,
-  ] = useState("");
-
-  const [
-    editingIncomeCategory,
-    setEditingIncomeCategory,
-  ] = useState(null);
-
-  const [
-    editingExpenseCategory,
-    setEditingExpenseCategory,
-  ] = useState(null);
-
-  const [
-    incomeEditValue,
-    setIncomeEditValue,
-  ] = useState("");
-
-  const [
-    expenseEditValue,
-    setExpenseEditValue,
-  ] = useState("");
-
-  const [
-    incomeMessage,
-    setIncomeMessage,
-  ] = useState("");
-
-  const [
-    expenseMessage,
-    setExpenseMessage,
-  ] = useState("");
-
-  const [
-    incomeError,
-    setIncomeError,
-  ] = useState("");
-
-  const [
-    expenseError,
-    setExpenseError,
-  ] = useState("");
-
-  const [
-    incomeAction,
-    setIncomeAction,
-  ] = useState("");
-
-  const [
-    expenseAction,
-    setExpenseAction,
-  ] = useState("");
-
-  const isIncomeBusy =
-    Boolean(incomeAction);
-
-  const isExpenseBusy =
-    Boolean(expenseAction);
-
-  const resetIncomeMessages = () => {
-    setIncomeMessage("");
-    setIncomeError("");
-  };
-
-  const resetExpenseMessages = () => {
-    setExpenseMessage("");
-    setExpenseError("");
-  };
-
-  const handleAddIncomeCategory =
-    async () => {
-      const value =
-        newIncomeCategory.trim();
-
-      resetIncomeMessages();
-
-      if (!value) {
-        setIncomeError(
-          "Debes escribir un nombre para la categoría de ingreso."
-        );
-
-        return;
-      }
-
-      const duplicated =
-        incomeCategories.some(
-          (category) =>
-            category.toLowerCase() ===
-            value.toLowerCase()
-        );
-
-      if (duplicated) {
-        setIncomeError(
-          "Esa categoría de ingreso ya existe."
-        );
-
-        return;
-      }
-
-      setIncomeAction("add");
-
-      try {
-        const result =
-          await addIncomeCategory(
-            value
-          );
-
-        if (!result?.success) {
-          setIncomeError(
-            result?.message ||
-              "No se pudo agregar la categoría de ingreso."
-          );
-
-          return;
-        }
-
-        setNewIncomeCategory("");
-
-        setIncomeMessage(
-          result.message ||
-            "Categoría de ingreso agregada correctamente."
-        );
-      } catch (error) {
-        console.error(
-          "No se pudo agregar la categoría de ingreso:",
-          error
-        );
-
-        setIncomeError(
-          "No se pudo agregar la categoría de ingreso. Volvé a intentarlo."
-        );
-      } finally {
-        setIncomeAction("");
-      }
-    };
-
-  const handleAddExpenseCategory =
-    async () => {
-      const value =
-        newExpenseCategory.trim();
-
-      resetExpenseMessages();
-
-      if (!value) {
-        setExpenseError(
-          "Debes escribir un nombre para la categoría de gasto."
-        );
-
-        return;
-      }
-
-      const duplicated =
-        expenseCategories.some(
-          (category) =>
-            category.toLowerCase() ===
-            value.toLowerCase()
-        );
-
-      if (duplicated) {
-        setExpenseError(
-          "Esa categoría de gasto ya existe."
-        );
-
-        return;
-      }
-
-      setExpenseAction("add");
-
-      try {
-        const result =
-          await addExpenseCategory(
-            value
-          );
-
-        if (!result?.success) {
-          setExpenseError(
-            result?.message ||
-              "No se pudo agregar la categoría de gasto."
-          );
-
-          return;
-        }
-
-        setNewExpenseCategory("");
-
-        setExpenseMessage(
-          result.message ||
-            "Categoría de gasto agregada correctamente."
-        );
-      } catch (error) {
-        console.error(
-          "No se pudo agregar la categoría de gasto:",
-          error
-        );
-
-        setExpenseError(
-          "No se pudo agregar la categoría de gasto. Volvé a intentarlo."
-        );
-      } finally {
-        setExpenseAction("");
-      }
-    };
-
-  const handleStartEditIncome = (
-    category
-  ) => {
-    if (isIncomeBusy) {
-      return;
-    }
-
-    resetIncomeMessages();
-
-    setEditingIncomeCategory(
-      category
-    );
-
-    setIncomeEditValue(
-      category
-    );
-  };
-
-  const handleStartEditExpense = (
-    category
-  ) => {
-    if (isExpenseBusy) {
-      return;
-    }
-
-    resetExpenseMessages();
-
-    setEditingExpenseCategory(
-      category
-    );
-
-    setExpenseEditValue(
-      category
-    );
-  };
-
-  const handleSaveIncomeEdit =
-    async (oldName) => {
-      const value =
-        incomeEditValue.trim();
-
-      resetIncomeMessages();
-
-      if (!value) {
-        setIncomeError(
-          "El nombre de la categoría no puede estar vacío."
-        );
-
-        return;
-      }
-
-      const duplicated =
-        incomeCategories.some(
-          (category) =>
-            category.toLowerCase() ===
-              value.toLowerCase() &&
-            category.toLowerCase() !==
-              oldName.toLowerCase()
-        );
-
-      if (duplicated) {
-        setIncomeError(
-          "Ya existe otra categoría de ingreso con ese nombre."
-        );
-
-        return;
-      }
-
-      if (
-        value.toLowerCase() ===
-        oldName.toLowerCase()
-      ) {
-        setEditingIncomeCategory(
-          null
-        );
-
-        setIncomeEditValue("");
-
-        return;
-      }
-
-      setIncomeAction(
-        `edit-${oldName}`
+  const incomeCategoryRecords =
+    useMemo(() => {
+      const records = categoryRecords.filter(
+        (category) =>
+          category.type === "income" &&
+          category.name.toLowerCase() !==
+            "general"
       );
 
-      try {
-        const result =
-          await updateIncomeCategory(
-            oldName,
-            value
-          );
+      return [
+        {
+          id: "general-income",
+          name: "General",
+          type: "income",
+          color: "#64748b",
+          icon: "bi bi-tag",
+          isProtected: true,
+        },
+        ...records,
+      ];
+    }, [categoryRecords]);
 
-        if (!result?.success) {
-          setIncomeError(
-            result?.message ||
-              "No se pudo actualizar la categoría de ingreso."
-          );
-
-          return;
-        }
-
-        setEditingIncomeCategory(
-          null
-        );
-
-        setIncomeEditValue("");
-
-        setIncomeMessage(
-          result.message ||
-            "Categoría de ingreso actualizada correctamente."
-        );
-      } catch (error) {
-        console.error(
-          "No se pudo actualizar la categoría de ingreso:",
-          error
-        );
-
-        setIncomeError(
-          "No se pudo actualizar la categoría de ingreso. Volvé a intentarlo."
-        );
-      } finally {
-        setIncomeAction("");
-      }
-    };
-
-  const handleSaveExpenseEdit =
-    async (oldName) => {
-      const value =
-        expenseEditValue.trim();
-
-      resetExpenseMessages();
-
-      if (!value) {
-        setExpenseError(
-          "El nombre de la categoría no puede estar vacío."
-        );
-
-        return;
-      }
-
-      const duplicated =
-        expenseCategories.some(
-          (category) =>
-            category.toLowerCase() ===
-              value.toLowerCase() &&
-            category.toLowerCase() !==
-              oldName.toLowerCase()
-        );
-
-      if (duplicated) {
-        setExpenseError(
-          "Ya existe otra categoría de gasto con ese nombre."
-        );
-
-        return;
-      }
-
-      if (
-        value.toLowerCase() ===
-        oldName.toLowerCase()
-      ) {
-        setEditingExpenseCategory(
-          null
-        );
-
-        setExpenseEditValue("");
-
-        return;
-      }
-
-      setExpenseAction(
-        `edit-${oldName}`
+  const expenseCategoryRecords =
+    useMemo(() => {
+      const records = categoryRecords.filter(
+        (category) =>
+          category.type === "expense" &&
+          category.name.toLowerCase() !==
+            "general"
       );
 
-      try {
-        const result =
-          await updateExpenseCategory(
-            oldName,
-            value
-          );
-
-        if (!result?.success) {
-          setExpenseError(
-            result?.message ||
-              "No se pudo actualizar la categoría de gasto."
-          );
-
-          return;
-        }
-
-        setEditingExpenseCategory(
-          null
-        );
-
-        setExpenseEditValue("");
-
-        setExpenseMessage(
-          result.message ||
-            "Categoría de gasto actualizada correctamente."
-        );
-      } catch (error) {
-        console.error(
-          "No se pudo actualizar la categoría de gasto:",
-          error
-        );
-
-        setExpenseError(
-          "No se pudo actualizar la categoría de gasto. Volvé a intentarlo."
-        );
-      } finally {
-        setExpenseAction("");
-      }
-    };
-
-  const handleCancelIncomeEdit =
-    () => {
-      if (isIncomeBusy) {
-        return;
-      }
-
-      setEditingIncomeCategory(
-        null
-      );
-
-      setIncomeEditValue("");
-
-      resetIncomeMessages();
-    };
-
-  const handleCancelExpenseEdit =
-    () => {
-      if (isExpenseBusy) {
-        return;
-      }
-
-      setEditingExpenseCategory(
-        null
-      );
-
-      setExpenseEditValue("");
-
-      resetExpenseMessages();
-    };
-
-  const handleDeleteIncome =
-    async (category) => {
-      resetIncomeMessages();
-
-      const confirmed =
-        window.confirm(
-          `¿Seguro que deseas eliminar la categoría "${category}"? Los ingresos asociados pasarán a la categoría General.`
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setIncomeAction(
-        `delete-${category}`
-      );
-
-      try {
-        const result =
-          await deleteIncomeCategory(
-            category
-          );
-
-        if (!result?.success) {
-          setIncomeError(
-            result?.message ||
-              "No se pudo eliminar la categoría de ingreso."
-          );
-
-          return;
-        }
-
-        if (
-          editingIncomeCategory ===
-          category
-        ) {
-          setEditingIncomeCategory(
-            null
-          );
-
-          setIncomeEditValue("");
-        }
-
-        setIncomeMessage(
-          result.message ||
-            "Categoría de ingreso eliminada correctamente."
-        );
-      } catch (error) {
-        console.error(
-          "No se pudo eliminar la categoría de ingreso:",
-          error
-        );
-
-        setIncomeError(
-          "No se pudo eliminar la categoría de ingreso. Volvé a intentarlo."
-        );
-      } finally {
-        setIncomeAction("");
-      }
-    };
-
-  const handleDeleteExpense =
-    async (category) => {
-      resetExpenseMessages();
-
-      const confirmed =
-        window.confirm(
-          `¿Seguro que deseas eliminar la categoría "${category}"? Los gastos asociados pasarán a la categoría General.`
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      setExpenseAction(
-        `delete-${category}`
-      );
-
-      try {
-        const result =
-          await deleteExpenseCategory(
-            category
-          );
-
-        if (!result?.success) {
-          setExpenseError(
-            result?.message ||
-              "No se pudo eliminar la categoría de gasto."
-          );
-
-          return;
-        }
-
-        if (
-          editingExpenseCategory ===
-          category
-        ) {
-          setEditingExpenseCategory(
-            null
-          );
-
-          setExpenseEditValue("");
-        }
-
-        setExpenseMessage(
-          result.message ||
-            "Categoría de gasto eliminada correctamente."
-        );
-      } catch (error) {
-        console.error(
-          "No se pudo eliminar la categoría de gasto:",
-          error
-        );
-
-        setExpenseError(
-          "No se pudo eliminar la categoría de gasto. Volvé a intentarlo."
-        );
-      } finally {
-        setExpenseAction("");
-      }
-    };
-
-  const handleIncomeKeyDown = (
-    event
-  ) => {
-    if (
-      event.key === "Enter" &&
-      !isIncomeBusy
-    ) {
-      event.preventDefault();
-
-      void handleAddIncomeCategory();
-    }
-  };
-
-  const handleExpenseKeyDown = (
-    event
-  ) => {
-    if (
-      event.key === "Enter" &&
-      !isExpenseBusy
-    ) {
-      event.preventDefault();
-
-      void handleAddExpenseCategory();
-    }
-  };
-
-  const handleIncomeEditKeyDown = (
-    event,
-    category
-  ) => {
-    if (
-      event.key === "Enter" &&
-      !isIncomeBusy
-    ) {
-      event.preventDefault();
-
-      void handleSaveIncomeEdit(
-        category
-      );
-    }
-
-    if (
-      event.key === "Escape" &&
-      !isIncomeBusy
-    ) {
-      handleCancelIncomeEdit();
-    }
-  };
-
-  const handleExpenseEditKeyDown = (
-    event,
-    category
-  ) => {
-    if (
-      event.key === "Enter" &&
-      !isExpenseBusy
-    ) {
-      event.preventDefault();
-
-      void handleSaveExpenseEdit(
-        category
-      );
-    }
-
-    if (
-      event.key === "Escape" &&
-      !isExpenseBusy
-    ) {
-      handleCancelExpenseEdit();
-    }
-  };
+      return [
+        {
+          id: "general-expense",
+          name: "General",
+          type: "expense",
+          color: "#64748b",
+          icon: "bi bi-tag",
+          isProtected: true,
+        },
+        ...records,
+      ];
+    }, [categoryRecords]);
 
   return (
     <div className={styles.page}>
@@ -677,533 +858,28 @@ function Categories() {
         </h1>
 
         <p className={styles.subtitle}>
-          Administra por separado las
-          categorías de ingresos y gastos.
+          Organizá tus ingresos y gastos y personalizá cada categoría con un color y un ícono.
         </p>
       </div>
 
       <div className={styles.grid}>
-        <section
-          className={styles.card}
-          aria-busy={isIncomeBusy}
-        >
-          <h2
-            className={styles.cardTitle}
-          >
-            Categorías de ingresos
-          </h2>
+        <CategorySection
+          type="income"
+          title="Categorías de ingresos"
+          categories={incomeCategoryRecords}
+          onAdd={addIncomeCategory}
+          onUpdate={updateIncomeCategory}
+          onDelete={deleteIncomeCategory}
+        />
 
-          {incomeError && (
-            <div
-              className={`${styles.message} ${styles.errorMessage}`}
-              role="alert"
-            >
-              <i className="bi bi-exclamation-circle"></i>
-
-              <span>
-                {incomeError}
-              </span>
-            </div>
-          )}
-
-          {incomeMessage && (
-            <div
-              className={`${styles.message} ${styles.successMessage}`}
-              role="status"
-            >
-              <i className="bi bi-check-circle"></i>
-
-              <span>
-                {incomeMessage}
-              </span>
-            </div>
-          )}
-
-          <div className={styles.addRow}>
-            <input
-              className={styles.input}
-              type="text"
-              placeholder="Nueva categoría de ingreso"
-              value={newIncomeCategory}
-              onChange={(event) => {
-                setNewIncomeCategory(
-                  event.target.value
-                );
-
-                resetIncomeMessages();
-              }}
-              onKeyDown={
-                handleIncomeKeyDown
-              }
-              disabled={isIncomeBusy}
-            />
-
-            <button
-              className={
-                styles.addButton
-              }
-              type="button"
-              onClick={() =>
-                void handleAddIncomeCategory()
-              }
-              disabled={isIncomeBusy}
-            >
-              <i
-                className={
-                  incomeAction === "add"
-                    ? "bi bi-hourglass-split"
-                    : "bi bi-plus-circle"
-                }
-              ></i>
-
-              {incomeAction === "add"
-                ? "Agregando..."
-                : "Agregar"}
-            </button>
-          </div>
-
-          <div className={styles.list}>
-            {incomeCategories.map(
-              (category) => {
-                const isEditing =
-                  editingIncomeCategory ===
-                  category;
-
-                const isProtected =
-                  category === "General";
-
-                const isSaving =
-                  incomeAction ===
-                  `edit-${category}`;
-
-                const isDeleting =
-                  incomeAction ===
-                  `delete-${category}`;
-
-                return (
-                  <div
-                    key={category}
-                    className={styles.item}
-                  >
-                    {isEditing ? (
-                      <>
-                        <input
-                          className={
-                            styles.editInput
-                          }
-                          type="text"
-                          value={
-                            incomeEditValue
-                          }
-                          onChange={(
-                            event
-                          ) => {
-                            setIncomeEditValue(
-                              event.target
-                                .value
-                            );
-
-                            resetIncomeMessages();
-                          }}
-                          onKeyDown={(
-                            event
-                          ) =>
-                            handleIncomeEditKeyDown(
-                              event,
-                              category
-                            )
-                          }
-                          disabled={
-                            isIncomeBusy
-                          }
-                          autoFocus
-                        />
-
-                        <div
-                          className={
-                            styles.actions
-                          }
-                        >
-                          <button
-                            className={
-                              styles.iconButton
-                            }
-                            type="button"
-                            onClick={() =>
-                              void handleSaveIncomeEdit(
-                                category
-                              )
-                            }
-                            disabled={
-                              isIncomeBusy
-                            }
-                            title="Guardar"
-                            aria-label={`Guardar cambios de ${category}`}
-                          >
-                            <i
-                              className={
-                                isSaving
-                                  ? "bi bi-hourglass-split"
-                                  : "bi bi-check-lg"
-                              }
-                            ></i>
-                          </button>
-
-                          <button
-                            className={
-                              styles.iconButton
-                            }
-                            type="button"
-                            onClick={
-                              handleCancelIncomeEdit
-                            }
-                            disabled={
-                              isIncomeBusy
-                            }
-                            title="Cancelar"
-                            aria-label={`Cancelar edición de ${category}`}
-                          >
-                            <i className="bi bi-x-lg"></i>
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <span
-                          className={
-                            styles.itemName
-                          }
-                        >
-                          {category}
-                        </span>
-
-                        <div
-                          className={
-                            styles.actions
-                          }
-                        >
-                          <button
-                            className={
-                              styles.iconButton
-                            }
-                            type="button"
-                            onClick={() =>
-                              handleStartEditIncome(
-                                category
-                              )
-                            }
-                            disabled={
-                              isProtected ||
-                              isIncomeBusy
-                            }
-                            title={
-                              isProtected
-                                ? "La categoría General no se puede editar"
-                                : "Editar"
-                            }
-                            aria-label={`Editar categoría ${category}`}
-                          >
-                            <i className="bi bi-pencil"></i>
-                          </button>
-
-                          <button
-                            className={`${styles.iconButton} ${styles.deleteButton}`}
-                            type="button"
-                            onClick={() =>
-                              void handleDeleteIncome(
-                                category
-                              )
-                            }
-                            disabled={
-                              isProtected ||
-                              isIncomeBusy
-                            }
-                            title={
-                              isProtected
-                                ? "La categoría General no se puede eliminar"
-                                : "Eliminar"
-                            }
-                            aria-label={`Eliminar categoría ${category}`}
-                          >
-                            <i
-                              className={
-                                isDeleting
-                                  ? "bi bi-hourglass-split"
-                                  : "bi bi-trash"
-                              }
-                            ></i>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              }
-            )}
-          </div>
-        </section>
-
-        <section
-          className={styles.card}
-          aria-busy={isExpenseBusy}
-        >
-          <h2
-            className={styles.cardTitle}
-          >
-            Categorías de gastos
-          </h2>
-
-          {expenseError && (
-            <div
-              className={`${styles.message} ${styles.errorMessage}`}
-              role="alert"
-            >
-              <i className="bi bi-exclamation-circle"></i>
-
-              <span>
-                {expenseError}
-              </span>
-            </div>
-          )}
-
-          {expenseMessage && (
-            <div
-              className={`${styles.message} ${styles.successMessage}`}
-              role="status"
-            >
-              <i className="bi bi-check-circle"></i>
-
-              <span>
-                {expenseMessage}
-              </span>
-            </div>
-          )}
-
-          <div className={styles.addRow}>
-            <input
-              className={styles.input}
-              type="text"
-              placeholder="Nueva categoría de gasto"
-              value={
-                newExpenseCategory
-              }
-              onChange={(event) => {
-                setNewExpenseCategory(
-                  event.target.value
-                );
-
-                resetExpenseMessages();
-              }}
-              onKeyDown={
-                handleExpenseKeyDown
-              }
-              disabled={isExpenseBusy}
-            />
-
-            <button
-              className={
-                styles.addButton
-              }
-              type="button"
-              onClick={() =>
-                void handleAddExpenseCategory()
-              }
-              disabled={isExpenseBusy}
-            >
-              <i
-                className={
-                  expenseAction === "add"
-                    ? "bi bi-hourglass-split"
-                    : "bi bi-plus-circle"
-                }
-              ></i>
-
-              {expenseAction === "add"
-                ? "Agregando..."
-                : "Agregar"}
-            </button>
-          </div>
-
-          <div className={styles.list}>
-            {expenseCategories.map(
-              (category) => {
-                const isEditing =
-                  editingExpenseCategory ===
-                  category;
-
-                const isProtected =
-                  category === "General";
-
-                const isSaving =
-                  expenseAction ===
-                  `edit-${category}`;
-
-                const isDeleting =
-                  expenseAction ===
-                  `delete-${category}`;
-
-                return (
-                  <div
-                    key={category}
-                    className={styles.item}
-                  >
-                    {isEditing ? (
-                      <>
-                        <input
-                          className={
-                            styles.editInput
-                          }
-                          type="text"
-                          value={
-                            expenseEditValue
-                          }
-                          onChange={(
-                            event
-                          ) => {
-                            setExpenseEditValue(
-                              event.target
-                                .value
-                            );
-
-                            resetExpenseMessages();
-                          }}
-                          onKeyDown={(
-                            event
-                          ) =>
-                            handleExpenseEditKeyDown(
-                              event,
-                              category
-                            )
-                          }
-                          disabled={
-                            isExpenseBusy
-                          }
-                          autoFocus
-                        />
-
-                        <div
-                          className={
-                            styles.actions
-                          }
-                        >
-                          <button
-                            className={
-                              styles.iconButton
-                            }
-                            type="button"
-                            onClick={() =>
-                              void handleSaveExpenseEdit(
-                                category
-                              )
-                            }
-                            disabled={
-                              isExpenseBusy
-                            }
-                            title="Guardar"
-                            aria-label={`Guardar cambios de ${category}`}
-                          >
-                            <i
-                              className={
-                                isSaving
-                                  ? "bi bi-hourglass-split"
-                                  : "bi bi-check-lg"
-                              }
-                            ></i>
-                          </button>
-
-                          <button
-                            className={
-                              styles.iconButton
-                            }
-                            type="button"
-                            onClick={
-                              handleCancelExpenseEdit
-                            }
-                            disabled={
-                              isExpenseBusy
-                            }
-                            title="Cancelar"
-                            aria-label={`Cancelar edición de ${category}`}
-                          >
-                            <i className="bi bi-x-lg"></i>
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <span
-                          className={
-                            styles.itemName
-                          }
-                        >
-                          {category}
-                        </span>
-
-                        <div
-                          className={
-                            styles.actions
-                          }
-                        >
-                          <button
-                            className={
-                              styles.iconButton
-                            }
-                            type="button"
-                            onClick={() =>
-                              handleStartEditExpense(
-                                category
-                              )
-                            }
-                            disabled={
-                              isProtected ||
-                              isExpenseBusy
-                            }
-                            title={
-                              isProtected
-                                ? "La categoría General no se puede editar"
-                                : "Editar"
-                            }
-                            aria-label={`Editar categoría ${category}`}
-                          >
-                            <i className="bi bi-pencil"></i>
-                          </button>
-
-                          <button
-                            className={`${styles.iconButton} ${styles.deleteButton}`}
-                            type="button"
-                            onClick={() =>
-                              void handleDeleteExpense(
-                                category
-                              )
-                            }
-                            disabled={
-                              isProtected ||
-                              isExpenseBusy
-                            }
-                            title={
-                              isProtected
-                                ? "La categoría General no se puede eliminar"
-                                : "Eliminar"
-                            }
-                            aria-label={`Eliminar categoría ${category}`}
-                          >
-                            <i
-                              className={
-                                isDeleting
-                                  ? "bi bi-hourglass-split"
-                                  : "bi bi-trash"
-                              }
-                            ></i>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              }
-            )}
-          </div>
-        </section>
+        <CategorySection
+          type="expense"
+          title="Categorías de gastos"
+          categories={expenseCategoryRecords}
+          onAdd={addExpenseCategory}
+          onUpdate={updateExpenseCategory}
+          onDelete={deleteExpenseCategory}
+        />
       </div>
     </div>
   );

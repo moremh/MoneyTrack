@@ -46,7 +46,7 @@ const PIE_COLORS = [
 ];
 
 function Reports() {
-  const { incomes, expenses } = useContext(FinanceContext);
+  const { incomes, expenses, categoryRecords } = useContext(FinanceContext);
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -556,6 +556,16 @@ function Reports() {
           <Cell
             key={entry.name}
             fill={
+              (categoryRecords || []).find(
+                (category) =>
+                  category.type === "expense" &&
+                  category.name
+                    ?.trim()
+                    .toLowerCase() ===
+                    entry.name
+                      ?.trim()
+                      .toLowerCase()
+              )?.color ||
               PIE_COLORS[
                 index %
                   PIE_COLORS.length

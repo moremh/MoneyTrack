@@ -19,17 +19,21 @@
 
 .subtitle {
   margin: 0;
+  max-width: 760px;
   color: var(--text-light);
   font-size: 1rem;
+  line-height: 1.55;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+  align-items: start;
 }
 
 .card {
+  min-width: 0;
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -40,11 +44,35 @@
   gap: 18px;
 }
 
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .cardTitle {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.cardHint {
+  margin: 6px 0 0;
+  color: var(--text-light);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.createBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
 }
 
 .addRow {
@@ -55,6 +83,7 @@
 .input,
 .editInput {
   width: 100%;
+  min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -75,24 +104,234 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
-.addButton {
+.addButton,
+.saveButton,
+.cancelButton {
   border: none;
-  background: var(--primary);
-  color: white;
   border-radius: 12px;
   padding: 12px 18px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   white-space: nowrap;
   transition: var(--transition);
 }
 
-.addButton:hover {
+.addButton,
+.saveButton {
+  background: var(--primary);
+  color: white;
+}
+
+.cancelButton {
+  background: var(--surface-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.addButton:hover:not(:disabled),
+.saveButton:hover:not(:disabled),
+.cancelButton:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: brightness(1.03);
+}
+
+.addButton:disabled,
+.saveButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.customizationDetails {
+  border-radius: 12px;
+}
+
+.customizationDetails > summary {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.customizationDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.customizationContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.stylePicker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pickerGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pickerLabel,
+.previewLabel {
+  color: var(--text-light);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.iconGrid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.iconOption {
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-light);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: var(--transition);
+}
+
+.iconOption:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.selectedIconOption {
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.13);
+}
+
+.colorControls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.colorOption {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.colorOption span {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--swatch-color);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.colorOption:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+
+.selectedColorOption {
+  border-color: var(--text);
+}
+
+.moreColorsButton {
+  position: relative;
+  width: fit-content;
+  min-height: 38px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.moreColorsButton:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.nativeColorInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.disabledControl {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.previewRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.previewBadge {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--category-color);
+  color: var(--category-text);
+  font-size: 0.9rem;
+  font-weight: 800;
+  overflow: hidden;
+}
+
+.previewBadge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list {
@@ -113,16 +352,55 @@
   gap: 12px;
 }
 
+.editingItem {
+  align-items: stretch;
+  padding: 14px;
+}
+
+.itemMain {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.categoryIcon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--category-color);
+  color: var(--category-text);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.itemText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .itemName {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
   word-break: break-word;
+}
+
+.systemLabel {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .iconButton {
@@ -156,6 +434,18 @@
   cursor: not-allowed;
 }
 
+.editPanel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.editActions {
+  display: flex;
+  gap: 10px;
+}
+
 .message {
   display: flex;
   align-items: center;
@@ -178,18 +468,89 @@
   border: 1px solid #bbf7d0;
 }
 
+@media (max-width: 1180px) {
+  .iconGrid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .colorGrid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: 1fr;
   }
+
+  .iconGrid {
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+  }
+
+  .colorGrid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
+  .page {
+    gap: 20px;
+  }
+
+  .title {
+    font-size: 1.75rem;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
   .addRow {
     flex-direction: column;
   }
 
   .addButton {
-    justify-content: center;
+    width: 100%;
+  }
+
+  .iconGrid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .colorGrid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  .item {
+    padding: 10px 12px;
+  }
+
+  .editActions {
+    flex-direction: column;
+  }
+
+  .saveButton,
+  .cancelButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .iconGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .colorGrid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .itemMain {
+    gap: 9px;
+  }
+
+  .categoryIcon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
   }
 }

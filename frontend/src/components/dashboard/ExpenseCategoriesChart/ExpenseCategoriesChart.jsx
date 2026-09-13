@@ -1,3 +1,5 @@
+import { useContext } from "react";
+
 import {
   ResponsiveContainer,
   BarChart,
@@ -9,25 +11,15 @@ import {
   Cell,
 } from "recharts";
 
+import { FinanceContext } from "../../../context/FinanceContext";
+
+import {
+  getCategoryDisplayColor,
+  getCategoryDisplayIcon,
+  getContrastTextColor,
+} from "../../../utils/categoryCustomization";
+
 import styles from "./ExpenseCategoriesChart.module.css";
-
-const CATEGORY_COLORS = {
-  Colectivo: "#8b5cf6",
-  Comida: "#2563eb",
-  Compras: "#ef4444",
-  IA: "#f59e0b",
-  Martin: "#06b6d4",
-  Uber: "#22c55e",
-};
-
-const FALLBACK_COLORS = [
-  "#2563eb",
-  "#22c55e",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#06b6d4",
-];
 
 const formatCurrency = (value) =>
   `$ ${Number(value || 0).toLocaleString(
@@ -53,14 +45,25 @@ function CategoryTooltip({
   }
 
   return (
-    <div
-      className={
-        styles.tooltip
-      }
-    >
-      <strong>
-        {item.category}
-      </strong>
+    <div className={styles.tooltip}>
+      <div className={styles.tooltipTitle}>
+        <span
+          className={styles.tooltipIcon}
+          style={{
+            "--category-color": item.color,
+            "--category-text":
+              getContrastTextColor(
+                item.color
+              ),
+          }}
+        >
+          <i className={item.icon}></i>
+        </span>
+
+        <strong>
+          {item.category}
+        </strong>
+      </div>
 
       <span>
         Total:{" "}
@@ -75,6 +78,25 @@ function CategoryTooltip({
 function ExpenseCategoriesChart({
   expenses = [],
 }) {
+  const financeContext =
+    useContext(FinanceContext);
+
+  const categoryRecords =
+    financeContext?.categoryRecords || [];
+
+  const categoryByName =
+    new Map(
+      categoryRecords
+        .filter(
+          (category) =>
+            category.type === "expense"
+        )
+        .map((category) => [
+          category.name.toLowerCase(),
+          category,
+        ])
+    );
+
   const grouped =
     expenses.reduce(
       (accumulator, expense) => {
@@ -106,22 +128,29 @@ function ExpenseCategoriesChart({
   const data =
     Object.entries(grouped)
       .map(
-        (
-          [category, total],
-          index
-        ) => ({
-          category,
-          total,
+        ([category, total]) => {
+          const savedCategory =
+            categoryByName.get(
+              category.toLowerCase()
+            ) || {
+              name: category,
+              type: "expense",
+            };
 
-          color:
-            CATEGORY_COLORS[
-              category
-            ] ||
-            FALLBACK_COLORS[
-              index %
-                FALLBACK_COLORS.length
-            ],
-        })
+          return {
+            category,
+            total,
+            color:
+              getCategoryDisplayColor(
+                savedCategory
+              ),
+            icon:
+              getCategoryDisplayIcon(
+                savedCategory,
+                "expense"
+              ),
+          };
+        }
       )
       .sort(
         (first, second) =>
@@ -130,17 +159,13 @@ function ExpenseCategoriesChart({
       );
 
   const chartHeight = Math.max(
-  320,
-  data.length * 44
-);
+    320,
+    data.length * 44
+  );
 
   if (data.length === 0) {
     return (
-      <div
-        className={
-          styles.emptyState
-        }
-      >
+      <div className={styles.emptyState}>
         Todavía no hay gastos
         cargados para mostrar por
         categoría.
@@ -149,11 +174,7 @@ function ExpenseCategoriesChart({
   }
 
   return (
-    <div
-      className={
-        styles.chartWrapper
-      }
-    >
+    <div className={styles.chartWrapper}>
       <ResponsiveContainer
         width="100%"
         height={chartHeight}
@@ -185,15 +206,16 @@ function ExpenseCategoriesChart({
           />
 
           <YAxis
-  type="category"
-  dataKey="category"
-  width={120}
-  interval={0}
-  tick={{
-    fill: "var(--text-light)",
-    fontSize: 14,
-  }}
-/>
+            type="category"
+            dataKey="category"
+            width={120}
+            interval={0}
+            tick={{
+              fill:
+                "var(--text-light)",
+              fontSize: 14,
+            }}
+          />
 
           <Tooltip
             content={
@@ -215,18 +237,13 @@ function ExpenseCategoriesChart({
             ]}
           >
             {data.map(
-              (
-                entry,
-                index
-              ) => (
+              (entry, index) => (
                 <Cell
                   key={
                     entry.category ||
                     index
                   }
-                  fill={
-                    entry.color
-                  }
+                  fill={entry.color}
                 />
               )
             )}

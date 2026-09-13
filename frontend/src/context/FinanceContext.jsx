@@ -29,6 +29,13 @@ import {
   isValidDateString,
 } from "../utils/dateUtils";
 
+import {
+  getDefaultCategoryIcon,
+  getRandomCategoryColor,
+  normalizeCategoryColor,
+  normalizeCategoryIcon,
+} from "../utils/categoryCustomization";
+
 export const FinanceContext = createContext(null);
 
 export const FREE_LIMIT_ERROR_CODE =
@@ -4891,7 +4898,7 @@ useEffect(() => {
   const addCategory =
     useCallback(
       async (
-        categoryName,
+        categoryInput,
         type
       ) => {
         if (!currentUserId) {
@@ -4902,9 +4909,20 @@ useEffect(() => {
           };
         }
 
+        const categoryData =
+          categoryInput &&
+          typeof categoryInput ===
+            "object"
+            ? categoryInput
+            : {
+                name:
+                  categoryInput,
+              };
+
         const cleanName =
           String(
-            categoryName || ""
+            categoryData?.name ||
+              ""
           ).trim();
 
         if (!cleanName) {
@@ -4942,6 +4960,20 @@ useEffect(() => {
           };
         }
 
+        const selectedColor =
+          normalizeCategoryColor(
+            categoryData?.color
+          ) ||
+          getRandomCategoryColor();
+
+        const selectedIcon =
+          normalizeCategoryIcon(
+            categoryData?.icon
+          ) ||
+          getDefaultCategoryIcon(
+            type
+          );
+
         const { data, error } =
           await supabase
             .from("categories")
@@ -4950,8 +4982,10 @@ useEffect(() => {
                 currentUserId,
               name: cleanName,
               type,
-              color: null,
-              icon: null,
+              color:
+                selectedColor,
+              icon:
+                selectedIcon,
               is_default: false,
             })
             .select(
@@ -5127,12 +5161,23 @@ useEffect(() => {
     useCallback(
       async (
         oldName,
-        newName,
+        categoryInput,
         type
       ) => {
+        const categoryData =
+          categoryInput &&
+          typeof categoryInput ===
+            "object"
+            ? categoryInput
+            : {
+                name:
+                  categoryInput,
+              };
+
         const cleanName =
           String(
-            newName || ""
+            categoryData?.name ||
+              ""
           ).trim();
 
         if (!cleanName) {
@@ -5187,6 +5232,26 @@ useEffect(() => {
           };
         }
 
+        const selectedColor =
+          normalizeCategoryColor(
+            categoryData?.color
+          ) ||
+          normalizeCategoryColor(
+            category.color
+          ) ||
+          getRandomCategoryColor();
+
+        const selectedIcon =
+          normalizeCategoryIcon(
+            categoryData?.icon
+          ) ||
+          normalizeCategoryIcon(
+            category.icon
+          ) ||
+          getDefaultCategoryIcon(
+            type
+          );
+
         const {
           data,
           error,
@@ -5194,6 +5259,10 @@ useEffect(() => {
           .from("categories")
           .update({
             name: cleanName,
+            color:
+              selectedColor,
+            icon:
+              selectedIcon,
           })
           .eq(
             "id",
@@ -7011,6 +7080,7 @@ const syncStatus =
 
     incomeCategories,
     expenseCategories,
+    categoryRecords,
 
     loading,
     errorMessage,
@@ -7077,6 +7147,7 @@ const syncStatus =
 
     incomeCategories,
     expenseCategories,
+    categoryRecords,
 
     loading,
     errorMessage,
