@@ -45,7 +45,7 @@ export const CATEGORY_ICONS = [
   { value: "bi bi-graph-up-arrow", label: "Inversiones" },
   { value: "bi bi-basket", label: "Compras" },
   { value: "bi bi-cart3", label: "Supermercado" },
-  { value: "bi bi-cup-hot", label: "Comida" },
+  { value: "bi bi-cup-hot", label: "Café" },
   { value: "bi bi-bus-front", label: "Transporte" },
   { value: "bi bi-car-front", label: "Auto" },
   { value: "bi bi-house", label: "Casa" },
@@ -56,6 +56,13 @@ export const CATEGORY_ICONS = [
   { value: "bi bi-airplane", label: "Viajes" },
   { value: "bi bi-gift", label: "Regalos" },
   { value: "bi bi-piggy-bank", label: "Ahorro" },
+  { value: "bi bi-trophy", label: "Deporte" },
+  { value: "bi bi-activity", label: "Gimnasio" },
+  { value: "bi bi-heart", label: "Pareja" },
+  { value: "bi bi-robot", label: "Inteligencia artificial" },
+  { value: "bi bi-stars", label: "Belleza / estética" },
+  { value: "bi bi-cup-straw", label: "Salidas" },
+  { value: "bi bi-fork-knife", label: "Comida" },
   { value: "bi bi-three-dots", label: "Otros" },
 ];
 
