@@ -558,20 +558,16 @@ Deno.serve(
         const payload =
           JSON.stringify({
             title:
-              `MoneyTrack · ${reminder.title}`,
+              reminder.title,
 
             body:
               reminder.description ||
-              `Recordatorio programado para las ${normalizeTime(
+              `Recordatorio para las ${normalizeTime(
                 reminder.reminder_time,
               )}.`,
 
             icon:
               "/pwa-192x192.png",
-
-            badge:
-              "/favicon-32x32.png",
-
             tag:
               `moneytrack-reminder-${reminder.id}`,
 

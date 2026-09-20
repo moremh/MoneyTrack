@@ -395,18 +395,16 @@ const showBrowserReminderNotification =
     }
 
     const title =
-      `MoneyTrack · ${reminder.title}`;
+      reminder.title;
 
     const body =
       reminder.description ||
-      `Tenés un recordatorio programado para las ${reminder.reminderTime}.`;
+      `Recordatorio para las ${reminder.reminderTime}.`;
 
     const options = {
       body,
       icon:
         "/pwa-192x192.png",
-      badge:
-        "/favicon-32x32.png",
       tag:
         `moneytrack-reminder-${reminder.id}`,
       renotify: true,
@@ -991,9 +989,14 @@ function ReminderProvider({
         }
 
         const validation =
-          validateReminder(
-            reminder
-          );
+          validateReminder({
+            ...reminder,
+
+            timezone:
+              reminder?.timezone ||
+              currentUser?.timezone ||
+              DEFAULT_TIMEZONE,
+          });
 
         if (
           !validation.success
@@ -1086,6 +1089,7 @@ function ReminderProvider({
         };
       },
       [
+        currentUser,
         currentUserId,
       ]
     );

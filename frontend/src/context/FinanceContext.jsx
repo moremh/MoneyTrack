@@ -36,6 +36,14 @@ import {
   normalizeCategoryIcon,
 } from "../utils/categoryCustomization";
 
+import {
+  normalizeCurrency,
+  normalizeLanguage,
+  normalizeRegion,
+  normalizeTimeFormat,
+  normalizeTimeZone,
+} from "../utils/regionalSettings";
+
 export const FinanceContext = createContext(null);
 
 export const FREE_LIMIT_ERROR_CODE =
@@ -48,6 +56,12 @@ const UNCATEGORIZED = "General";
 const DEFAULT_SETTINGS = {
   userName: "Usuario",
   theme: "light",
+  language: "es",
+  region: "AR",
+  currency: "ARS",
+  timezone:
+    "America/Argentina/Buenos_Aires",
+  timeFormat: "24h",
 };
 
 const createClientMutationId =
@@ -1187,6 +1201,41 @@ const applyFinanceSnapshot =
             currentUser?.theme ||
             DEFAULT_SETTINGS.theme
         ),
+
+        language:
+          normalizeLanguage(
+            snapshot.settings?.language ||
+              currentUser?.language ||
+              DEFAULT_SETTINGS.language
+          ),
+
+        region:
+          normalizeRegion(
+            snapshot.settings?.region ||
+              currentUser?.region ||
+              DEFAULT_SETTINGS.region
+          ),
+
+        currency:
+          normalizeCurrency(
+            snapshot.settings?.currency ||
+              currentUser?.currency ||
+              DEFAULT_SETTINGS.currency
+          ),
+
+        timezone:
+          normalizeTimeZone(
+            snapshot.settings?.timezone ||
+              currentUser?.timezone ||
+              DEFAULT_SETTINGS.timezone
+          ),
+
+        timeFormat:
+          normalizeTimeFormat(
+            snapshot.settings?.timeFormat ||
+              currentUser?.timeFormat ||
+              DEFAULT_SETTINGS.timeFormat
+          ),
       });
 
       setMovementUsage(
@@ -1448,6 +1497,36 @@ const applyFinanceSnapshot =
           currentUser?.theme ||
             DEFAULT_SETTINGS.theme
         ),
+
+        language:
+          normalizeLanguage(
+            currentUser?.language ||
+              DEFAULT_SETTINGS.language
+          ),
+
+        region:
+          normalizeRegion(
+            currentUser?.region ||
+              DEFAULT_SETTINGS.region
+          ),
+
+        currency:
+          normalizeCurrency(
+            currentUser?.currency ||
+              DEFAULT_SETTINGS.currency
+          ),
+
+        timezone:
+          normalizeTimeZone(
+            currentUser?.timezone ||
+              DEFAULT_SETTINGS.timezone
+          ),
+
+        timeFormat:
+          normalizeTimeFormat(
+            currentUser?.timeFormat ||
+              DEFAULT_SETTINGS.timeFormat
+          ),
       };
 
       let nextMovementUsage;
@@ -6770,6 +6849,36 @@ const updateGoal = useCallback(
               settings.theme
           );
 
+        const nextLanguage =
+          normalizeLanguage(
+            newSettings?.language ??
+              settings.language
+          );
+
+        const nextRegion =
+          normalizeRegion(
+            newSettings?.region ??
+              settings.region
+          );
+
+        const nextCurrency =
+          normalizeCurrency(
+            newSettings?.currency ??
+              settings.currency
+          );
+
+        const nextTimezone =
+          normalizeTimeZone(
+            newSettings?.timezone ??
+              settings.timezone
+          );
+
+        const nextTimeFormat =
+          normalizeTimeFormat(
+            newSettings?.timeFormat ??
+              settings.timeFormat
+          );
+
         if (!nextUserName) {
           return {
             success: false,
@@ -6784,6 +6893,12 @@ const updateGoal = useCallback(
             .update({
               name: nextUserName,
               theme: nextTheme,
+              language: nextLanguage,
+              region: nextRegion,
+              currency: nextCurrency,
+              timezone: nextTimezone,
+              time_format:
+                nextTimeFormat,
             })
             .eq(
               "id",
@@ -6804,7 +6919,18 @@ const updateGoal = useCallback(
         setSettings({
           userName:
             nextUserName,
-          theme: nextTheme,
+          theme:
+            nextTheme,
+          language:
+            nextLanguage,
+          region:
+            nextRegion,
+          currency:
+            nextCurrency,
+          timezone:
+            nextTimezone,
+          timeFormat:
+            nextTimeFormat,
         });
 
         if (
@@ -6823,10 +6949,23 @@ const updateGoal = useCallback(
       [
         currentUserId,
         refreshCurrentUser,
+        settings.currency,
+        settings.language,
+        settings.region,
         settings.theme,
+        settings.timeFormat,
+        settings.timezone,
         settings.userName,
       ]
     );
+
+  useEffect(() => {
+    document.documentElement.lang =
+      settings.language ||
+      "es";
+  }, [
+    settings.language,
+  ]);
 
   const clearIncomes =
     useCallback(async () => {

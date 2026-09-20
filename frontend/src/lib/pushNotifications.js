@@ -643,14 +643,12 @@ export const showTestSystemNotification =
       await registrationResult
         .registration
         .showNotification(
-          "MoneyTrack · Prueba",
+          "Prueba de notificación",
           {
             body:
-              "Si ves este aviso, las notificaciones del sistema están habilitadas en este dispositivo.",
+              "Las notificaciones están activadas en este dispositivo.",
             icon:
               "/pwa-192x192.png",
-            badge:
-              "/favicon-32x32.png",
             tag:
               "moneytrack-notification-test",
             renotify: true,

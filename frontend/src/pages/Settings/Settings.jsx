@@ -19,6 +19,8 @@ import {
   showTestSystemNotification,
 } from "../../lib/pushNotifications";
 
+import RegionalSettingsCard from "../../components/settings/RegionalSettingsCard/RegionalSettingsCard";
+
 import styles from "./Settings.module.css";
 
 function Settings() {
@@ -756,6 +758,14 @@ function Settings() {
           </button>
         </form>
       </section>
+
+      <RegionalSettingsCard
+        settings={settings}
+        updateSettings={
+          updateSettings
+        }
+        disabled={isBusy}
+      />
 
       <section className={styles.card}>
         <div className={styles.cardTitleRow}>

@@ -761,8 +761,14 @@ function Dashboard() {
 
   const chartTitle =
     activePreset === "month"
-      ? "Ingresos y gastos del mes"
-      : "Balance por mes";
+      ? "Balance de este mes"
+      : activePreset === "quarter"
+        ? "Balance de los últimos 3 meses"
+        : activePreset === "year"
+          ? "Balance de este año"
+          : activePreset === "all"
+            ? "Balance histórico"
+            : "Balance del período seleccionado";
 
   return (
     <div

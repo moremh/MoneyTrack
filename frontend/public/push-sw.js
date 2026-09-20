@@ -10,7 +10,6 @@ const DEFAULT_NOTIFICATION = {
   body:
     "Tenés un recordatorio pendiente.",
   icon: "/pwa-192x192.png",
-  badge: "/favicon-32x32.png",
   url: "/reminders",
 };
 
@@ -81,10 +80,6 @@ self.addEventListener(
         payload.icon ||
         DEFAULT_NOTIFICATION.icon,
 
-      badge:
-        payload.badge ||
-        DEFAULT_NOTIFICATION.badge,
-
       tag:
         payload.tag ||
         (
@@ -148,7 +143,7 @@ self.addEventListener(
           action:
             "open-reminders",
           title:
-            "Ver recordatorios",
+            "Abrir",
         },
       ],
     };

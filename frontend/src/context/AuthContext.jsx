@@ -75,6 +75,13 @@ const mapProfile = (
     accountStatus:
       profile.account_status || "active",
     currency: profile.currency || "ARS",
+    language: profile.language || "es",
+    region: profile.region || "AR",
+    timezone:
+      profile.timezone ||
+      "America/Argentina/Buenos_Aires",
+    timeFormat:
+      profile.time_format || "24h",
     theme: profile.theme || "system",
     createdAt: profile.created_at,
     updatedAt: profile.updated_at,
@@ -273,6 +280,10 @@ const fetchCurrentProfile = useCallback(
         role,
         account_status,
         currency,
+        language,
+        region,
+        timezone,
+        time_format,
         theme,
         created_at,
         updated_at,
@@ -370,6 +381,10 @@ const fetchCurrentProfile = useCallback(
               role,
               account_status,
               currency,
+              language,
+              region,
+              timezone,
+              time_format,
               theme,
               created_at,
               updated_at,
