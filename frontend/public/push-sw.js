@@ -143,7 +143,8 @@ self.addEventListener(
           action:
             "open-reminders",
           title:
-            "Abrir",
+            payload.actionTitle ||
+            "Open",
         },
       ],
     };

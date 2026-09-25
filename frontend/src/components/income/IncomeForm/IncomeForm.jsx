@@ -21,6 +21,10 @@ import {
   parseAmountInput,
 } from "../../../utils/amountUtils";
 
+import {
+  getLocale,
+} from "../../../utils/regionalSettings";
+
 import styles from "./IncomeForm.module.css";
 
 function IncomeForm({
@@ -34,6 +38,7 @@ function IncomeForm({
     incomeCategories = [],
     expenseCategories = [],
     movementUsage,
+    settings,
   } = useContext(FinanceContext);
 
   const categories =
@@ -94,7 +99,8 @@ function IncomeForm({
 
       setAmount(
         formatStoredAmount(
-          initialData.amount ?? ""
+          initialData.amount ?? "",
+          settings
         )
       );
 
@@ -113,7 +119,8 @@ function IncomeForm({
         initialAmount === undefined
           ? ""
           : formatStoredAmount(
-              initialAmount
+              initialAmount,
+              settings
             )
       );
       setCategory("");
@@ -358,7 +365,10 @@ function IncomeForm({
           className={styles.input}
           type="text"
           inputMode="decimal"
-          lang="es-AR"
+          lang={getLocale(
+            settings?.language,
+            settings?.region
+          )}
           value={amount}
           onChange={(event) => {
             const nextValue =
@@ -368,7 +378,8 @@ function IncomeForm({
               (currentValue) =>
                 formatAmountInput(
                   nextValue,
-                  currentValue
+                  currentValue,
+                  settings
                 )
             );
 
@@ -379,11 +390,15 @@ function IncomeForm({
             setAmount(
               (currentValue) =>
                 normalizeAmountOnBlur(
-                  currentValue
+                  currentValue,
+                  settings
                 )
             )
           }
-          placeholder="Ej: 250.000,50"
+          placeholder={`Ej: ${formatStoredAmount(
+            250000.5,
+            settings
+          )}`}
           autoComplete="off"
           disabled={isSubmitting}
         />

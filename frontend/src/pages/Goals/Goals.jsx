@@ -7,6 +7,17 @@ import {
 import { FinanceContext } from "../../context/FinanceContext";
 import { getLocalToday } from "../../utils/dateUtils";
 
+import {
+  formatRegionalCurrency,
+  formatRegionalDate,
+} from "../../utils/regionalSettings";
+
+import {
+  formatAmountInput as formatRegionalAmountInput,
+  formatStoredAmount,
+  parseAmountInput as parseRegionalAmountInput,
+} from "../../utils/amountUtils";
+
 import Card from "../../components/common/Card/Card";
 import Modal from "../../components/common/Modal/Modal";
 import GoalForm from "../../components/goals/GoalForm/GoalForm";
@@ -126,7 +137,22 @@ function Goals() {
     updateGoalMovement,
     deleteGoalMovement,
     loading,
+    settings,
   } = useContext(FinanceContext);
+
+  const formatMovementDateRegional =
+    (value) =>
+      formatRegionalDate(
+        value,
+        settings
+      );
+
+  const formatAmountRegional =
+    (value) =>
+      formatRegionalCurrency(
+        value,
+        settings
+      );
 
   const [
     editingGoal,
@@ -492,8 +518,9 @@ function Goals() {
       setEditError("");
 
       const numericAmount =
-        parseAmountInput(
-          editAmount
+        parseRegionalAmountInput(
+          editAmount,
+          settings
         );
 
       if (!editGoalId) {
@@ -611,7 +638,7 @@ function Goals() {
 
       const confirmed =
         window.confirm(
-          `¿Seguro que deseas eliminar este ${movementLabel} de ${formatAmount(
+          `¿Seguro que deseas eliminar este ${movementLabel} de ${formatAmountRegional(
             movement.amount
           )} del objetivo "${goalName}"? El saldo del objetivo se recalculará automáticamente.`
         );
@@ -691,6 +718,9 @@ function Goals() {
       <Card title="Lista de objetivos">
         <GoalList
           goals={goals}
+          settings={
+            settings
+          }
           loading={loading}
           deletingGoalId={
             deletingGoalId
@@ -875,7 +905,7 @@ function Goals() {
                         }
                       >
                         <td>
-                          {formatMovementDate(
+                          {formatMovementDateRegional(
                             movement.date
                           )}
                         </td>
@@ -930,7 +960,7 @@ function Goals() {
                           {isWithdrawal
                             ? "- "
                             : "+ "}
-                          {formatAmount(
+                          {formatAmountRegional(
                             movement.amount
                           )}
                         </td>
@@ -1114,7 +1144,7 @@ function Goals() {
                 </span>
 
                 <strong>
-                  {formatAmount(
+                  {formatAmountRegional(
                     selectedEditGoal.currentAmount
                   )}
                 </strong>
@@ -1180,7 +1210,10 @@ function Goals() {
                     event.target.value
                   )
                 }
-                placeholder="Ej: 25.000,00"
+                placeholder={`Ej: ${formatStoredAmount(
+                  25000,
+                  settings
+                )}`}
                 disabled={
                   isSavingGoalMovement
                 }

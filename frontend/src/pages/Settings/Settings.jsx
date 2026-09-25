@@ -27,6 +27,7 @@ function Settings() {
   const {
     settings,
     updateSettings,
+    updateRegionalSettings,
     clearIncomes,
     clearExpenses,
     clearGoals,
@@ -761,8 +762,8 @@ function Settings() {
 
       <RegionalSettingsCard
         settings={settings}
-        updateSettings={
-          updateSettings
+        updateRegionalSettings={
+          updateRegionalSettings
         }
         disabled={isBusy}
       />

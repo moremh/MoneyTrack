@@ -1,9 +1,18 @@
 import { useContext, useMemo, useState } from "react";
 import { FinanceContext } from "../../context/FinanceContext";
+import {
+  useI18n,
+} from "../../context/I18nContext";
 import styles from "./Reports.module.css";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+
+import {
+  formatRegionalCurrency,
+  formatRegionalDate,
+  formatRegionalDateTime,
+} from "../../utils/regionalSettings";
 
 import {
   ResponsiveContainer,
@@ -46,7 +55,17 @@ const PIE_COLORS = [
 ];
 
 function Reports() {
-  const { incomes, expenses, categoryRecords } = useContext(FinanceContext);
+  const {
+    t,
+  } = useI18n();
+  const {
+    incomes,
+    expenses,
+    categoryRecords,
+    settings,
+  } = useContext(
+    FinanceContext
+  );
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -138,21 +157,30 @@ function Reports() {
     setToDate("");
   };
 
-  const formatCurrency = (value) =>
-    `$ ${Number(value).toLocaleString("es-AR")}`;
+  const formatCurrency =
+    (value) =>
+      formatRegionalCurrency(
+        value,
+        settings
+      );
 
-  const formatDate = (date) => date.split("-").reverse().join("/");
+  const formatDate =
+    (date) =>
+      formatRegionalDate(
+        date,
+        settings
+      );
 
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new();
 
     const summaryData = [
-      { Métrica: "Desde", Valor: fromDate ? formatDate(fromDate) : "Sin filtro" },
-      { Métrica: "Hasta", Valor: toDate ? formatDate(toDate) : "Sin filtro" },
-      { Métrica: "Ingresos del período", Valor: totalIncome },
-      { Métrica: "Gastos del período", Valor: totalExpenses },
-      { Métrica: "Balance del período", Valor: balance },
-      { Métrica: "Movimientos analizados", Valor: totalMovements },
+      { Métrica: "Desde", Valor: fromDate ? formatDate(fromDate) : t("Sin filtro") },
+      { Métrica: "Hasta", Valor: toDate ? formatDate(toDate) : t("Sin filtro") },
+      { Métrica: t("Ingresos del período"), Valor: totalIncome },
+      { Métrica: t("Gastos del período"), Valor: totalExpenses },
+      { Métrica: t("Balance del período"), Valor: balance },
+      { Métrica: t("Movimientos analizados"), Valor: totalMovements },
     ];
 
     const incomesData = filteredIncomes.map((item) => ({
@@ -250,7 +278,11 @@ function Reports() {
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    const generatedAt = new Date().toLocaleString("es-AR");
+    const generatedAt =
+      formatRegionalDateTime(
+        new Date(),
+        settings
+      );
 
     addPdfHeader(
       doc,
@@ -262,8 +294,8 @@ function Reports() {
     doc.setFontSize(11);
     doc.setTextColor(70, 70, 70);
     doc.text(
-      `Período: ${fromDate ? formatDate(fromDate) : "Sin filtro"} a ${
-        toDate ? formatDate(toDate) : "Sin filtro"
+      `Período: ${fromDate ? formatDate(fromDate) : t("Sin filtro")} a ${
+        toDate ? formatDate(toDate) : t("Sin filtro")
       }`,
       14,
       38
@@ -276,7 +308,7 @@ function Reports() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text("Resumen general", 18, 55);
+    doc.text(t("Resumen general"), 18, 55);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -287,14 +319,14 @@ function Reports() {
 
     autoTable(doc, {
       startY: 90,
-      head: [["Métrica", "Valor"]],
+      head: [[t("Métrica"), "Valor"]],
       body: [
-        ["Desde", fromDate ? formatDate(fromDate) : "Sin filtro"],
-        ["Hasta", toDate ? formatDate(toDate) : "Sin filtro"],
-        ["Ingresos del período", formatCurrency(totalIncome)],
-        ["Gastos del período", formatCurrency(totalExpenses)],
-        ["Balance del período", formatCurrency(balance)],
-        ["Movimientos analizados", String(totalMovements)],
+        ["Desde", fromDate ? formatDate(fromDate) : t("Sin filtro")],
+        ["Hasta", toDate ? formatDate(toDate) : t("Sin filtro")],
+        [t("Ingresos del período"), formatCurrency(totalIncome)],
+        [t("Gastos del período"), formatCurrency(totalExpenses)],
+        [t("Balance del período"), formatCurrency(balance)],
+        [t("Movimientos analizados"), String(totalMovements)],
       ],
       theme: "grid",
       headStyles: {
@@ -316,7 +348,7 @@ function Reports() {
 
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 12,
-      head: [["Categoría", "Total"]],
+      head: [[t("Categoría"), "Total"]],
       body:
         expenseCategoriesData.length > 0
           ? expenseCategoriesData.map((item) => [
@@ -343,11 +375,11 @@ function Reports() {
     });
 
     doc.addPage();
-    addPdfHeader(doc, "Ingresos filtrados");
+    addPdfHeader(doc, t("Ingresos filtrados"));
 
     autoTable(doc, {
       startY: 36,
-      head: [["Descripción", "Categoría", "Fecha", "Monto"]],
+      head: [[t("Descripción"), t("Categoría"), t("Fecha"), t("Monto")]],
       body:
         filteredIncomes.length > 0
           ? filteredIncomes.map((item) => [
@@ -356,7 +388,7 @@ function Reports() {
               formatDate(item.date),
               formatCurrency(item.amount),
             ])
-          : [["Sin ingresos", "-", "-", "-"]],
+          : [[t("Sin ingresos"), "-", "-", "-"]],
       theme: "grid",
       headStyles: {
         fillColor: [34, 197, 94],
@@ -376,11 +408,11 @@ function Reports() {
     });
 
     doc.addPage();
-    addPdfHeader(doc, "Gastos filtrados");
+    addPdfHeader(doc, t("Gastos filtrados"));
 
     autoTable(doc, {
       startY: 36,
-      head: [["Descripción", "Categoría", "Fecha", "Monto"]],
+      head: [[t("Descripción"), t("Categoría"), t("Fecha"), t("Monto")]],
       body:
         filteredExpenses.length > 0
           ? filteredExpenses.map((item) => [
@@ -389,7 +421,7 @@ function Reports() {
               formatDate(item.date),
               formatCurrency(item.amount),
             ])
-          : [["Sin gastos", "-", "-", "-"]],
+          : [[t("Sin gastos"), "-", "-", "-"]],
       theme: "grid",
       headStyles: {
         fillColor: [239, 68, 68],

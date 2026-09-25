@@ -1,7 +1,12 @@
 import {
+  useContext,
   useEffect,
   useState,
 } from "react";
+
+import {
+  FinanceContext,
+} from "../../../context/FinanceContext";
 
 import {
   formatAmountInput,
@@ -16,6 +21,11 @@ function GoalForm({
   onSubmit,
   initialData,
 }) {
+  const {
+    settings,
+  } = useContext(
+    FinanceContext
+  );
   const [title, setTitle] =
     useState("");
 
@@ -54,7 +64,8 @@ function GoalForm({
         formatStoredAmount(
           initialData.targetAmount ??
             initialData.target ??
-            ""
+            "",
+          settings
         )
       );
 
@@ -91,7 +102,8 @@ function GoalForm({
 
     const numericTarget =
       parseAmountInput(
-        targetAmount
+        targetAmount,
+        settings
       );
 
     if (!cleanTitle) {
@@ -258,7 +270,12 @@ function GoalForm({
           className={styles.input}
           type="text"
           inputMode="decimal"
-          lang="es-AR"
+          lang={
+            settings?.language &&
+            settings?.region
+              ? `${settings.language}-${settings.region}`
+              : "es-AR"
+          }
           value={targetAmount}
           onChange={(event) => {
             const nextValue =
@@ -268,7 +285,8 @@ function GoalForm({
               (currentValue) =>
                 formatAmountInput(
                   nextValue,
-                  currentValue
+                  currentValue,
+                  settings
                 )
             );
 
@@ -279,7 +297,8 @@ function GoalForm({
             setTargetAmount(
               (currentValue) =>
                 normalizeAmountOnBlur(
-                  currentValue
+                  currentValue,
+                  settings
                 )
             )
           }

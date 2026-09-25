@@ -1,3 +1,7 @@
+import {
+  translateStoredText,
+} from "../i18n/translationCatalog";
+
 import { supabase } from "./supabase";
 
 const VAPID_PUBLIC_KEY =
@@ -643,10 +647,14 @@ export const showTestSystemNotification =
       await registrationResult
         .registration
         .showNotification(
-          "Prueba de notificación",
+          translateStoredText(
+            "Prueba de notificación"
+          ),
           {
             body:
-              "Las notificaciones están activadas en este dispositivo.",
+              translateStoredText(
+                "Las notificaciones están activadas en este dispositivo."
+              ),
             icon:
               "/pwa-192x192.png",
             tag:

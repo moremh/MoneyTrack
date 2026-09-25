@@ -21,6 +21,17 @@ import CalculatorModal from "../../components/calculator/CalculatorModal";
 
 import PremiumLimitModal from "../../components/premium/PremiumLimitModal/PremiumLimitModal";
 
+import {
+  formatRegionalCurrency,
+  formatRegionalDate,
+} from "../../utils/regionalSettings";
+
+import {
+  formatAmountInput as formatRegionalAmountInput,
+  formatStoredAmount,
+  parseAmountInput as parseRegionalAmountInput,
+} from "../../utils/amountUtils";
+
 function formatLocalDate(date) {
   const year = date.getFullYear();
 
@@ -422,22 +433,26 @@ function Dashboard() {
         fromDate &&
         toDate
       ) {
-        return `Período seleccionado: ${formatDisplayDate(
-          fromDate
-        )} - ${formatDisplayDate(
-          toDate
+        return `Período seleccionado: ${formatRegionalDate(
+          fromDate,
+          settings
+        )} - ${formatRegionalDate(
+          toDate,
+          settings
         )}`;
       }
 
       if (fromDate) {
-        return `Período desde: ${formatDisplayDate(
-          fromDate
+        return `Período desde: ${formatRegionalDate(
+          fromDate,
+          settings
         )}`;
       }
 
       if (toDate) {
-        return `Período hasta: ${formatDisplayDate(
-          toDate
+        return `Período hasta: ${formatRegionalDate(
+          toDate,
+          settings
         )}`;
       }
 
@@ -553,8 +568,12 @@ function Dashboard() {
     setSavingsAmount(
       initialAmount === ""
         ? ""
-        : formatAmountInput(
-            initialAmount
+        : formatRegionalAmountInput(
+            String(
+              initialAmount
+            ),
+            "",
+            settings
           )
     );
     setSavingsDescription("");
@@ -652,7 +671,14 @@ function Dashboard() {
   const handleSavingsAmountChange =
     (value) => {
       setSavingsAmount(
-        formatAmountInput(value)
+        (
+          currentValue
+        ) =>
+          formatRegionalAmountInput(
+            value,
+            currentValue,
+            settings
+          )
       );
     };
 
@@ -667,8 +693,9 @@ function Dashboard() {
       setSavingsError("");
 
       const numericAmount =
-        parseAmountInput(
-          savingsAmount
+        parseRegionalAmountInput(
+          savingsAmount,
+          settings
         );
 
       if (!savingsGoalId) {
@@ -1050,36 +1077,48 @@ function Dashboard() {
       >
         <StatCard
           title="Balance del período"
-          value={`$ ${balance.toLocaleString(
-            "es-AR"
-          )}`}
+          value={
+            formatRegionalCurrency(
+              balance,
+              settings
+            )
+          }
           icon="bi bi-wallet2"
           color="#2563eb"
         />
 
         <StatCard
           title="Ingresos"
-          value={`$ ${totalIncome.toLocaleString(
-            "es-AR"
-          )}`}
+          value={
+            formatRegionalCurrency(
+              totalIncome,
+              settings
+            )
+          }
           icon="bi bi-arrow-down-circle"
           color="#22c55e"
         />
 
         <StatCard
           title="Gastos"
-          value={`$ ${totalExpenses.toLocaleString(
-            "es-AR"
-          )}`}
+          value={
+            formatRegionalCurrency(
+              totalExpenses,
+              settings
+            )
+          }
           icon="bi bi-arrow-up-circle"
           color="#ef4444"
         />
 
         <StatCard
           title="Ahorros totales"
-          value={`$ ${totalGoalSavings.toLocaleString(
-            "es-AR"
-          )}`}
+          value={
+            formatRegionalCurrency(
+              totalGoalSavings,
+              settings
+            )
+          }
           icon="bi bi-piggy-bank"
           color="#f59e0b"
         />
@@ -1111,6 +1150,9 @@ function Dashboard() {
           mode={chartMode}
           fromDate={fromDate}
           toDate={toDate}
+          settings={
+            settings
+          }
         />
       </section>
 
@@ -1131,6 +1173,9 @@ function Dashboard() {
           expenses={
             filteredExpenses
           }
+          settings={
+            settings
+          }
         />
       </section>
 
@@ -1149,6 +1194,9 @@ function Dashboard() {
 
         <SavingsGoals
           goals={goals}
+          settings={
+            settings
+          }
         />
       </section>
 
@@ -1373,7 +1421,10 @@ function Dashboard() {
                       event.target.value
                     )
                   }
-                  placeholder="Ej: 25.000,00"
+                  placeholder={`Ej: ${formatStoredAmount(
+                    25000,
+                    settings
+                  )}`}
                   disabled={
                     isSavingMovement
                   }

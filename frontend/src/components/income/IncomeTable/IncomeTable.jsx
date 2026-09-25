@@ -8,6 +8,11 @@ import {
   getContrastTextColor,
 } from "../../../utils/categoryCustomization";
 
+import {
+  formatRegionalCurrency,
+  formatRegionalDate,
+} from "../../../utils/regionalSettings";
+
 import styles from "./IncomeTable.module.css";
 
 function IncomeTable({ incomes, onDelete, onEdit }) {
@@ -16,6 +21,9 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
 
   const categoryRecords =
     financeContext?.categoryRecords || [];
+
+  const settings =
+    financeContext?.settings || {};
 
   const findCategory = (item) => {
     if (item.categoryId) {
@@ -107,18 +115,16 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
                 </td>
 
                 <td>
-                  {item.date
-                    .split("-")
-                    .reverse()
-                    .join("/")}
+                  {formatRegionalDate(
+                    item.date,
+                    settings
+                  )}
                 </td>
 
                 <td className={styles.amount}>
-                  ${" "}
-                  {Number(
-                    item.amount
-                  ).toLocaleString(
-                    "es-AR"
+                  {formatRegionalCurrency(
+                    item.amount,
+                    settings
                   )}
                 </td>
 

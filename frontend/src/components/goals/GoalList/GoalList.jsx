@@ -1,3 +1,9 @@
+import {
+  formatRegionalCurrency,
+  formatRegionalDate,
+  getLocale,
+} from "../../../utils/regionalSettings";
+
 import styles from "./GoalList.module.css";
 
 function GoalList({
@@ -6,6 +12,7 @@ function GoalList({
   onDelete,
   loading = false,
   deletingGoalId = null,
+  settings = {},
 }) {
   if (loading) {
     return (
@@ -43,9 +50,18 @@ function GoalList({
   percentage <= 0
     ? "0"
     : percentage < 10
-      ? percentage
-          .toFixed(1)
-          .replace(".", ",")
+      ? new Intl.NumberFormat(
+          getLocale(
+            settings.language,
+            settings.region
+          ),
+          {
+            maximumFractionDigits:
+              1,
+          }
+        ).format(
+          percentage
+        )
       : String(
           Math.round(
             percentage
@@ -63,10 +79,10 @@ function GoalList({
 
         const formattedDeadline =
           goal.deadline
-            ? goal.deadline
-                .split("-")
-                .reverse()
-                .join("/")
+            ? formatRegionalDate(
+                goal.deadline,
+                settings
+              )
             : "Sin definir";
 
         return (
@@ -117,19 +133,19 @@ function GoalList({
 
             <div className={styles.values}>
               <span>
-                Ahorrado: ${" "}
-                {currentAmount.toLocaleString("es-AR", {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2,
-                })}
+                Ahorrado:{" "}
+                {formatRegionalCurrency(
+                  currentAmount,
+                  settings
+                )}
               </span>
 
               <span>
-                Objetivo: ${" "}
-                {targetAmount.toLocaleString("es-AR", {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2,
-                })}
+                Objetivo:{" "}
+                {formatRegionalCurrency(
+                  targetAmount,
+                  settings
+                )}
               </span>
             </div>
 

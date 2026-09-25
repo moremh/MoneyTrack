@@ -19,16 +19,16 @@ import {
   getContrastTextColor,
 } from "../../../utils/categoryCustomization";
 
-import styles from "./ExpenseCategoriesChart.module.css";
+import {
+  formatRegionalCurrency,
+} from "../../../utils/regionalSettings";
 
-const formatCurrency = (value) =>
-  `$ ${Number(value || 0).toLocaleString(
-    "es-AR"
-  )}`;
+import styles from "./ExpenseCategoriesChart.module.css";
 
 function CategoryTooltip({
   active,
   payload,
+  settings,
 }) {
   if (
     !active ||
@@ -67,8 +67,9 @@ function CategoryTooltip({
 
       <span>
         Total:{" "}
-        {formatCurrency(
-          item.total
+        {formatRegionalCurrency(
+          item.total,
+          settings
         )}
       </span>
     </div>
@@ -77,6 +78,7 @@ function CategoryTooltip({
 
 function ExpenseCategoriesChart({
   expenses = [],
+  settings = {},
 }) {
   const financeContext =
     useContext(FinanceContext);
@@ -200,8 +202,13 @@ function ExpenseCategoriesChart({
               fill:
                 "var(--text-light)",
             }}
-            tickFormatter={
-              formatCurrency
+            tickFormatter={(
+              value
+            ) =>
+              formatRegionalCurrency(
+                value,
+                settings
+              )
             }
           />
 
@@ -219,7 +226,11 @@ function ExpenseCategoriesChart({
 
           <Tooltip
             content={
-              <CategoryTooltip />
+              <CategoryTooltip
+                settings={
+                  settings
+                }
+              />
             }
             cursor={{
               fill:

@@ -1,3 +1,8 @@
+import {
+  getStoredUiLanguage,
+  translateInterfaceText,
+} from "../i18n/translationCatalog";
+
 export const DEFAULT_COMMERCIAL_SETTINGS = {
   id: "main",
   whatsappNumber: "5493813540133",
@@ -169,23 +174,82 @@ export function buildWhatsAppPremiumRequest({
       }`
     : plan?.name || "Premium";
 
+  const language =
+    user?.language ||
+    getStoredUiLanguage();
+
+  const tr =
+    (value) =>
+      translateInterfaceText(
+        value,
+        language
+      );
+
+  const noValue =
+    language === "it"
+      ? "Non specificato"
+      : language === "en"
+        ? "Not specified"
+        : "Sin especificar";
+
+  const whatsappCopy =
+    language === "it"
+      ? {
+          hello:
+            "Ciao, vorrei richiedere MoneyTrack Premium.",
+          name: "Nome",
+          email: "Email",
+          userId: "ID utente",
+          plan: "Piano richiesto",
+          duration: "Durata",
+          price: "Prezzo",
+        }
+      : language === "en"
+        ? {
+            hello:
+              "Hi, I would like to request MoneyTrack Premium.",
+            name: "Name",
+            email: "Email",
+            userId: "User ID",
+            plan: "Requested plan",
+            duration: "Duration",
+            price: "Price",
+          }
+        : {
+            hello:
+              "Hola, quiero solicitar MoneyTrack Premium.",
+            name: "Nombre",
+            email: "Email",
+            userId: "ID de usuario",
+            plan: "Plan solicitado",
+            duration: "Duración",
+            price: "Precio",
+          };
+
   const message = [
-    "Hola, quiero solicitar MoneyTrack Premium.",
+    whatsappCopy.hello,
     "",
-    `Nombre: ${
-      user?.name || "Sin especificar"
+    `${whatsappCopy.name}: ${
+      user?.name || noValue
     }`,
-    `Email: ${
-      user?.email || "Sin especificar"
+    `${whatsappCopy.email}: ${
+      user?.email || noValue
     }`,
-    `ID de usuario: ${
-      user?.id || "Sin especificar"
+    `${whatsappCopy.userId}: ${
+      user?.id || noValue
     }`,
-    `Plan solicitado: ${requestedPlanName}`,
-    `Duración: ${
-      plan?.duration || "Sin especificar"
+    `${whatsappCopy.plan}: ${
+      tr(requestedPlanName)
     }`,
-    `Precio: ${formatCurrency(finalPrice)}`,
+    `${whatsappCopy.duration}: ${
+      tr(
+        plan?.duration ||
+        noValue
+      )
+    }`,
+    `${whatsappCopy.price}: ${
+      formatCurrency(finalPrice)
+    }`,
   ].join("\n");
 
   const isConfigured =

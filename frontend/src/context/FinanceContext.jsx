@@ -6959,6 +6959,164 @@ const updateGoal = useCallback(
       ]
     );
 
+  const updateRegionalSettings =
+    useCallback(
+      async (changes) => {
+        if (!currentUserId) {
+          return {
+            success: false,
+            message:
+              "No hay una sesión activa.",
+          };
+        }
+
+        const nextRegional = {
+          language:
+            normalizeLanguage(
+              changes?.language ??
+                settings.language
+            ),
+
+          region:
+            normalizeRegion(
+              changes?.region ??
+                settings.region
+            ),
+
+          currency:
+            normalizeCurrency(
+              changes?.currency ??
+                settings.currency
+            ),
+
+          timezone:
+            normalizeTimeZone(
+              changes?.timezone ??
+                settings.timezone
+            ),
+
+          timeFormat:
+            normalizeTimeFormat(
+              changes?.timeFormat ??
+                settings.timeFormat
+            ),
+        };
+
+        const {
+          error,
+        } =
+          await supabase.rpc(
+            "update_my_regional_preferences",
+            {
+              p_language:
+                nextRegional.language,
+              p_region:
+                nextRegional.region,
+              p_currency:
+                nextRegional.currency,
+              p_timezone:
+                nextRegional.timezone,
+              p_time_format:
+                nextRegional.timeFormat,
+            }
+          );
+
+        if (error) {
+          const errorText =
+            [
+              error?.message,
+              error?.details,
+              error?.hint,
+              error?.code,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toUpperCase();
+
+          if (
+            errorText.includes(
+              "PGRST202"
+            ) ||
+            errorText.includes(
+              "UPDATE_MY_REGIONAL_PREFERENCES"
+            )
+          ) {
+            return {
+              success: false,
+              message:
+                "Falta ejecutar la migración regional 016 en Supabase.",
+            };
+          }
+
+          if (
+            errorText.includes(
+              "INVALID_TIMEZONE"
+            )
+          ) {
+            return {
+              success: false,
+              message:
+                "La zona horaria seleccionada no es válida.",
+            };
+          }
+
+          if (
+            errorText.includes(
+              "ACCOUNT_NOT_ACTIVE"
+            )
+          ) {
+            return {
+              success: false,
+              message:
+                "La cuenta no está habilitada para modificar preferencias.",
+            };
+          }
+
+          console.error(
+            "No se pudo guardar la configuración regional:",
+            error
+          );
+
+          return {
+            success: false,
+            message:
+              "No se pudo actualizar la configuración regional.",
+          };
+        }
+
+        setSettings(
+          (
+            currentSettings
+          ) => ({
+            ...currentSettings,
+            ...nextRegional,
+          })
+        );
+
+        if (
+          typeof refreshCurrentUser ===
+          "function"
+        ) {
+          await refreshCurrentUser();
+        }
+
+        return {
+          success: true,
+          message:
+            "Configuración regional actualizada correctamente.",
+        };
+      },
+      [
+        currentUserId,
+        refreshCurrentUser,
+        settings.currency,
+        settings.language,
+        settings.region,
+        settings.timeFormat,
+        settings.timezone,
+      ]
+    );
+
   useEffect(() => {
     document.documentElement.lang =
       settings.language ||
@@ -7271,6 +7429,7 @@ const syncStatus =
     updateExpenseCategory,
 
     updateSettings,
+    updateRegionalSettings,
 
     clearIncomes,
     clearExpenses,
@@ -7338,6 +7497,7 @@ const syncStatus =
     updateExpenseCategory,
 
     updateSettings,
+    updateRegionalSettings,
 
     clearIncomes,
     clearExpenses,

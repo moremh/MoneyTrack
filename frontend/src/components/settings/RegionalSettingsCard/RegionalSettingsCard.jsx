@@ -18,7 +18,7 @@ import styles from "./RegionalSettingsCard.module.css";
 
 function RegionalSettingsCard({
   settings,
-  updateSettings,
+  updateRegionalSettings,
   disabled = false,
 }) {
   const [language, setLanguage] = useState(settings?.language || "es");
@@ -94,13 +94,14 @@ function RegionalSettingsCard({
     setFeedback(null);
 
     try {
-      const result = await updateSettings({
-        language,
-        region,
-        currency,
-        timezone,
-        timeFormat,
-      });
+      const result =
+        await updateRegionalSettings({
+          language,
+          region,
+          currency,
+          timezone,
+          timeFormat,
+        });
 
       setFeedback({
         type: result?.success ? "success" : "error",
@@ -174,8 +175,10 @@ function RegionalSettingsCard({
               ))}
             </select>
             <small>
-              La base queda preparada para Español, English e Italiano. La
-              traducción completa de toda la interfaz se hará en la siguiente etapa.
+              Idiomas adicionales: Próximamente. La configuración regional, moneda, zona horaria y formato de hora ya están disponibles.
+            </small>
+            <small>
+              Idiomas adicionales: Próximamente. La configuración regional, moneda, zona horaria y formato de hora ya están disponibles.
             </small>
           </label>
 
@@ -208,8 +211,8 @@ function RegionalSettingsCard({
               ))}
             </select>
             <small>
-              Cambiar la moneda no convierte importes históricos. Por ahora guarda
-              la moneda principal elegida para la cuenta.
+              Cambiar la moneda no convierte importes históricos. Define cómo se
+              muestran e interpretan los montos financieros de la cuenta.
             </small>
           </label>
 

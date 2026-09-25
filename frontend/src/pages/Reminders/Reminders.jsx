@@ -16,6 +16,11 @@ import {
   getLocalToday,
 } from "../../utils/dateUtils";
 
+import {
+  formatRegionalDate,
+  formatRegionalTime,
+} from "../../utils/regionalSettings";
+
 import styles from "./Reminders.module.css";
 
 const EMPTY_FORM = {
@@ -123,6 +128,7 @@ const getReminderTiming = (
 function Reminders() {
   const {
     goals,
+    settings,
   } = useContext(
     FinanceContext
   );
@@ -981,21 +987,19 @@ function Reminders() {
                     >
                       <span>
                         <i className="bi bi-calendar3"></i>
-                        {formatDate(
+                        {formatRegionalDate(
                           reminder
-                            .reminderDate
+                            .reminderDate,
+                          settings
                         )}
                       </span>
 
                       <span>
                         <i className="bi bi-clock"></i>
-                        {String(
+                        {formatRegionalTime(
                           reminder
-                            .reminderTime ||
-                            ""
-                        ).slice(
-                          0,
-                          5
+                            .reminderTime,
+                          settings
                         )}
                       </span>
 

@@ -1,129 +1,244 @@
-const GROUP_SEPARATOR = ".";
-const DECIMAL_SEPARATOR = ",";
+import {
+  getLocale,
+} from "./regionalSettings";
+
 const MAX_DECIMAL_DIGITS = 2;
 
-function countCharacter(value, character) {
-  return String(value)
-    .split(character)
-    .length - 1;
-}
+const getSeparators = (
+  settings = {}
+) => {
+  const locale =
+    getLocale(
+      settings.language,
+      settings.region
+    );
+
+  try {
+    const parts =
+      new Intl.NumberFormat(
+        locale,
+        {
+          useGrouping: true,
+          minimumFractionDigits: 1,
+        }
+      ).formatToParts(
+        1000.1
+      );
+
+    return {
+      locale,
+      group:
+        parts.find(
+          (part) =>
+            part.type === "group"
+        )?.value || ".",
+      decimal:
+        parts.find(
+          (part) =>
+            part.type === "decimal"
+        )?.value || ",",
+    };
+  } catch {
+    return {
+      locale: "es-AR",
+      group: ".",
+      decimal: ",",
+    };
+  }
+};
+
+const escapeRegExp = (
+  value
+) =>
+  String(value).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
 
 export function formatAmountInput(
   nextValue,
-  previousValue = ""
+  previousValue = "",
+  settings = {}
 ) {
-  let cleanValue = String(
-    nextValue ?? ""
-  )
-    .replace(/\s/g, "")
-    .replace(/[^\d.,]/g, "");
+  const {
+    group,
+    decimal,
+  } = getSeparators(
+    settings
+  );
+
+  let cleanValue =
+    String(
+      nextValue ?? ""
+    )
+      .replace(/\s/g, "")
+      .replace(/[^\d.,]/g, "");
 
   if (!cleanValue) {
     return "";
   }
 
-  const nextDotCount =
-    countCharacter(
-      cleanValue,
-      GROUP_SEPARATOR
+  const alternateDecimal =
+    decimal === ","
+      ? "."
+      : ",";
+
+  let decimalIndex =
+    cleanValue.lastIndexOf(
+      decimal
     );
 
-  const previousDotCount =
-    countCharacter(
-      previousValue,
-      GROUP_SEPARATOR
-    );
+  if (
+    decimalIndex < 0
+  ) {
+    const alternateIndex =
+      cleanValue.lastIndexOf(
+        alternateDecimal
+      );
 
-  const typedDecimalPoint =
-    !cleanValue.includes(
-      DECIMAL_SEPARATOR
-    ) &&
-    cleanValue.endsWith(
-      GROUP_SEPARATOR
-    ) &&
-    nextDotCount >
-      previousDotCount;
+    if (
+      alternateIndex >= 0
+    ) {
+      const digitsAfter =
+        cleanValue.length -
+        alternateIndex -
+        1;
 
-  if (typedDecimalPoint) {
-    cleanValue = `${cleanValue.slice(
-      0,
-      -1
-    )}${DECIMAL_SEPARATOR}`;
+      const previousHadGroup =
+        String(
+          previousValue || ""
+        ).includes(
+          alternateDecimal
+        );
+
+      if (
+        digitsAfter <=
+          MAX_DECIMAL_DIGITS &&
+        (
+          cleanValue.endsWith(
+            alternateDecimal
+          ) ||
+          !previousHadGroup
+        )
+      ) {
+        decimalIndex =
+          alternateIndex;
+      }
+    }
   }
 
-  const decimalSeparatorIndex =
-    cleanValue.indexOf(
-      DECIMAL_SEPARATOR
-    );
-
-  const hasDecimalSeparator =
-    decimalSeparatorIndex >= 0;
-
-  const rawIntegerPart =
-    hasDecimalSeparator
+  const integerSource =
+    decimalIndex >= 0
       ? cleanValue.slice(
           0,
-          decimalSeparatorIndex
+          decimalIndex
         )
       : cleanValue;
 
-  const rawDecimalPart =
-    hasDecimalSeparator
+  const decimalSource =
+    decimalIndex >= 0
       ? cleanValue.slice(
-          decimalSeparatorIndex + 1
+          decimalIndex + 1
         )
       : "";
 
-  let integerPart =
-    rawIntegerPart
+  let integerDigits =
+    integerSource
       .replace(/[.,]/g, "")
-      .replace(/^0+(?=\d)/, "");
+      .replace(
+        /^0+(?=\d)/,
+        ""
+      );
 
-  const decimalPart =
-    rawDecimalPart
+  if (
+    !integerDigits &&
+    decimalIndex >= 0
+  ) {
+    integerDigits = "0";
+  }
+
+  const decimalDigits =
+    decimalSource
       .replace(/\D/g, "")
       .slice(
         0,
         MAX_DECIMAL_DIGITS
       );
 
-  if (
-    !integerPart &&
-    hasDecimalSeparator
-  ) {
-    integerPart = "0";
-  }
-
   const formattedInteger =
-    integerPart.replace(
+    integerDigits.replace(
       /\B(?=(\d{3})+(?!\d))/g,
-      GROUP_SEPARATOR
+      group
     );
 
-  if (hasDecimalSeparator) {
-    return `${formattedInteger}${DECIMAL_SEPARATOR}${decimalPart}`;
+  if (
+    decimalIndex >= 0
+  ) {
+    return (
+      `${formattedInteger}` +
+      `${decimal}` +
+      `${decimalDigits}`
+    );
   }
 
   return formattedInteger;
 }
 
-export function parseAmountInput(value) {
-  const cleanValue = String(
-    value ?? ""
-  ).trim();
+export function parseAmountInput(
+  value,
+  settings = {}
+) {
+  const cleanValue =
+    String(
+      value ?? ""
+    ).trim();
 
   if (!cleanValue) {
     return Number.NaN;
   }
 
+  const {
+    group,
+    decimal,
+  } = getSeparators(
+    settings
+  );
+
+  const groupRegex =
+    new RegExp(
+      escapeRegExp(
+        group
+      ),
+      "g"
+    );
+
+  const decimalRegex =
+    new RegExp(
+      escapeRegExp(
+        decimal
+      ),
+      "g"
+    );
+
   const normalizedValue =
     cleanValue
-      .replace(/\./g, "")
-      .replace(",", ".");
+      .replace(
+        groupRegex,
+        ""
+      )
+      .replace(
+        decimalRegex,
+        "."
+      )
+      .replace(
+        /[^\d.-]/g,
+        ""
+      );
 
-  const numericValue = Number(
-    normalizedValue
-  );
+  const numericValue =
+    Number(
+      normalizedValue
+    );
 
   return Number.isFinite(
     numericValue
@@ -132,7 +247,10 @@ export function parseAmountInput(value) {
     : Number.NaN;
 }
 
-export function formatStoredAmount(value) {
+export function formatStoredAmount(
+  value,
+  settings = {}
+) {
   if (
     value === "" ||
     value === null ||
@@ -141,7 +259,8 @@ export function formatStoredAmount(value) {
     return "";
   }
 
-  const numericValue = Number(value);
+  const numericValue =
+    Number(value);
 
   if (
     !Number.isFinite(
@@ -151,8 +270,14 @@ export function formatStoredAmount(value) {
     return "";
   }
 
+  const locale =
+    getLocale(
+      settings.language,
+      settings.region
+    );
+
   return numericValue.toLocaleString(
-    "es-AR",
+    locale,
     {
       useGrouping: true,
       maximumFractionDigits:
@@ -162,10 +287,14 @@ export function formatStoredAmount(value) {
 }
 
 export function normalizeAmountOnBlur(
-  value
+  value,
+  settings = {}
 ) {
   const numericValue =
-    parseAmountInput(value);
+    parseAmountInput(
+      value,
+      settings
+    );
 
   if (
     !Number.isFinite(
@@ -176,6 +305,7 @@ export function normalizeAmountOnBlur(
   }
 
   return formatStoredAmount(
-    numericValue
+    numericValue,
+    settings
   );
 }

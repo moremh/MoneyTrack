@@ -1,4 +1,8 @@
 import {
+  formatRegionalCurrency,
+} from "../../../utils/regionalSettings";
+
+import {
   ResponsiveContainer,
   LineChart,
   Line,
@@ -307,6 +311,7 @@ function BalanceChart({
   mode = "monthly",
   fromDate = "",
   toDate = "",
+  settings = {},
 }) {
   const data =
     mode === "daily"
@@ -359,7 +364,10 @@ function BalanceChart({
 
           <Tooltip
             formatter={(value) =>
-              `$ ${Number(value).toLocaleString("es-AR")}`
+              formatRegionalCurrency(
+                value,
+                settings
+              )
             }
             labelFormatter={(value) =>
               mode === "daily"

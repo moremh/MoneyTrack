@@ -17,6 +17,50 @@ type ReminderRow = {
   notified_at: string | null;
 };
 
+type UserLanguage =
+  | "es"
+  | "en"
+  | "it";
+
+const PUSH_COPY = {
+  es: {
+    reminderFor:
+      (time: string) =>
+        `Recordatorio para las ${time}.`,
+    action: "Abrir",
+  },
+  en: {
+    reminderFor:
+      (time: string) =>
+        `Reminder for ${time}.`,
+    action: "Open",
+  },
+  it: {
+    reminderFor:
+      (time: string) =>
+        `Promemoria per le ${time}.`,
+    action: "Apri",
+  },
+};
+
+const normalizeLanguage = (
+  value: unknown,
+): UserLanguage => {
+  const language =
+    String(value || "")
+      .trim()
+      .toLowerCase();
+
+  if (
+    language === "en" ||
+    language === "it"
+  ) {
+    return language;
+  }
+
+  return "es";
+};
+
 type PushSubscriptionRow = {
   id: string;
   user_id: string;
@@ -455,6 +499,42 @@ Deno.serve(
 
         const {
           data:
+            profileRow,
+          error:
+            profileError,
+        } = await supabase
+          .from(
+            "profiles",
+          )
+          .select(
+            "language",
+          )
+          .eq(
+            "id",
+            reminder.user_id,
+          )
+          .maybeSingle();
+
+        if (profileError) {
+          console.error(
+            "Could not load reminder language",
+            reminder.id,
+            profileError,
+          );
+        }
+
+        const profileLanguage =
+          normalizeLanguage(
+            profileRow?.language,
+          );
+
+        const pushCopy =
+          PUSH_COPY[
+            profileLanguage
+          ];
+
+        const {
+          data:
             subscriptionRows,
           error:
             subscriptionsError,
@@ -562,9 +642,17 @@ Deno.serve(
 
             body:
               reminder.description ||
-              `Recordatorio para las ${normalizeTime(
-                reminder.reminder_time,
-              )}.`,
+              pushCopy.reminderFor(
+                normalizeTime(
+                  reminder.reminder_time,
+                ),
+              ),
+
+            actionTitle:
+              pushCopy.action,
+
+            language:
+              profileLanguage,
 
             icon:
               "/pwa-192x192.png",

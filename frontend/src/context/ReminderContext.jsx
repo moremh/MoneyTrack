@@ -1,4 +1,8 @@
 import {
+  translateStoredText,
+} from "../i18n/translationCatalog";
+
+import {
   createContext,
   createElement,
   useCallback,
@@ -399,7 +403,9 @@ const showBrowserReminderNotification =
 
     const body =
       reminder.description ||
-      `Recordatorio para las ${reminder.reminderTime}.`;
+      translateStoredText(
+        `Recordatorio para las ${reminder.reminderTime}.`
+      );
 
     const options = {
       body,
