@@ -30,6 +30,11 @@ const sidebarMenu = [
     icon: "bi bi-bell",
   },
   {
+    title: "Cobros y pagos",
+    path: "/debts",
+    icon: "bi bi-arrow-left-right",
+  },
+  {
     title: "Reportes",
     path: "/reports",
     icon: "bi bi-bar-chart",

@@ -64,6 +64,8 @@ const REMINDER_FIELDS = `
   recurrence,
   recurrence_end_date,
   related_goal_id,
+  related_debt_id,
+  related_installment_id,
   status,
   is_read,
   notified_at,
@@ -76,6 +78,7 @@ const VALID_TYPES = [
   "general",
   "payment",
   "goal",
+  "debt",
   "custom",
 ];
 
@@ -519,6 +522,14 @@ const mapReminder = (reminder) => ({
     reminder.related_goal_id ||
     null,
 
+  relatedDebtId:
+    reminder.related_debt_id ||
+    null,
+
+  relatedInstallmentId:
+    reminder.related_installment_id ||
+    null,
+
   status:
     reminder.status ||
     "pending",
@@ -563,6 +574,14 @@ const getErrorMessage = (
     )
   ) {
     return "El objetivo seleccionado no pertenece a esta cuenta.";
+  }
+
+  if (
+    content.includes(
+      "REMINDER_DEBT_NOT_OWNED_BY_USER"
+    )
+  ) {
+    return "La cuenta vinculada no pertenece a esta sesión.";
   }
 
   if (
@@ -776,6 +795,20 @@ const validateReminder = (
       ?.related_goal_id ||
     null;
 
+  const relatedDebtId =
+    reminder
+      ?.relatedDebtId ||
+    reminder
+      ?.related_debt_id ||
+    null;
+
+  const relatedInstallmentId =
+    reminder
+      ?.relatedInstallmentId ||
+    reminder
+      ?.related_installment_id ||
+    null;
+
   return {
     success: true,
 
@@ -805,6 +838,12 @@ const validateReminder = (
 
       related_goal_id:
         relatedGoalId || null,
+
+      related_debt_id:
+        relatedDebtId || null,
+
+      related_installment_id:
+        relatedInstallmentId || null,
     },
   };
 };

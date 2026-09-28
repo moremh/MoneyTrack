@@ -19,6 +19,7 @@ import Expenses from "../pages/Expenses/Expenses";
 import Categories from "../pages/Categories/Categories";
 import Goals from "../pages/Goals/Goals";
 import Reminders from "../pages/Reminders/Reminders";
+import Debts from "../pages/Debts/Debts";
 import Reports from "../pages/Reports/Reports";
 import Settings from "../pages/Settings/Settings";
 import Plans from "../pages/Plans/Plans";
@@ -82,6 +83,13 @@ function AppRouter() {
               path="/reminders"
               element={
                 <Reminders />
+              }
+            />
+
+            <Route
+              path="/debts"
+              element={
+                <Debts />
               }
             />
 
