@@ -10,6 +10,9 @@ type ReminderRow = {
   user_id: string;
   title: string;
   description: string | null;
+  type: string;
+  related_debt_id: string | null;
+  related_installment_id: string | null;
   reminder_date: string;
   reminder_time: string;
   timezone: string;
@@ -373,7 +376,7 @@ Deno.serve(
       } = await supabase
         .from("reminders")
         .select(
-          "id,user_id,title,description,reminder_date,reminder_time,timezone,status,notified_at",
+          "id,user_id,title,description,type,related_debt_id,related_installment_id,reminder_date,reminder_time,timezone,status,notified_at",
         )
         .eq(
           "status",
@@ -475,7 +478,7 @@ Deno.serve(
             null,
           )
           .select(
-            "id,user_id,title,description,reminder_date,reminder_time,timezone,status,notified_at",
+            "id,user_id,title,description,type,related_debt_id,related_installment_id,reminder_date,reminder_time,timezone,status,notified_at",
           )
           .maybeSingle();
 
@@ -635,6 +638,21 @@ Deno.serve(
         let temporaryFailureForReminder =
           0;
 
+        const targetUrl =
+          reminder.type ===
+            "debt" &&
+          reminder.related_debt_id
+            ? `/debts?debt=${encodeURIComponent(
+                reminder.related_debt_id,
+              )}${
+                reminder.related_installment_id
+                  ? `&installment=${encodeURIComponent(
+                      reminder.related_installment_id,
+                    )}`
+                  : ""
+              }`
+            : "/reminders";
+
         const payload =
           JSON.stringify({
             title:
@@ -677,7 +695,7 @@ Deno.serve(
 
             data: {
               url:
-                "/reminders",
+                targetUrl,
 
               reminderId:
                 reminder.id,

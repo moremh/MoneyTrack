@@ -38,6 +38,7 @@ const TYPE_LABELS = {
   general: "General",
   payment: "Pago",
   goal: "Objetivo",
+  debt: "Cobro / pago",
   custom: "Personalizado",
 };
 
@@ -45,6 +46,7 @@ const TYPE_ICONS = {
   general: "bi bi-bell",
   payment: "bi bi-credit-card",
   goal: "bi bi-bullseye",
+  debt: "bi bi-arrow-left-right",
   custom: "bi bi-stars",
 };
 

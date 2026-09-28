@@ -32,6 +32,7 @@ const REMINDER_TYPE_LABELS = {
   general: "General",
   payment: "Pago",
   goal: "Objetivo",
+  debt: "Cobro / pago",
   custom: "Personalizado",
 };
 
