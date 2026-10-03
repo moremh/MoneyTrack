@@ -1,6 +1,7 @@
 import { useContext } from "react";
 
 import { FinanceContext } from "../../../context/FinanceContext";
+import { AccountContext } from "../../../context/AccountContext";
 
 import {
   getCategoryDisplayColor,
@@ -24,6 +25,28 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
 
   const settings =
     financeContext?.settings || {};
+
+  const accountContext =
+    useContext(AccountContext);
+
+  const accounts =
+    accountContext?.accounts || [];
+
+  const getAccountName = (
+    item
+  ) => {
+    if (!item?.accountId) {
+      return null;
+    }
+
+    return (
+      accounts.find(
+        (account) =>
+          account.id ===
+          item.accountId
+      )?.name || "Cuenta"
+    );
+  };
 
   const findCategory = (item) => {
     if (item.categoryId) {
@@ -59,6 +82,7 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
           <tr>
             <th>Descripción</th>
             <th>Categoría</th>
+            <th>Cuenta</th>
             <th>Fecha</th>
             <th>Monto</th>
             <th></th>
@@ -112,6 +136,31 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
                         "General"}
                     </span>
                   </span>
+                </td>
+
+                <td>
+                  {getAccountName(item) ? (
+                    <span
+                      className={
+                        styles.accountBadge
+                      }
+                    >
+                      <i className="bi bi-wallet2"></i>
+                      <span>
+                        {getAccountName(
+                          item
+                        )}
+                      </span>
+                    </span>
+                  ) : (
+                    <span
+                      className={
+                        styles.noAccount
+                      }
+                    >
+                      Sin cuenta
+                    </span>
+                  )}
                 </td>
 
                 <td>

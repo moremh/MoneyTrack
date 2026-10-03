@@ -6,6 +6,7 @@ import App from "./App";
 
 import AuthProvider from "./context/AuthContext";
 import FinanceProvider from "./context/FinanceContext";
+import AccountProvider from "./context/AccountContext";
 import ReminderProvider from "./context/ReminderContext";
 import I18nProvider from "./context/I18nContext";
 
@@ -89,13 +90,15 @@ ReactDOM.createRoot(
 ).render(
   <React.StrictMode>
     <AuthProvider>
-      <FinanceProvider>
-        <I18nProvider>
+      <AccountProvider>
+        <FinanceProvider>
+          <I18nProvider>
           <ReminderProvider>
             <App />
           </ReminderProvider>
-        </I18nProvider>
-      </FinanceProvider>
+          </I18nProvider>
+        </FinanceProvider>
+      </AccountProvider>
     </AuthProvider>
   </React.StrictMode>
 );

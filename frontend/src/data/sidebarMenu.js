@@ -15,6 +15,11 @@ const sidebarMenu = [
     icon: "bi bi-arrow-down-circle",
   },
   {
+    title: "Cuentas",
+    path: "/accounts",
+    icon: "bi bi-wallet2",
+  },
+  {
     title: "Categorías",
     path: "/categories",
     icon: "bi bi-tags",
