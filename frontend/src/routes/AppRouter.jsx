@@ -16,6 +16,7 @@ import Register from "../pages/Register/Register";
 import Dashboard from "../pages/Dashboard/Dashboard";
 import Income from "../pages/Income/Income";
 import Expenses from "../pages/Expenses/Expenses";
+import Accounts from "../pages/Accounts/Accounts";
 import Categories from "../pages/Categories/Categories";
 import Goals from "../pages/Goals/Goals";
 import Reminders from "../pages/Reminders/Reminders";
@@ -64,6 +65,13 @@ function AppRouter() {
               path="/expenses"
               element={
                 <Expenses />
+              }
+            />
+
+            <Route
+              path="/accounts"
+              element={
+                <Accounts />
               }
             />
 

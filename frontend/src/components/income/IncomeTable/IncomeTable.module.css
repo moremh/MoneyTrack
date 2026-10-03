@@ -99,3 +99,29 @@
   background: #2563eb;
   border-radius: 10px;
 }
+
+
+.accountBadge {
+  max-width: 170px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.accountBadge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noAccount {
+  color: var(--text-light);
+  font-size: 0.8rem;
+}

@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import { FinanceContext } from "../../context/FinanceContext";
+import { AccountContext } from "../../context/AccountContext";
 import {
   useI18n,
 } from "../../context/I18nContext";
@@ -67,24 +68,102 @@ function Reports() {
     FinanceContext
   );
 
+  const {
+    accounts = [],
+    transfers = [],
+  } =
+    useContext(AccountContext) || {};
+
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [
+    accountFilter,
+    setAccountFilter,
+  ] = useState("");
 
   const filteredIncomes = useMemo(() => {
     return incomes.filter((item) => {
       if (fromDate && item.date < fromDate) return false;
       if (toDate && item.date > toDate) return false;
+
+      if (
+        accountFilter === "__none__" &&
+        item.accountId
+      ) {
+        return false;
+      }
+
+      if (
+        accountFilter &&
+        accountFilter !== "__none__" &&
+        item.accountId !== accountFilter
+      ) {
+        return false;
+      }
+
       return true;
     });
-  }, [incomes, fromDate, toDate]);
+  }, [
+    incomes,
+    fromDate,
+    toDate,
+    accountFilter,
+  ]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((item) => {
       if (fromDate && item.date < fromDate) return false;
       if (toDate && item.date > toDate) return false;
+
+      if (
+        accountFilter === "__none__" &&
+        item.accountId
+      ) {
+        return false;
+      }
+
+      if (
+        accountFilter &&
+        accountFilter !== "__none__" &&
+        item.accountId !== accountFilter
+      ) {
+        return false;
+      }
+
       return true;
     });
-  }, [expenses, fromDate, toDate]);
+  }, [
+    expenses,
+    fromDate,
+    toDate,
+    accountFilter,
+  ]);
+
+  const filteredTransfers = useMemo(() => {
+    return transfers.filter((item) => {
+      if (fromDate && item.date < fromDate) return false;
+      if (toDate && item.date > toDate) return false;
+
+      if (accountFilter === "__none__") {
+        return false;
+      }
+
+      if (
+        accountFilter &&
+        item.fromAccountId !== accountFilter &&
+        item.toAccountId !== accountFilter
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [
+    transfers,
+    fromDate,
+    toDate,
+    accountFilter,
+  ]);
 
   const totalIncome = filteredIncomes.reduce(
     (acc, item) => acc + Number(item.amount),
@@ -155,6 +234,7 @@ function Reports() {
   const clearFilters = () => {
     setFromDate("");
     setToDate("");
+    setAccountFilter("");
   };
 
   const formatCurrency =
@@ -171,6 +251,20 @@ function Reports() {
         settings
       );
 
+  const getAccountName =
+    (accountId) => {
+      if (!accountId) {
+        return "Sin cuenta";
+      }
+
+      return (
+        accounts.find(
+          (account) =>
+            account.id === accountId
+        )?.name || "Cuenta"
+      );
+    };
+
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new();
 
@@ -181,11 +275,13 @@ function Reports() {
       { Métrica: t("Gastos del período"), Valor: totalExpenses },
       { Métrica: t("Balance del período"), Valor: balance },
       { Métrica: t("Movimientos analizados"), Valor: totalMovements },
+      { Métrica: "Transferencias internas", Valor: filteredTransfers.length },
     ];
 
     const incomesData = filteredIncomes.map((item) => ({
       Descripción: item.description,
       Categoría: item.category || "General",
+      Cuenta: getAccountName(item.accountId),
       Fecha: formatDate(item.date),
       Monto: Number(item.amount),
     }));
@@ -193,8 +289,17 @@ function Reports() {
     const expensesData = filteredExpenses.map((item) => ({
       Descripción: item.description,
       Categoría: item.category || "General",
+      Cuenta: getAccountName(item.accountId),
       Fecha: formatDate(item.date),
       Monto: Number(item.amount),
+    }));
+
+    const transfersData = filteredTransfers.map((item) => ({
+      Desde: getAccountName(item.fromAccountId),
+      Hacia: getAccountName(item.toAccountId),
+      Fecha: formatDate(item.date),
+      Monto: Number(item.amount),
+      Nota: item.notes || "",
     }));
 
     const categoriesData = expenseCategoriesData.map((item) => ({
@@ -211,6 +316,7 @@ function Reports() {
     const summarySheet = XLSX.utils.json_to_sheet(summaryData);
     const incomesSheet = XLSX.utils.json_to_sheet(incomesData);
     const expensesSheet = XLSX.utils.json_to_sheet(expensesData);
+    const transfersSheet = XLSX.utils.json_to_sheet(transfersData);
     const categoriesSheet = XLSX.utils.json_to_sheet(categoriesData);
     const monthlySheet = XLSX.utils.json_to_sheet(monthlySheetData);
 
@@ -218,14 +324,23 @@ function Reports() {
     incomesSheet["!cols"] = [
       { wch: 28 },
       { wch: 20 },
+      { wch: 20 },
       { wch: 14 },
       { wch: 16 },
     ];
     expensesSheet["!cols"] = [
       { wch: 28 },
       { wch: 20 },
+      { wch: 20 },
       { wch: 14 },
       { wch: 16 },
+    ];
+    transfersSheet["!cols"] = [
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 30 },
     ];
     categoriesSheet["!cols"] = [{ wch: 24 }, { wch: 18 }];
     monthlySheet["!cols"] = [
@@ -237,6 +352,7 @@ function Reports() {
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Resumen");
     XLSX.utils.book_append_sheet(workbook, incomesSheet, "Ingresos");
     XLSX.utils.book_append_sheet(workbook, expensesSheet, "Gastos");
+    XLSX.utils.book_append_sheet(workbook, transfersSheet, "Transferencias");
     XLSX.utils.book_append_sheet(workbook, categoriesSheet, "Categorias");
     XLSX.utils.book_append_sheet(workbook, monthlySheet, "Mensual");
 
@@ -379,16 +495,17 @@ function Reports() {
 
     autoTable(doc, {
       startY: 36,
-      head: [[t("Descripción"), t("Categoría"), t("Fecha"), t("Monto")]],
+      head: [[t("Descripción"), t("Categoría"), "Cuenta", t("Fecha"), t("Monto")]],
       body:
         filteredIncomes.length > 0
           ? filteredIncomes.map((item) => [
               item.description,
               item.category || "General",
+              getAccountName(item.accountId),
               formatDate(item.date),
               formatCurrency(item.amount),
             ])
-          : [[t("Sin ingresos"), "-", "-", "-"]],
+          : [[t("Sin ingresos"), "-", "-", "-", "-"]],
       theme: "grid",
       headStyles: {
         fillColor: [34, 197, 94],
@@ -412,16 +529,17 @@ function Reports() {
 
     autoTable(doc, {
       startY: 36,
-      head: [[t("Descripción"), t("Categoría"), t("Fecha"), t("Monto")]],
+      head: [[t("Descripción"), t("Categoría"), "Cuenta", t("Fecha"), t("Monto")]],
       body:
         filteredExpenses.length > 0
           ? filteredExpenses.map((item) => [
               item.description,
               item.category || "General",
+              getAccountName(item.accountId),
               formatDate(item.date),
               formatCurrency(item.amount),
             ])
-          : [[t("Sin gastos"), "-", "-", "-"]],
+          : [[t("Sin gastos"), "-", "-", "-", "-"]],
       theme: "grid",
       headStyles: {
         fillColor: [239, 68, 68],
@@ -439,6 +557,33 @@ function Reports() {
         cellPadding: 4,
       },
     });
+
+    if (filteredTransfers.length > 0) {
+      doc.addPage();
+      addPdfHeader(doc, "Transferencias internas");
+
+      autoTable(doc, {
+        startY: 36,
+        head: [["Desde", "Hacia", "Fecha", "Monto", "Nota"]],
+        body: filteredTransfers.map((item) => [
+          getAccountName(item.fromAccountId),
+          getAccountName(item.toAccountId),
+          formatDate(item.date),
+          formatCurrency(item.amount),
+          item.notes || "-",
+        ]),
+        theme: "grid",
+        headStyles: {
+          fillColor: [37, 99, 235],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+        },
+      });
+    }
 
     addPdfFooter(doc);
     doc.save("reporte-moneytrack.pdf");
@@ -473,6 +618,32 @@ function Reports() {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
             />
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label>Cuenta</label>
+            <select
+              className={styles.filterInput}
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+            >
+              <option value="">
+                Todas las cuentas
+              </option>
+
+              <option value="__none__">
+                Sin cuenta
+              </option>
+
+              {accounts.map((account) => (
+                <option
+                  key={account.id}
+                  value={account.id}
+                >
+                  {account.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className={styles.filterActions}>
@@ -524,6 +695,11 @@ function Reports() {
         <article className={styles.summaryCard}>
           <span className={styles.label}>Movimientos analizados</span>
           <h3 className={styles.value}>{totalMovements}</h3>
+        </article>
+
+        <article className={styles.summaryCard}>
+          <span className={styles.label}>Transferencias internas</span>
+          <h3 className={styles.value}>{filteredTransfers.length}</h3>
         </article>
       </section>
 

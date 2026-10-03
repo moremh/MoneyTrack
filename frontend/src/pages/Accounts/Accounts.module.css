@@ -1,0 +1,836 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  color: var(--text);
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  color: var(--text);
+  font-size:
+    clamp(
+      1.8rem,
+      4vw,
+      2.35rem
+    );
+  font-weight: 800;
+}
+
+.subtitle {
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: var(--text-light);
+  line-height: 1.55;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  gap: 16px;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  border:
+    1px solid
+    var(--border);
+  border-radius:
+    var(--radius);
+  background:
+    var(--surface);
+  box-shadow:
+    var(--shadow);
+}
+
+.summaryCard span {
+  color:
+    var(--text-light);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.summaryCard strong {
+  color: var(--text);
+  font-size: 1.65rem;
+}
+
+.summaryCard small {
+  color:
+    var(--text-light);
+}
+
+.errorMessage,
+.successMessage,
+.inlineNotice,
+.transferInfo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.errorMessage {
+  color: var(--danger);
+  background:
+    color-mix(
+      in srgb,
+      var(--danger) 10%,
+      var(--surface)
+    );
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--danger) 35%,
+      var(--border)
+    );
+}
+
+.successMessage {
+  color: var(--success);
+  background:
+    color-mix(
+      in srgb,
+      var(--success) 10%,
+      var(--surface)
+    );
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--success) 35%,
+      var(--border)
+    );
+}
+
+.inlineNotice,
+.transferInfo {
+  color:
+    var(--text-light);
+  background:
+    var(--surface-soft);
+  border:
+    1px solid
+    var(--border);
+  font-weight: 600;
+}
+
+.transferInfo i {
+  color: var(--primary);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  gap: 16px;
+}
+
+.transferGrid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    minmax(0, 1fr)
+    minmax(160px, 0.7fr)
+    minmax(160px, 0.7fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.transferNotes {
+  grid-column: 1 / -1;
+}
+
+.transferArrow {
+  min-height: 46px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  font-size: 1.2rem;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.group label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.group label span {
+  color:
+    var(--text-light);
+  font-weight: 500;
+}
+
+.group input,
+.group select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border:
+    1px solid
+    var(--border);
+  border-radius: 10px;
+  outline: none;
+  background:
+    var(--surface);
+  color: var(--text);
+  transition:
+    border-color
+      var(--transition),
+    box-shadow
+      var(--transition);
+}
+
+.group input:focus,
+.group select:focus {
+  border-color:
+    var(--primary);
+  box-shadow:
+    0 0 0 3px
+    color-mix(
+      in srgb,
+      var(--primary) 15%,
+      transparent
+    );
+}
+
+.balanceHint {
+  color:
+    var(--text-light);
+  font-size: 0.78rem;
+}
+
+.formActions,
+.accountActions,
+.historyActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.primaryButton,
+.secondaryButton,
+.accountActions button,
+.historyActions button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform
+      var(--transition),
+    opacity
+      var(--transition),
+    background
+      var(--transition);
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background:
+    var(--primary);
+  color: #fff;
+}
+
+.secondaryButton {
+  background:
+    var(--neutral-button-bg);
+  color:
+    var(--neutral-button-text);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover,
+.accountActions button:hover,
+.historyActions button:hover {
+  transform:
+    translateY(-1px);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+.accountsGrid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(
+        280px,
+        1fr
+      )
+    );
+  gap: 16px;
+}
+
+.accountCard {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  padding: 18px;
+  border:
+    1px solid
+    var(--border);
+  border-radius: 16px;
+  background:
+    var(--surface-soft);
+  transition:
+    transform
+      var(--transition),
+    border-color
+      var(--transition),
+    opacity
+      var(--transition);
+}
+
+.accountCard:hover {
+  transform:
+    translateY(-2px);
+  border-color:
+    color-mix(
+      in srgb,
+      var(--primary) 40%,
+      var(--border)
+    );
+}
+
+.inactiveCard {
+  opacity: 0.72;
+}
+
+.accountHeader {
+  display: grid;
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.accountIcon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background:
+    color-mix(
+      in srgb,
+      var(--primary) 12%,
+      var(--surface)
+    );
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+
+.accountIdentity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.accountIdentity strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountIdentity span {
+  color:
+    var(--text-light);
+  font-size: 0.82rem;
+}
+
+.statusBadge,
+.kindBadge {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.activeBadge {
+  color: var(--success);
+  background:
+    color-mix(
+      in srgb,
+      var(--success) 12%,
+      var(--surface)
+    );
+}
+
+.inactiveBadge {
+  color:
+    var(--text-light);
+  background:
+    var(--surface);
+}
+
+.balanceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.balanceBlock span {
+  color:
+    var(--text-light);
+  font-size: 0.83rem;
+}
+
+.balanceBlock strong {
+  color: var(--text);
+  font-size: 1.7rem;
+}
+
+.accountMeta {
+  display: flex;
+  justify-content:
+    space-between;
+  gap: 12px;
+  color:
+    var(--text-light);
+  font-size: 0.8rem;
+}
+
+.accountMeta strong {
+  color: var(--text);
+}
+
+.notes {
+  margin: 0;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background:
+    var(--surface);
+  color:
+    var(--text-light);
+  font-size: 0.84rem;
+}
+
+.accountActions {
+  margin-top: auto;
+}
+
+.accountActions button,
+.historyActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background:
+    var(--surface);
+  color: var(--text);
+  border:
+    1px solid
+    var(--border);
+  font-size: 0.8rem;
+}
+
+.accountActions .deleteButton,
+.historyActions button:last-child {
+  color: var(--danger);
+}
+
+.historyToolbar {
+  display: flex;
+  align-items: end;
+  justify-content:
+    space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.historyToolbar .group {
+  min-width: 240px;
+}
+
+.historyCount {
+  color:
+    var(--text-light);
+  font-size: 0.85rem;
+}
+
+.historyTableWrapper {
+  width: 100%;
+  overflow: auto;
+  border-radius: 12px;
+}
+
+.historyTable {
+  width: 100%;
+  min-width: 820px;
+  border-collapse:
+    separate;
+  border-spacing: 0;
+  color: var(--text);
+}
+
+.historyTable th {
+  position: sticky;
+  top: 0;
+  padding: 12px 14px;
+  background: var(--primary);
+  color: #fff;
+  text-align: left;
+  z-index: 1;
+}
+
+.historyTable td {
+  padding: 13px 14px;
+  border-bottom:
+    1px solid
+    var(--border);
+  vertical-align: middle;
+}
+
+.historyTable tbody tr:hover {
+  background:
+    var(--surface-soft);
+}
+
+.historyTable td strong {
+  display: block;
+}
+
+.historyNote {
+  display: block;
+  margin-top: 3px;
+  color:
+    var(--text-light);
+}
+
+.incomeBadge {
+  color: var(--success);
+  background:
+    color-mix(
+      in srgb,
+      var(--success) 12%,
+      var(--surface)
+    );
+}
+
+.expenseBadge {
+  color: var(--danger);
+  background:
+    color-mix(
+      in srgb,
+      var(--danger) 12%,
+      var(--surface)
+    );
+}
+
+.transferBadge {
+  color: var(--primary);
+  background:
+    color-mix(
+      in srgb,
+      var(--primary) 12%,
+      var(--surface)
+    );
+}
+
+.historyAmount {
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.amountIncome {
+  color: var(--success);
+}
+
+.amountExpense {
+  color: var(--danger);
+}
+
+.historyActions {
+  flex-wrap: nowrap;
+}
+
+.historyActions button {
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+}
+
+.emptyState {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content:
+    center;
+  gap: 8px;
+  color:
+    var(--text-light);
+  text-align: center;
+}
+
+.emptyState i {
+  color: var(--primary);
+  font-size: 2rem;
+}
+
+.emptyState strong {
+  color: var(--text);
+}
+
+@media (max-width: 1100px) {
+  .transferGrid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .transferArrow {
+    display: none;
+  }
+
+  .transferNotes {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 820px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .formGrid,
+  .transferGrid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .transferNotes {
+    grid-column: auto;
+  }
+
+  .accountMeta,
+  .historyToolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .historyToolbar .group {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 460px) {
+  .accountHeader {
+    grid-template-columns:
+      auto minmax(0, 1fr);
+  }
+
+  .statusBadge {
+    grid-column: 1 / -1;
+  }
+
+  .accountActions {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .accountActions button {
+    justify-content: center;
+  }
+
+  .accountActions .deleteButton {
+    grid-column: 1 / -1;
+  }
+}
+
+
+.periodFilters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.presetButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.presetButtons button {
+  min-height: 40px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition);
+}
+
+.presetButtons button:hover {
+  border-color: var(--primary);
+}
+
+.presetButtons .presetActive {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.customDates {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.customDates label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-light);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.customDates input {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .periodFilters,
+  .customDates {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .presetButtons {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .presetButtons button {
+    width: 100%;
+  }
+}
+
+
+.balanceVisibilityOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+.balanceVisibilityOption input {
+  width: 17px;
+  height: 17px;
+  margin-top: 3px;
+  accent-color: var(--primary);
+}
+
+.balanceVisibilityOption > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balanceVisibilityOption strong {
+  color: var(--text);
+}
+
+.balanceVisibilityOption small {
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
+.accountBadges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.excludedBadge {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.32);
+}

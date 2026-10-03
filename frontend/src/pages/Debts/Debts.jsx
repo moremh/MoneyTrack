@@ -9,6 +9,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 
 import { FinanceContext } from "../../context/FinanceContext";
+import { AccountContext } from "../../context/AccountContext";
 import { useAuth } from "../../context/AuthContext";
 import { useReminders } from "../../context/ReminderContext";
 import { supabase } from "../../lib/supabase";
@@ -102,6 +103,7 @@ const EMPTY_PAYMENT = {
   notes: "",
   registerTransaction: true,
   category: "General",
+  accountId: "",
 };
 
 const STATUS_LABELS = {
@@ -260,6 +262,11 @@ function Debts() {
     incomeCategories,
     expenseCategories,
   } = useContext(FinanceContext);
+
+  const {
+    activeAccounts = [],
+  } =
+    useContext(AccountContext) || {};
 
   const { currentUser } = useAuth();
   const { reminders, loadReminders } = useReminders();
@@ -689,6 +696,7 @@ function Debts() {
       amount: String(maxAmount),
       paymentDate: today,
       category: categories?.[0] || "General",
+      accountId: "",
     });
     setFeedback(null);
   };
@@ -773,6 +781,8 @@ function Debts() {
             : `Pago: ${paymentTarget.concept} - ${paymentTarget.personName}`,
         amount,
         category: paymentForm.category || "General",
+        accountId:
+          paymentForm.accountId || null,
         date: paymentForm.paymentDate || today,
       };
 
@@ -1731,22 +1741,48 @@ function Debts() {
                 </label>
 
                 {paymentForm.registerTransaction && (
-                  <label>
-                    <span>Categoría</span>
-                    <select
-                      name="category"
-                      value={paymentForm.category}
-                      onChange={handlePaymentChange}
-                    >
-                      {(selectedCategories || ["General"]).map(
-                        (category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        )
-                      )}
-                    </select>
-                  </label>
+                  <>
+                    <label>
+                      <span>Categoría</span>
+                      <select
+                        name="category"
+                        value={paymentForm.category}
+                        onChange={handlePaymentChange}
+                      >
+                        {(selectedCategories || ["General"]).map(
+                          (category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Cuenta (opcional)</span>
+                      <select
+                        name="accountId"
+                        value={paymentForm.accountId}
+                        onChange={handlePaymentChange}
+                      >
+                        <option value="">
+                          Sin cuenta
+                        </option>
+
+                        {activeAccounts.map(
+                          (account) => (
+                            <option
+                              key={account.id}
+                              value={account.id}
+                            >
+                              {account.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+                  </>
                 )}
               </div>
 

@@ -9,6 +9,8 @@ import {
   FREE_LIMIT_ERROR_CODE,
 } from "../../../context/FinanceContext";
 
+import { AccountContext } from "../../../context/AccountContext";
+
 import {
   getLocalToday,
   isValidDateString,
@@ -41,6 +43,12 @@ function IncomeForm({
     settings,
   } = useContext(FinanceContext);
 
+  const {
+    accounts = [],
+    activeAccounts = [],
+  } =
+    useContext(AccountContext) || {};
+
   const categories =
     type === "expense"
       ? expenseCategories
@@ -62,6 +70,11 @@ function IncomeForm({
 
   const [date, setDate] =
     useState("");
+
+  const [
+    accountId,
+    setAccountId,
+  ] = useState("");
 
   const [
     errorMessage,
@@ -91,6 +104,30 @@ function IncomeForm({
     isNewMovement &&
     movementUsage?.hasReachedLimit;
 
+  const availableAccounts =
+    [...activeAccounts];
+
+  if (
+    accountId &&
+    !availableAccounts.some(
+      (account) =>
+        account.id === accountId
+    )
+  ) {
+    const currentAccount =
+      accounts.find(
+        (account) =>
+          account.id ===
+          accountId
+      );
+
+    if (currentAccount) {
+      availableAccounts.push(
+        currentAccount
+      );
+    }
+  }
+
   useEffect(() => {
     if (initialData) {
       setDescription(
@@ -111,6 +148,11 @@ function IncomeForm({
       setDate(
         initialData.date || ""
       );
+
+      setAccountId(
+        initialData.accountId ||
+          ""
+      );
     } else {
       setDescription("");
       setAmount(
@@ -124,6 +166,7 @@ function IncomeForm({
             )
       );
       setCategory("");
+      setAccountId("");
 
       setDate(
         getLocalToday()
@@ -163,7 +206,7 @@ function IncomeForm({
       description.trim();
 
     const numericAmount =
-      parseAmountInput(amount);
+      parseAmountInput(amount, settings);
 
     if (!cleanDescription) {
       setErrorMessage(
@@ -244,6 +287,8 @@ function IncomeForm({
           numericAmount,
 
         category,
+        accountId:
+          accountId || null,
         date: cleanDate,
       });
 
@@ -281,6 +326,7 @@ function IncomeForm({
         setDescription("");
         setAmount("");
         setCategory("");
+        setAccountId("");
 
         setDate(
           getLocalToday()
@@ -436,6 +482,43 @@ function IncomeForm({
           )}
         </select>
       </div>
+
+      <div className={styles.group}>
+        <label htmlFor={`${type}-account`}>
+          Cuenta (opcional)
+        </label>
+
+        <select
+          id={`${type}-account`}
+          className={styles.input}
+          value={accountId}
+          onChange={(event) =>
+            setAccountId(
+              event.target.value
+            )
+          }
+          disabled={isSubmitting}
+        >
+          <option value="">
+            Sin cuenta
+          </option>
+
+          {availableAccounts.map(
+            (account) => (
+              <option
+                key={account.id}
+                value={account.id}
+              >
+                {account.name}
+                {!account.isActive
+                  ? " (inactiva)"
+                  : ""}
+              </option>
+            )
+          )}
+        </select>
+      </div>
+
       <div
   className={`${styles.group} ${styles.dateGroup}`}
 >

@@ -182,6 +182,7 @@ const TRANSACTION_FIELDS = `
   amount,
   category_id,
   category_name,
+  account_id,
   date,
   client_mutation_id,
   created_at,
@@ -285,6 +286,10 @@ const mapTransaction = (
   category:
     transaction.category_name ||
     UNCATEGORIZED,
+
+  accountId:
+    transaction.account_id ||
+    null,
 
   date:
     transaction.date,
@@ -1923,6 +1928,10 @@ useEffect(() => {
         movement.amount
       );
 
+    const accountId =
+      movement?.accountId ||
+      null;
+
     const now =
       new Date().toISOString();
 
@@ -1946,6 +1955,7 @@ useEffect(() => {
         description,
 
         amount,
+        accountId,
 
         categoryId:
           categoryRecord?.id ||
@@ -1953,6 +1963,8 @@ useEffect(() => {
 
         categoryName:
           cleanCategory,
+
+        accountId,
 
         date:
           validation.date,
@@ -1986,6 +1998,8 @@ useEffect(() => {
 
       category:
         cleanCategory,
+
+      accountId,
 
       date:
         validation.date,
@@ -2130,6 +2144,9 @@ useEffect(() => {
 
       category_name:
         cleanCategory,
+
+      account_id:
+        accountId,
 
       date:
         validation.date,
@@ -3092,6 +3109,49 @@ useEffect(() => {
             data = result.data;
             error = result.error;
           }
+
+          if (
+            !error &&
+            (
+              operation.action ===
+                "create" ||
+              operation.action ===
+                "update"
+            ) &&
+            Object.prototype.hasOwnProperty.call(
+              payload,
+              "accountId"
+            )
+          ) {
+            const rawTransaction =
+              Array.isArray(data)
+                ? data[0]
+                : data;
+
+            if (
+              rawTransaction?.id
+            ) {
+              const accountResult =
+                await supabase.rpc(
+                  "set_transaction_account",
+                  {
+                    p_transaction_id:
+                      rawTransaction.id,
+
+                    p_account_id:
+                      payload.accountId ||
+                      null,
+                  }
+                );
+
+              data =
+                accountResult.data;
+
+              error =
+                accountResult.error;
+            }
+          }
+
 
           if (error) {
             if (
@@ -4481,6 +4541,11 @@ useEffect(() => {
           updatedMovement.amount
         );
 
+      const accountId =
+        updatedMovement
+          ?.accountId ||
+        null;
+
       const now =
         new Date().toISOString();
 
@@ -4541,6 +4606,7 @@ useEffect(() => {
           type,
           description,
           amount,
+          accountId,
 
           categoryId:
             categoryRecord?.id ||
@@ -4634,6 +4700,7 @@ useEffect(() => {
         type,
         description,
         amount,
+        account_id: accountId,
 
         category_id:
           categoryRecord?.id ||
@@ -7248,14 +7315,31 @@ const updateGoal = useCallback(
         };
       }
 
+      /*
+       * Primero eliminamos datos que
+       * pueden referenciar cuentas.
+       * Recién después borramos las
+       * cuentas para respetar las FK.
+       */
       const [
         transactionsResult,
+        transfersResult,
         goalsResult,
         categoriesResult,
         profileResult,
       ] = await Promise.all([
         supabase
           .from("transactions")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          ),
+
+        supabase
+          .from(
+            "account_transfers"
+          )
           .delete()
           .eq(
             "user_id",
@@ -7295,6 +7379,7 @@ const updateGoal = useCallback(
 
       const firstError =
         transactionsResult.error ||
+        transfersResult.error ||
         goalsResult.error ||
         categoriesResult.error ||
         profileResult.error;
@@ -7310,7 +7395,36 @@ const updateGoal = useCallback(
         };
       }
 
+      const {
+        error:
+          accountsError,
+      } =
+        await supabase
+          .from("accounts")
+          .delete()
+          .eq(
+            "user_id",
+            currentUserId
+          );
+
+      if (accountsError) {
+        return {
+          success: false,
+          message:
+            getDatabaseErrorMessage(
+              accountsError,
+              "Se limpiaron los movimientos, pero no se pudieron eliminar las cuentas."
+            ),
+        };
+      }
+
       await loadFinanceData();
+
+      window.dispatchEvent(
+        new Event(
+          "moneytrack:accounts-changed"
+        )
+      );
 
       if (
         typeof refreshCurrentUser ===
@@ -7324,13 +7438,11 @@ const updateGoal = useCallback(
         message:
           "Los datos fueron restablecidos correctamente.",
       };
-    },
-    [
+    }, [
       currentUserId,
       loadFinanceData,
       refreshCurrentUser,
     ]);
-
 
 const syncConflictCount =
   syncConflicts.length;

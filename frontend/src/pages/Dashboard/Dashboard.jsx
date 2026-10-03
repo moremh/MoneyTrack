@@ -8,6 +8,10 @@ import {
   FinanceContext,
 } from "../../context/FinanceContext";
 
+import {
+  AccountContext,
+} from "../../context/AccountContext";
+
 import styles from "./Dashboard.module.css";
 
 import StatCard from "../../components/dashboard/StatCard/StatCard";
@@ -180,6 +184,13 @@ function Dashboard() {
     FinanceContext
   );
 
+  const {
+    accounts = [],
+    transfers = [],
+  } =
+    useContext(AccountContext) ||
+    {};
+
   const [
     fromDate,
     setFromDate,
@@ -340,6 +351,112 @@ function Dashboard() {
       toDate,
     ]);
 
+  const includedBalanceAccounts =
+    useMemo(
+      () =>
+        accounts.filter(
+          (account) =>
+            account.isActive &&
+            account.includeInBalance !==
+              false
+        ),
+      [accounts]
+    );
+
+  const includedBalanceAccountIds =
+    useMemo(
+      () =>
+        new Set(
+          includedBalanceAccounts.map(
+            (account) =>
+              account.id
+          )
+        ),
+      [includedBalanceAccounts]
+    );
+
+  const generalAccountBalance =
+    useMemo(() => {
+      let total =
+        includedBalanceAccounts.reduce(
+          (
+            accumulator,
+            account
+          ) =>
+            accumulator +
+            Number(
+              account.openingBalance ||
+                0
+            ),
+          0
+        );
+
+      incomes.forEach(
+        (movement) => {
+          if (
+            movement.accountId &&
+            includedBalanceAccountIds.has(
+              movement.accountId
+            )
+          ) {
+            total +=
+              Number(
+                movement.amount
+              ) || 0;
+          }
+        }
+      );
+
+      expenses.forEach(
+        (movement) => {
+          if (
+            movement.accountId &&
+            includedBalanceAccountIds.has(
+              movement.accountId
+            )
+          ) {
+            total -=
+              Number(
+                movement.amount
+              ) || 0;
+          }
+        }
+      );
+
+      transfers.forEach(
+        (transfer) => {
+          const amount =
+            Number(
+              transfer.amount
+            ) || 0;
+
+          if (
+            includedBalanceAccountIds.has(
+              transfer.fromAccountId
+            )
+          ) {
+            total -= amount;
+          }
+
+          if (
+            includedBalanceAccountIds.has(
+              transfer.toAccountId
+            )
+          ) {
+            total += amount;
+          }
+        }
+      );
+
+      return total;
+    }, [
+      includedBalanceAccounts,
+      includedBalanceAccountIds,
+      incomes,
+      expenses,
+      transfers,
+    ]);
+
   const totalIncome =
     filteredIncomes.reduce(
       (accumulator, item) =>
@@ -409,9 +526,7 @@ function Dashboard() {
   );
 
   const balance =
-    totalIncome -
-    totalExpenses -
-    netSavingsMovement;
+    generalAccountBalance;
 
   /*
    * El contador principal representa
@@ -1076,7 +1191,7 @@ function Dashboard() {
         }
       >
         <StatCard
-          title="Balance del período"
+          title="Saldo general"
           value={
             formatRegionalCurrency(
               balance,
