@@ -897,76 +897,6 @@ function AccountProvider({
           };
         }
 
-        const [
-          transactionResult,
-          transferResult,
-        ] =
-          await Promise.all([
-            supabase
-              .from(
-                "transactions"
-              )
-              .select("id", {
-                count: "exact",
-                head: true,
-              })
-              .eq(
-                "user_id",
-                currentUserId
-              )
-              .eq(
-                "account_id",
-                accountId
-              ),
-
-            supabase
-              .from(
-                "account_transfers"
-              )
-              .select("id", {
-                count: "exact",
-                head: true,
-              })
-              .eq(
-                "user_id",
-                currentUserId
-              )
-              .or(
-                `from_account_id.eq.${accountId},to_account_id.eq.${accountId}`
-              ),
-          ]);
-
-        const firstError =
-          transactionResult.error ||
-          transferResult.error;
-
-        if (firstError) {
-          return {
-            success: false,
-            message:
-              "No se pudo comprobar el historial de la cuenta.",
-          };
-        }
-
-        if (
-          (
-            transactionResult.count ||
-            0
-          ) > 0 ||
-          (
-            transferResult.count ||
-            0
-          ) > 0
-        ) {
-          return {
-            success: false,
-            code:
-              "ACCOUNT_HAS_HISTORY",
-            message:
-              "Esta cuenta tiene movimientos o transferencias. Desactívala para conservar el historial.",
-          };
-        }
-
         const { error } =
           await supabase
             .from("accounts")
@@ -989,13 +919,22 @@ function AccountProvider({
         }
 
         setAccounts(
-          (
-            currentAccounts
-          ) =>
+          (currentAccounts) =>
             currentAccounts.filter(
               (account) =>
                 account.id !==
                 accountId
+            )
+        );
+
+        setTransfers(
+          (currentTransfers) =>
+            currentTransfers.filter(
+              (transfer) =>
+                transfer.fromAccountId !==
+                  accountId &&
+                transfer.toAccountId !==
+                  accountId
             )
         );
 

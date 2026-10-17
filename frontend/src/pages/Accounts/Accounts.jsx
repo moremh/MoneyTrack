@@ -135,6 +135,7 @@ function Accounts() {
     incomes = [],
     expenses = [],
     settings = {},
+    loadFinanceData,
   } =
     useContext(FinanceContext);
 
@@ -1057,7 +1058,7 @@ function Accounts() {
 
       const confirmed =
         window.confirm(
-          `¿Eliminar la cuenta "${account.name}"? Solo se puede borrar si no tiene historial.`
+          `¿Eliminar definitivamente la cuenta "${account.name}"? También se eliminarán todos sus movimientos y transferencias asociados. Esta acción no se puede deshacer.`
         );
 
       if (!confirmed) {
@@ -1084,8 +1085,15 @@ function Accounts() {
         clearAccountForm();
       }
 
+      if (
+        typeof loadFinanceData ===
+        "function"
+      ) {
+        await loadFinanceData();
+      }
+
       setSuccessMessage(
-        "Cuenta eliminada correctamente."
+        "Cuenta y movimientos asociados eliminados correctamente."
       );
     };
 
@@ -1111,6 +1119,51 @@ function Accounts() {
       );
       setTransferNotes("");
       setErrorMessage("");
+    };
+
+  const startNewTransfer =
+    (originAccountId = "") => {
+      setEditingTransfer(null);
+
+      const origin =
+        activeAccounts.some(
+          (account) =>
+            account.id ===
+              originAccountId &&
+            account.isActive
+        )
+          ? originAccountId
+          : activeAccounts[0]
+              ?.id || "";
+
+      const destination =
+        activeAccounts.find(
+          (account) =>
+            account.id !== origin
+        )?.id || "";
+
+      setFromAccountId(origin);
+      setToAccountId(destination);
+      setTransferAmount("");
+      setTransferDate(
+        getLocalToday()
+      );
+      setTransferNotes("");
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      requestAnimationFrame(
+        () => {
+          document
+            .getElementById(
+              "transfer-from"
+            )
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+        }
+      );
     };
 
   const startEditingTransfer =
@@ -1318,6 +1371,55 @@ function Accounts() {
             balance general.
           </p>
         </div>
+      </div>
+
+      <div
+        className={
+          styles.quickActions
+        }
+      >
+        <button
+          type="button"
+          className={
+            styles.quickActionPrimary
+          }
+          onClick={() => {
+            clearAccountForm();
+
+            requestAnimationFrame(
+              () => {
+                document
+                  .getElementById(
+                    "account-name"
+                  )
+                  ?.scrollIntoView({
+                    behavior:
+                      "smooth",
+                    block: "center",
+                  });
+              }
+            );
+          }}
+        >
+          <i className="bi bi-plus-circle"></i>
+          Nueva cuenta
+        </button>
+
+        <button
+          type="button"
+          className={
+            styles.quickActionButton
+          }
+          disabled={
+            activeAccounts.length < 2
+          }
+          onClick={() =>
+            startNewTransfer()
+          }
+        >
+          <i className="bi bi-arrow-left-right"></i>
+          Nueva transferencia
+        </button>
       </div>
 
       <section
@@ -2022,6 +2124,22 @@ function Accounts() {
                         styles.accountActions
                       }
                     >
+                      {account.isActive &&
+                        activeAccounts.length >
+                          1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              startNewTransfer(
+                                account.id
+                              )
+                            }
+                          >
+                            <i className="bi bi-arrow-left-right"></i>
+                            Transferir
+                          </button>
+                        )}
+
                       <button
                         type="button"
                         onClick={() =>

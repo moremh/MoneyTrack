@@ -31,13 +31,208 @@
   line-height: 1.55;
 }
 
+/* =========================
+   ACCIONES RÁPIDAS
+========================= */
+
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.quickActions button {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  padding: 9px 14px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius: 10px;
+
+  background:
+    var(--surface);
+
+  color:
+    var(--text);
+
+  font: inherit;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    transform
+      var(--transition),
+    opacity
+      var(--transition),
+    background
+      var(--transition),
+    border-color
+      var(--transition);
+}
+
+.quickActions button:hover:not(:disabled) {
+  transform:
+    translateY(-1px);
+
+  border-color:
+    var(--primary);
+}
+
+.quickActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+.quickActionPrimary {
+  background:
+    var(--primary) !important;
+
+  border-color:
+    var(--primary) !important;
+
+  color:
+    #ffffff !important;
+}
+
+/* =========================
+   FILTROS DE PERÍODO
+========================= */
+
+.periodFilters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  padding: 16px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius:
+    var(--radius);
+
+  background:
+    var(--surface);
+
+  box-shadow:
+    var(--shadow);
+}
+
+.presetButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.presetButtons button {
+  min-height: 40px;
+
+  padding:
+    8px 13px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius: 10px;
+
+  background:
+    var(--surface-soft);
+
+  color:
+    var(--text);
+
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background
+      var(--transition),
+    color
+      var(--transition),
+    border-color
+      var(--transition);
+}
+
+.presetButtons button:hover {
+  border-color:
+    var(--primary);
+}
+
+.presetButtons .presetActive {
+  border-color:
+    var(--primary);
+
+  background:
+    var(--primary);
+
+  color: #ffffff;
+}
+
+.customDates {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.customDates label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  color:
+    var(--text-light);
+
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.customDates input {
+  min-height: 40px;
+
+  padding:
+    8px 10px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius: 10px;
+
+  background:
+    var(--surface);
+
+  color:
+    var(--text);
+}
+
+/* =========================
+   RESUMEN
+========================= */
+
 .summaryGrid {
   display: grid;
+
   grid-template-columns:
     repeat(
       3,
       minmax(0, 1fr)
     );
+
   gap: 16px;
 }
 
@@ -45,14 +240,19 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+
   padding: 20px;
+
   border:
     1px solid
     var(--border);
+
   border-radius:
     var(--radius);
+
   background:
     var(--surface);
+
   box-shadow:
     var(--shadow);
 }
@@ -60,12 +260,15 @@
 .summaryCard span {
   color:
     var(--text-light);
+
   font-size: 0.9rem;
   font-weight: 700;
 }
 
 .summaryCard strong {
-  color: var(--text);
+  color:
+    var(--text);
+
   font-size: 1.65rem;
 }
 
@@ -74,6 +277,10 @@
     var(--text-light);
 }
 
+/* =========================
+   MENSAJES
+========================= */
+
 .errorMessage,
 .successMessage,
 .inlineNotice,
@@ -81,19 +288,26 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 12px 14px;
+
+  padding:
+    12px 14px;
+
   border-radius: 12px;
+
   font-weight: 700;
 }
 
 .errorMessage {
-  color: var(--danger);
+  color:
+    var(--danger);
+
   background:
     color-mix(
       in srgb,
       var(--danger) 10%,
       var(--surface)
     );
+
   border:
     1px solid
     color-mix(
@@ -104,13 +318,16 @@
 }
 
 .successMessage {
-  color: var(--success);
+  color:
+    var(--success);
+
   background:
     color-mix(
       in srgb,
       var(--success) 10%,
       var(--surface)
     );
+
   border:
     1px solid
     color-mix(
@@ -124,17 +341,25 @@
 .transferInfo {
   color:
     var(--text-light);
+
   background:
     var(--surface-soft);
+
   border:
     1px solid
     var(--border);
+
   font-weight: 600;
 }
 
 .transferInfo i {
-  color: var(--primary);
+  color:
+    var(--primary);
 }
+
+/* =========================
+   FORMULARIOS
+========================= */
 
 .form {
   display: flex;
@@ -144,35 +369,46 @@
 
 .formGrid {
   display: grid;
+
   grid-template-columns:
     repeat(
       2,
       minmax(0, 1fr)
     );
+
   gap: 16px;
 }
 
 .transferGrid {
   display: grid;
+
   grid-template-columns:
     minmax(0, 1fr)
     auto
     minmax(0, 1fr)
     minmax(160px, 0.7fr)
     minmax(160px, 0.7fr);
+
   gap: 14px;
+
   align-items: end;
 }
 
 .transferNotes {
-  grid-column: 1 / -1;
+  grid-column:
+    1 / -1;
 }
 
 .transferArrow {
   min-height: 46px;
+
   display: grid;
+
   place-items: center;
-  color: var(--primary);
+
+  color:
+    var(--primary);
+
   font-size: 1.2rem;
 }
 
@@ -183,29 +419,42 @@
 }
 
 .group label {
-  color: var(--text);
+  color:
+    var(--text);
+
   font-weight: 700;
 }
 
 .group label span {
   color:
     var(--text-light);
+
   font-weight: 500;
 }
 
 .group input,
 .group select {
   width: 100%;
+
   min-height: 46px;
-  padding: 10px 12px;
+
+  padding:
+    10px 12px;
+
   border:
     1px solid
     var(--border);
+
   border-radius: 10px;
+
   outline: none;
+
   background:
     var(--surface);
-  color: var(--text);
+
+  color:
+    var(--text);
+
   transition:
     border-color
       var(--transition),
@@ -217,6 +466,7 @@
 .group select:focus {
   border-color:
     var(--primary);
+
   box-shadow:
     0 0 0 3px
     color-mix(
@@ -229,8 +479,68 @@
 .balanceHint {
   color:
     var(--text-light);
+
   font-size: 0.78rem;
 }
+
+/* =========================
+   INCLUIR EN BALANCE
+========================= */
+
+.balanceVisibilityOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  grid-column:
+    1 / -1;
+
+  padding:
+    12px 14px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius: 12px;
+
+  background:
+    var(--surface-soft);
+
+  cursor: pointer;
+}
+
+.balanceVisibilityOption input {
+  width: 17px;
+  height: 17px;
+
+  margin-top: 3px;
+
+  accent-color:
+    var(--primary);
+}
+
+.balanceVisibilityOption > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balanceVisibilityOption strong {
+  color:
+    var(--text);
+}
+
+.balanceVisibilityOption small {
+  color:
+    var(--text-light);
+
+  line-height: 1.4;
+}
+
+/* =========================
+   BOTONES GENERALES
+========================= */
 
 .formActions,
 .accountActions,
@@ -246,10 +556,16 @@
 .accountActions button,
 .historyActions button {
   border: none;
+
   border-radius: 10px;
-  padding: 10px 14px;
+
+  padding:
+    10px 14px;
+
   font-weight: 700;
+
   cursor: pointer;
+
   transition:
     transform
       var(--transition),
@@ -263,14 +579,17 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+
   background:
     var(--primary);
-  color: #fff;
+
+  color: #ffffff;
 }
 
 .secondaryButton {
   background:
     var(--neutral-button-bg);
+
   color:
     var(--neutral-button-text);
 }
@@ -286,12 +605,19 @@
 .primaryButton:disabled,
 .secondaryButton:disabled {
   cursor: not-allowed;
+
   opacity: 0.65;
+
   transform: none;
 }
 
+/* =========================
+   CUENTAS
+========================= */
+
 .accountsGrid {
   display: grid;
+
   grid-template-columns:
     repeat(
       auto-fit,
@@ -300,6 +626,7 @@
         1fr
       )
     );
+
   gap: 16px;
 }
 
@@ -307,13 +634,18 @@
   display: flex;
   flex-direction: column;
   gap: 17px;
+
   padding: 18px;
+
   border:
     1px solid
     var(--border);
+
   border-radius: 16px;
+
   background:
     var(--surface-soft);
+
   transition:
     transform
       var(--transition),
@@ -326,6 +658,7 @@
 .accountCard:hover {
   transform:
     translateY(-2px);
+
   border-color:
     color-mix(
       in srgb,
@@ -340,77 +673,203 @@
 
 .accountHeader {
   display: grid;
+
   grid-template-columns:
     auto
     minmax(0, 1fr)
     auto;
+
   align-items: center;
+
   gap: 12px;
 }
 
 .accountIcon {
   width: 44px;
   height: 44px;
+
+  flex-shrink: 0;
+
   display: grid;
+
   place-items: center;
+
   border-radius: 13px;
+
   background:
     color-mix(
       in srgb,
       var(--primary) 12%,
       var(--surface)
     );
-  color: var(--primary);
+
+  color:
+    var(--primary);
+
   font-size: 1.25rem;
 }
 
 .accountIdentity {
   min-width: 0;
+
   display: flex;
   flex-direction: column;
+
   gap: 2px;
 }
 
 .accountIdentity strong {
   overflow: hidden;
-  color: var(--text);
+
+  color:
+    var(--text);
+
   font-size: 1rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
 }
 
 .accountIdentity span {
   color:
     var(--text-light);
+
   font-size: 0.82rem;
+}
+
+/* =========================
+   BADGES DE CUENTA
+========================= */
+
+.accountBadges {
+  min-width: 0;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+    flex-end;
+
+  gap: 6px;
+
+  flex-wrap: wrap;
 }
 
 .statusBadge,
 .kindBadge {
   width: fit-content;
-  padding: 5px 8px;
+
+  max-width: 100%;
+
+  min-height: 28px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding:
+    6px 10px;
+
+  border:
+    1px solid
+    transparent;
+
   border-radius: 999px;
+
   font-size: 0.72rem;
+
   font-weight: 800;
+
+  line-height: 1.2;
+
   white-space: nowrap;
+
+  box-sizing:
+    border-box;
 }
 
 .activeBadge {
-  color: var(--success);
+  color:
+    var(--success);
+
   background:
     color-mix(
       in srgb,
       var(--success) 12%,
       var(--surface)
     );
+
+  border-color:
+    color-mix(
+      in srgb,
+      var(--success) 25%,
+      transparent
+    );
 }
 
 .inactiveBadge {
   color:
     var(--text-light);
+
   background:
     var(--surface);
+
+  border-color:
+    var(--border);
 }
+
+.excludedBadge {
+  color:
+    #b45309;
+
+  background:
+    rgba(
+      245,
+      158,
+      11,
+      0.12
+    );
+
+  border-color:
+    rgba(
+      245,
+      158,
+      11,
+      0.32
+    );
+}
+
+body[data-theme="dark"]
+  .excludedBadge {
+  color:
+    #fbbf24;
+
+  background:
+    rgba(
+      245,
+      158,
+      11,
+      0.16
+    );
+
+  border-color:
+    rgba(
+      245,
+      158,
+      11,
+      0.3
+    );
+}
+
+/* =========================
+   SALDOS
+========================= */
 
 .balanceBlock {
   display: flex;
@@ -421,38 +880,56 @@
 .balanceBlock span {
   color:
     var(--text-light);
+
   font-size: 0.83rem;
 }
 
 .balanceBlock strong {
-  color: var(--text);
+  color:
+    var(--text);
+
   font-size: 1.7rem;
 }
 
 .accountMeta {
   display: flex;
+
   justify-content:
     space-between;
+
   gap: 12px;
+
   color:
     var(--text-light);
+
   font-size: 0.8rem;
 }
 
 .accountMeta strong {
-  color: var(--text);
+  color:
+    var(--text);
 }
 
 .notes {
   margin: 0;
-  padding: 10px 11px;
+
+  padding:
+    10px 11px;
+
   border-radius: 10px;
+
   background:
     var(--surface);
+
   color:
     var(--text-light);
+
   font-size: 0.84rem;
 }
+
+/* =========================
+   ACCIONES DE CUENTA
+========================= */
 
 .accountActions {
   margin-top: auto;
@@ -461,29 +938,49 @@
 .accountActions button,
 .historyActions button {
   display: inline-flex;
+
   align-items: center;
+
+  justify-content: center;
+
   gap: 6px;
-  padding: 8px 10px;
+
+  padding:
+    8px 10px;
+
   background:
     var(--surface);
-  color: var(--text);
+
+  color:
+    var(--text);
+
   border:
     1px solid
     var(--border);
+
   font-size: 0.8rem;
 }
 
 .accountActions .deleteButton,
 .historyActions button:last-child {
-  color: var(--danger);
+  color:
+    var(--danger);
 }
+
+/* =========================
+   HISTORIAL
+========================= */
 
 .historyToolbar {
   display: flex;
+
   align-items: end;
+
   justify-content:
     space-between;
+
   gap: 16px;
+
   margin-bottom: 14px;
 }
 
@@ -494,39 +991,59 @@
 .historyCount {
   color:
     var(--text-light);
+
   font-size: 0.85rem;
 }
 
 .historyTableWrapper {
   width: 100%;
+
   overflow: auto;
+
   border-radius: 12px;
 }
 
 .historyTable {
   width: 100%;
+
   min-width: 820px;
+
   border-collapse:
     separate;
+
   border-spacing: 0;
-  color: var(--text);
+
+  color:
+    var(--text);
 }
 
 .historyTable th {
   position: sticky;
+
   top: 0;
-  padding: 12px 14px;
-  background: var(--primary);
-  color: #fff;
+
+  padding:
+    12px 14px;
+
+  background:
+    var(--primary);
+
+  color:
+    #ffffff;
+
   text-align: left;
+
   z-index: 1;
 }
 
 .historyTable td {
-  padding: 13px 14px;
+  padding:
+    13px 14px;
+
   border-bottom:
     1px solid
     var(--border);
+
   vertical-align: middle;
 }
 
@@ -541,13 +1058,17 @@
 
 .historyNote {
   display: block;
+
   margin-top: 3px;
+
   color:
     var(--text-light);
 }
 
 .incomeBadge {
-  color: var(--success);
+  color:
+    var(--success);
+
   background:
     color-mix(
       in srgb,
@@ -557,7 +1078,9 @@
 }
 
 .expenseBadge {
-  color: var(--danger);
+  color:
+    var(--danger);
+
   background:
     color-mix(
       in srgb,
@@ -567,7 +1090,9 @@
 }
 
 .transferBadge {
-  color: var(--primary);
+  color:
+    var(--primary);
+
   background:
     color-mix(
       in srgb,
@@ -577,16 +1102,20 @@
 }
 
 .historyAmount {
-  white-space: nowrap;
+  white-space:
+    nowrap;
+
   font-weight: 800;
 }
 
 .amountIncome {
-  color: var(--success);
+  color:
+    var(--success);
 }
 
 .amountExpense {
-  color: var(--danger);
+  color:
+    var(--danger);
 }
 
 .historyActions {
@@ -596,31 +1125,51 @@
 .historyActions button {
   width: 34px;
   height: 34px;
+
   justify-content: center;
+
   padding: 0;
 }
 
+/* =========================
+   ESTADO VACÍO
+========================= */
+
 .emptyState {
   min-height: 180px;
+
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content:
     center;
+
   gap: 8px;
+
   color:
     var(--text-light);
+
   text-align: center;
 }
 
 .emptyState i {
-  color: var(--primary);
+  color:
+    var(--primary);
+
   font-size: 2rem;
 }
 
 .emptyState strong {
-  color: var(--text);
+  color:
+    var(--text);
 }
+
+/* =========================
+   RESPONSIVE
+========================= */
 
 @media (max-width: 1100px) {
   .transferGrid {
@@ -636,17 +1185,41 @@
   }
 
   .transferNotes {
-    grid-column: 1 / -1;
+    grid-column:
+      1 / -1;
   }
 }
 
 @media (max-width: 820px) {
   .summaryGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns:
+      1fr;
   }
 }
 
 @media (max-width: 760px) {
+  .periodFilters,
+  .customDates {
+    flex-direction: column;
+
+    align-items:
+      stretch;
+  }
+
+  .presetButtons {
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .presetButtons button {
+    width: 100%;
+  }
+
   .formGrid,
   .transferGrid {
     grid-template-columns:
@@ -659,8 +1232,12 @@
 
   .accountMeta,
   .historyToolbar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction:
+      column;
+
+    align-items:
+      stretch;
+
     gap: 8px;
   }
 
@@ -669,18 +1246,58 @@
   }
 }
 
+@media (max-width: 600px) {
+  .quickActions {
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+
+    gap: 10px;
+  }
+
+  .quickActions button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 460px) {
   .accountHeader {
     grid-template-columns:
-      auto minmax(0, 1fr);
+      auto
+      minmax(0, 1fr);
   }
 
-  .statusBadge {
-    grid-column: 1 / -1;
+  .accountBadges {
+    grid-column:
+      1 / -1;
+
+    width: 100%;
+
+    justify-content:
+      flex-start;
+
+    align-items: center;
+
+    gap: 6px;
+  }
+
+  .statusBadge,
+  .kindBadge {
+    min-height: 30px;
+
+    padding:
+      6px 10px;
+
+    line-height: 1.2;
   }
 
   .accountActions {
     display: grid;
+
     grid-template-columns:
       repeat(
         2,
@@ -689,148 +1306,19 @@
   }
 
   .accountActions button {
-    justify-content: center;
+    width: 100%;
+
+    justify-content:
+      center;
   }
 
   .accountActions .deleteButton {
-    grid-column: 1 / -1;
-  }
-}
-
-
-.periodFilters {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.presetButtons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.presetButtons button {
-  min-height: 40px;
-  padding: 8px 13px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-soft);
-  color: var(--text);
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    background var(--transition),
-    color var(--transition),
-    border-color var(--transition);
-}
-
-.presetButtons button:hover {
-  border-color: var(--primary);
-}
-
-.presetButtons .presetActive {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
-}
-
-.customDates {
-  display: flex;
-  align-items: end;
-  gap: 10px;
-}
-
-.customDates label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  color: var(--text-light);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.customDates input {
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text);
-}
-
-@media (max-width: 760px) {
-  .periodFilters,
-  .customDates {
-    flex-direction: column;
-    align-items: stretch;
+    grid-column:
+      1 / -1;
   }
 
-  .presetButtons {
-    display: grid;
+  .quickActions {
     grid-template-columns:
-      repeat(
-        2,
-        minmax(0, 1fr)
-      );
+      1fr;
   }
-
-  .presetButtons button {
-    width: 100%;
-  }
-}
-
-
-.balanceVisibilityOption {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  grid-column: 1 / -1;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-soft);
-  cursor: pointer;
-}
-
-.balanceVisibilityOption input {
-  width: 17px;
-  height: 17px;
-  margin-top: 3px;
-  accent-color: var(--primary);
-}
-
-.balanceVisibilityOption > span {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.balanceVisibilityOption strong {
-  color: var(--text);
-}
-
-.balanceVisibilityOption small {
-  color: var(--text-light);
-  line-height: 1.4;
-}
-
-.accountBadges {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.excludedBadge {
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
-  border-color: rgba(245, 158, 11, 0.32);
 }
