@@ -9,6 +9,10 @@ import {
 } from "../../../context/FinanceContext";
 
 import {
+  AccountContext,
+} from "../../../context/AccountContext";
+
+import {
   formatAmountInput,
   formatStoredAmount,
   normalizeAmountOnBlur,
@@ -26,6 +30,13 @@ function GoalForm({
   } = useContext(
     FinanceContext
   );
+
+  const {
+    accounts = [],
+  } =
+    useContext(
+      AccountContext
+    ) || {};
   const [title, setTitle] =
     useState("");
 
@@ -36,6 +47,11 @@ function GoalForm({
 
   const [deadline, setDeadline] =
     useState("");
+
+  const [
+    accountId,
+    setAccountId,
+  ] = useState("");
 
   const [
     errorMessage,
@@ -74,10 +90,17 @@ function GoalForm({
           initialData.date ||
           ""
       );
+
+      setAccountId(
+        initialData.accountId ||
+          initialData.account_id ||
+          ""
+      );
     } else {
       setTitle("");
       setTargetAmount("");
       setDeadline("");
+      setAccountId("");
     }
 
     setErrorMessage("");
@@ -158,6 +181,9 @@ function GoalForm({
             numericTarget,
 
           deadline,
+
+          accountId:
+            accountId || null,
         });
 
       if (!result?.success) {
@@ -179,6 +205,7 @@ function GoalForm({
         setTitle("");
         setTargetAmount("");
         setDeadline("");
+        setAccountId("");
       }
     } catch (error) {
       console.error(
@@ -326,6 +353,53 @@ function GoalForm({
           />
         </div>
       )}
+
+      <div className={styles.group}>
+        <label htmlFor="goal-account">
+          Cuenta vinculada{" "}
+          <span>(opcional)</span>
+        </label>
+
+        <select
+          id="goal-account"
+          className={styles.input}
+          value={accountId}
+          onChange={(event) => {
+            setAccountId(
+              event.target.value
+            );
+
+            setErrorMessage("");
+            setSuccessMessage("");
+          }}
+          disabled={isSubmitting}
+        >
+          <option value="">
+            Sin cuenta vinculada
+          </option>
+
+          {accounts.map(
+            (account) => (
+              <option
+                key={account.id}
+                value={account.id}
+              >
+                {account.name}
+                {account.isActive
+                  ? ""
+                  : " (inactiva)"}
+              </option>
+            )
+          )}
+        </select>
+
+        <small>
+          Si vinculás una cuenta,
+          el progreso del ahorro se
+          calculará automáticamente
+          con el saldo de esa cuenta.
+        </small>
+      </div>
 
       <div
         className={`${styles.group} ${styles.dateGroup}`}

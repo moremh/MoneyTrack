@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import { FinanceContext } from "../../context/FinanceContext";
+import { AccountContext } from "../../context/AccountContext";
 import { getLocalToday } from "../../utils/dateUtils";
 
 import {
@@ -131,6 +132,8 @@ function Goals() {
   const {
     goals,
     goalMovements = [],
+    incomes = [],
+    expenses = [],
     addGoal,
     deleteGoal,
     updateGoal,
@@ -139,6 +142,14 @@ function Goals() {
     loading,
     settings,
   } = useContext(FinanceContext);
+
+  const {
+    accounts = [],
+    transfers = [],
+  } =
+    useContext(
+      AccountContext
+    ) || {};
 
   const formatMovementDateRegional =
     (value) =>
@@ -223,6 +234,185 @@ function Goals() {
     deletingGoalMovementId,
     setDeletingGoalMovementId,
   ] = useState(null);
+
+  const accountBalances =
+    useMemo(() => {
+      const balances =
+        new Map(
+          accounts.map(
+            (account) => [
+              account.id,
+              Number(
+                account.openingBalance
+              ) || 0,
+            ]
+          )
+        );
+
+      incomes.forEach(
+        (movement) => {
+          if (
+            movement.accountId &&
+            balances.has(
+              movement.accountId
+            )
+          ) {
+            balances.set(
+              movement.accountId,
+              (
+                balances.get(
+                  movement.accountId
+                ) || 0
+              ) +
+                (
+                  Number(
+                    movement.amount
+                  ) || 0
+                )
+            );
+          }
+        }
+      );
+
+      expenses.forEach(
+        (movement) => {
+          if (
+            movement.accountId &&
+            balances.has(
+              movement.accountId
+            )
+          ) {
+            balances.set(
+              movement.accountId,
+              (
+                balances.get(
+                  movement.accountId
+                ) || 0
+              ) -
+                (
+                  Number(
+                    movement.amount
+                  ) || 0
+                )
+            );
+          }
+        }
+      );
+
+      transfers.forEach(
+        (transfer) => {
+          const amount =
+            Number(
+              transfer.amount
+            ) || 0;
+
+          if (
+            balances.has(
+              transfer.fromAccountId
+            )
+          ) {
+            balances.set(
+              transfer.fromAccountId,
+              (
+                balances.get(
+                  transfer.fromAccountId
+                ) || 0
+              ) - amount
+            );
+          }
+
+          if (
+            balances.has(
+              transfer.toAccountId
+            )
+          ) {
+            balances.set(
+              transfer.toAccountId,
+              (
+                balances.get(
+                  transfer.toAccountId
+                ) || 0
+              ) + amount
+            );
+          }
+        }
+      );
+
+      return balances;
+    }, [
+      accounts,
+      incomes,
+      expenses,
+      transfers,
+    ]);
+
+  const displayGoals =
+    useMemo(() => {
+      const accountById =
+        new Map(
+          accounts.map(
+            (account) => [
+              account.id,
+              account,
+            ]
+          )
+        );
+
+      return goals.map(
+        (goal) => {
+          if (!goal.accountId) {
+            return {
+              ...goal,
+              linkedAccountName:
+                null,
+            };
+          }
+
+          const linkedAccount =
+            accountById.get(
+              goal.accountId
+            );
+
+          if (!linkedAccount) {
+            return {
+              ...goal,
+              linkedAccountName:
+                null,
+            };
+          }
+
+          const linkedBalance =
+            Math.max(
+              Number(
+                accountBalances.get(
+                  goal.accountId
+                )
+              ) || 0,
+              0
+            );
+
+          return {
+            ...goal,
+
+            currentAmount:
+              linkedBalance,
+
+            savedAmount:
+              linkedBalance,
+
+            saved:
+              linkedBalance,
+
+            linkedAccountName:
+              linkedAccount.name,
+          };
+        }
+      );
+    }, [
+      goals,
+      accounts,
+      accountBalances,
+    ]);
 
   const goalNames =
     useMemo(() => {
@@ -717,7 +907,7 @@ function Goals() {
 
       <Card title="Lista de objetivos">
         <GoalList
-          goals={goals}
+          goals={displayGoals}
           settings={
             settings
           }

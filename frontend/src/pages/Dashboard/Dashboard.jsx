@@ -474,6 +474,168 @@ function Dashboard() {
     );
 
   /*
+   * Saldo histórico real de cada cuenta.
+   * Para objetivos vinculados, este saldo
+   * será la fuente del progreso.
+   */
+  const accountBalances =
+    useMemo(() => {
+      const balances =
+        new Map(
+          accounts.map(
+            (account) => [
+              account.id,
+              Number(
+                account.openingBalance ||
+                  0
+              ),
+            ]
+          )
+        );
+
+      incomes.forEach(
+        (movement) => {
+          if (
+            movement.accountId &&
+            balances.has(
+              movement.accountId
+            )
+          ) {
+            balances.set(
+              movement.accountId,
+              (
+                balances.get(
+                  movement.accountId
+                ) || 0
+              ) +
+                (
+                  Number(
+                    movement.amount
+                  ) || 0
+                )
+            );
+          }
+        }
+      );
+
+      expenses.forEach(
+        (movement) => {
+          if (
+            movement.accountId &&
+            balances.has(
+              movement.accountId
+            )
+          ) {
+            balances.set(
+              movement.accountId,
+              (
+                balances.get(
+                  movement.accountId
+                ) || 0
+              ) -
+                (
+                  Number(
+                    movement.amount
+                  ) || 0
+                )
+            );
+          }
+        }
+      );
+
+      transfers.forEach(
+        (transfer) => {
+          const amount =
+            Number(
+              transfer.amount
+            ) || 0;
+
+          if (
+            balances.has(
+              transfer.fromAccountId
+            )
+          ) {
+            balances.set(
+              transfer.fromAccountId,
+              (
+                balances.get(
+                  transfer.fromAccountId
+                ) || 0
+              ) - amount
+            );
+          }
+
+          if (
+            balances.has(
+              transfer.toAccountId
+            )
+          ) {
+            balances.set(
+              transfer.toAccountId,
+              (
+                balances.get(
+                  transfer.toAccountId
+                ) || 0
+              ) + amount
+            );
+          }
+        }
+      );
+
+      return balances;
+    }, [
+      accounts,
+      incomes,
+      expenses,
+      transfers,
+    ]);
+
+  /*
+   * Las metas vinculadas usan solamente
+   * el saldo real de la cuenta.
+   */
+  const dashboardGoals =
+    useMemo(
+      () =>
+        goals.map(
+          (goal) => {
+            if (
+              !goal.accountId ||
+              !accountBalances.has(
+                goal.accountId
+              )
+            ) {
+              return goal;
+            }
+
+            const linkedBalance =
+              Math.max(
+                Number(
+                  accountBalances.get(
+                    goal.accountId
+                  )
+                ) || 0,
+                0
+              );
+
+            return {
+              ...goal,
+              currentAmount:
+                linkedBalance,
+              savedAmount:
+                linkedBalance,
+              saved:
+                linkedBalance,
+            };
+          }
+        ),
+      [
+        goals,
+        accountBalances,
+      ]
+    );
+
+  /*
    * Este valor representa cuánto dinero
    * hay ahorrado actualmente en todos
    * los objetivos. Se muestra aparte y
@@ -481,7 +643,7 @@ function Dashboard() {
    * el balance del período.
    */
   const totalGoalSavings =
-    goals.reduce(
+    dashboardGoals.reduce(
       (accumulator, goal) =>
         accumulator +
         Number(
@@ -820,6 +982,22 @@ function Dashboard() {
         return;
       }
 
+      const goalForMovement =
+        goals.find(
+          (goal) =>
+            goal.id ===
+            savingsGoalId
+        );
+
+      if (
+        goalForMovement?.accountId
+      ) {
+        setSavingsError(
+          `Este objetivo está vinculado a una cuenta y se actualiza automáticamente con su saldo.`
+        );
+        return;
+      }
+
       if (
         !Number.isFinite(
           numericAmount
@@ -875,7 +1053,7 @@ function Dashboard() {
     };
 
   const selectedSavingsGoal =
-    goals.find(
+    dashboardGoals.find(
       (goal) =>
         goal.id ===
         savingsGoalId
@@ -1308,7 +1486,7 @@ function Dashboard() {
         </h2>
 
         <SavingsGoals
-          goals={goals}
+          goals={dashboardGoals}
           settings={
             settings
           }
@@ -1463,17 +1641,33 @@ function Dashboard() {
                     styles.savingsGoalInfo
                   }
                 >
-                  <span>
-                    Ahorrado actualmente
-                  </span>
-                  <strong>
-                    $ {Number(
-                      selectedSavingsGoal.currentAmount ||
-                        0
-                    ).toLocaleString(
-                      "es-AR"
-                    )}
-                  </strong>
+                  {selectedSavingsGoal.accountId ? (
+                    <>
+                      <span>
+                        <i className="bi bi-link-45deg"></i>{" "}
+                        Sincronización automática
+                      </span>
+
+                      <strong>
+                        Este objetivo se actualiza con el saldo de la cuenta vinculada.
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Ahorrado actualmente
+                      </span>
+
+                      <strong>
+                        $ {Number(
+                          selectedSavingsGoal.currentAmount ||
+                            0
+                        ).toLocaleString(
+                          "es-AR"
+                        )}
+                      </strong>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1500,7 +1694,10 @@ function Dashboard() {
                     )
                   }
                   disabled={
-                    isSavingMovement
+                    isSavingMovement ||
+                    Boolean(
+                      selectedSavingsGoal?.accountId
+                    )
                   }
                 >
                   <option value="deposit">
@@ -1541,7 +1738,10 @@ function Dashboard() {
                     settings
                   )}`}
                   disabled={
-                    isSavingMovement
+                    isSavingMovement ||
+                    Boolean(
+                      selectedSavingsGoal?.accountId
+                    )
                   }
                   autoComplete="off"
                 />
@@ -1577,7 +1777,10 @@ function Dashboard() {
                   }
                   placeholder="Ej: Aporte del sueldo"
                   disabled={
-                    isSavingMovement
+                    isSavingMovement ||
+                    Boolean(
+                      selectedSavingsGoal?.accountId
+                    )
                   }
                 ></textarea>
               </div>
@@ -1607,7 +1810,10 @@ function Dashboard() {
                     )
                   }
                   disabled={
-                    isSavingMovement
+                    isSavingMovement ||
+                    Boolean(
+                      selectedSavingsGoal?.accountId
+                    )
                   }
                 />
               </div>
@@ -1623,7 +1829,10 @@ function Dashboard() {
                     styles.savingsSubmitButton
                   }
                   disabled={
-                    isSavingMovement
+                    isSavingMovement ||
+                    Boolean(
+                      selectedSavingsGoal?.accountId
+                    )
                   }
                 >
                   {isSavingMovement

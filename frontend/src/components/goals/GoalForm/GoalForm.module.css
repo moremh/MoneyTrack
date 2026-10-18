@@ -256,3 +256,26 @@ body[data-theme="dark"] .successMessage {
     padding: 11px 20px;
   }
 }
+
+/* Ayuda del selector de cuenta vinculada */
+.group small {
+  display: block;
+
+  margin-top: 2px;
+
+  color: var(--text-light);
+
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+/* Mejor contraste para selects */
+select.input {
+  color: var(--text);
+  background: var(--surface);
+}
+
+select.input option {
+  color: var(--text);
+  background: var(--surface);
+}

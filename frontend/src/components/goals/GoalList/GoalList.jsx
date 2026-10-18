@@ -100,6 +100,22 @@ function GoalList({
                 <p className={styles.deadline}>
                   Fecha límite: {formattedDeadline}
                 </p>
+
+                {goal.linkedAccountName && (
+                  <p
+                    className={
+                      styles.linkedAccount
+                    }
+                  >
+                    <i className="bi bi-wallet2"></i>
+                    Cuenta vinculada:{" "}
+                    <strong>
+                      {
+                        goal.linkedAccountName
+                      }
+                    </strong>
+                  </p>
+                )}
               </div>
 
               <div className={styles.actions}>
