@@ -206,6 +206,7 @@ const GOAL_FIELDS = `
   user_id,
   name,
   description,
+  account_id,
   target_amount,
   current_amount,
   deadline,
@@ -338,6 +339,9 @@ const mapGoal = (goal) => {
     title: goal.name,
 
     description: goal.description || "",
+
+    accountId:
+      goal.account_id || null,
 
     targetAmount,
     target: targetAmount,
@@ -871,6 +875,11 @@ const getGoalPayload = (goal) => {
       0
   );
 
+  const accountId =
+    goal?.accountId ??
+    goal?.account_id ??
+    null;
+
   const deadline =
     goal?.deadline ||
     goal?.date ||
@@ -892,6 +901,8 @@ const getGoalPayload = (goal) => {
     name,
     description:
       description || null,
+    account_id:
+      accountId || null,
     target_amount: targetAmount,
     current_amount: currentAmount,
     deadline: deadline || null,
@@ -5774,6 +5785,10 @@ const updateGoal = useCallback(
           : existingGoal?.description ||
             null,
 
+      account_id:
+        payload.account_id ||
+        null,
+
       target_amount:
         payload.target_amount,
 
@@ -5994,6 +6009,18 @@ const updateGoal = useCallback(
             success: false,
             message:
               "No se encontró el objetivo seleccionado.",
+          };
+        }
+
+        if (
+          selectedGoal.accountId
+        ) {
+          return {
+            success: false,
+            code:
+              "GOAL_LINKED_TO_ACCOUNT",
+            message:
+              "Este objetivo está vinculado a una cuenta. Su progreso se actualiza automáticamente con el saldo de esa cuenta.",
           };
         }
 

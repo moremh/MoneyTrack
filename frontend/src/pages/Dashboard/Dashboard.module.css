@@ -760,3 +760,38 @@
     font-size: 0.8rem;
   }
 }
+/* Información de objetivo vinculado */
+.savingsGoalInfo {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.savingsGoalInfo span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  flex: 0 0 auto;
+}
+
+.savingsGoalInfo strong {
+  flex: 1 1 220px;
+
+  min-width: 0;
+
+  white-space: normal;
+  overflow-wrap: anywhere;
+
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .savingsGoalInfo {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .savingsGoalInfo strong {
+    width: 100%;
+  }
+}
