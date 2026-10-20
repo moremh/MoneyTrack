@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 
 import {
   Link,
@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
 
 import styles from "../Login/Auth.module.css";
 
@@ -36,6 +37,10 @@ function Register() {
     isAdmin,
     loading,
   } = useAuth();
+
+  const {
+    alertDialog,
+  } = useContext(DialogContext) || {};
 
   const navigate = useNavigate();
 
@@ -143,7 +148,7 @@ function Register() {
       if (
         result.requiresEmailConfirmation
       ) {
-        window.alert(result.message);
+        await alertDialog({ title: "Confirmá tu correo", message: result.message, confirmText: "Aceptar" });
 
         navigate("/login", {
           replace: true,

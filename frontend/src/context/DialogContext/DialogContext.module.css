@@ -1,0 +1,160 @@
+.dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+
+  padding-top: 8px;
+
+  text-align: center;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 58px;
+  height: 58px;
+
+  border-radius: 50%;
+
+  font-size: 1.6rem;
+}
+
+.infoIcon {
+  color: var(--primary);
+  background:
+    rgba(37, 99, 235, 0.12);
+}
+
+.dangerIcon {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.content h2 {
+  margin: 0 0 8px;
+
+  color: var(--text);
+
+  font-size: 1.25rem;
+}
+
+.content p {
+  margin: 0;
+
+  color: var(--text-light);
+
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+
+  width: 100%;
+}
+
+.cancelButton,
+.confirmButton {
+  min-width: 110px;
+
+  padding: 10px 18px;
+
+  border-radius: 10px;
+
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.cancelButton {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.confirmButton {
+  color: #ffffff;
+  background: var(--primary);
+  border: 1px solid transparent;
+}
+
+.dangerButton {
+  background: #dc2626;
+}
+
+@media (max-width: 520px) {
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancelButton,
+  .confirmButton {
+    width: 100%;
+  }
+}
+
+/* Contenedor del diálogo de confirmación */
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100dvh;
+  padding: 16px;
+  box-sizing: border-box;
+
+  background: rgba(15, 23, 42, 0.55);
+  overflow-y: auto;
+}
+
+/* Cuadro del diálogo */
+.dialogModal {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
+
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+}
+
+.closeButton {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-light);
+  font-size: 1rem;
+}
+
+/* Adaptación para celulares */
+@media (max-width: 600px) {
+  .dialogOverlay {
+    padding: 12px;
+  }
+
+  .dialogModal {
+    max-height: calc(100dvh - 24px);
+  }
+}

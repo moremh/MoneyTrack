@@ -1,9 +1,11 @@
 import {
+  useContext,
   useEffect,
   useState,
 } from "react";
 
 import { supabase } from "../../../lib/supabase";
+import { DialogContext } from "../../../context/DialogContext/DialogContext";
 
 import {
   notifyCommercialCatalogUpdated,
@@ -767,6 +769,7 @@ function PromotionEditor({
   onSaved,
   planMap,
 }) {
+  const { confirmDialog } = useContext(DialogContext) || {};
   const [draft, setDraft] =
     useState({
       ...EMPTY_PROMOTION,
@@ -964,10 +967,7 @@ function PromotionEditor({
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `¿Eliminar la promoción "${promotion.title}"?`
-      );
+    const confirmed = await confirmDialog({ title: "Eliminar promoción", message: "¿Eliminar la promoción \"" + promotion.title + "\"?", confirmText: "Eliminar promoción", cancelText: "Cancelar", danger: true });
 
     if (!confirmed) {
       return;

@@ -9,6 +9,7 @@ import FinanceProvider from "./context/FinanceContext";
 import AccountProvider from "./context/AccountContext";
 import ReminderProvider from "./context/ReminderContext";
 import I18nProvider from "./context/I18nContext";
+import DialogProvider from "./context/DialogContext/DialogContext";
 
 import "./styles/reset.css";
 import "./styles/variables.css";
@@ -93,9 +94,11 @@ ReactDOM.createRoot(
       <AccountProvider>
         <FinanceProvider>
           <I18nProvider>
-          <ReminderProvider>
-            <App />
-          </ReminderProvider>
+            <ReminderProvider>
+              <DialogProvider>
+                <App />
+              </DialogProvider>
+            </ReminderProvider>
           </I18nProvider>
         </FinanceProvider>
       </AccountProvider>

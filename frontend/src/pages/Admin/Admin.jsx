@@ -1,11 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useContext,
   useMemo,
   useState,
 } from "react";
 
 import { useAuth } from "../../context/AuthContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
 import { supabase } from "../../lib/supabase";
 
 import {
@@ -131,6 +133,10 @@ function Admin() {
     changeMonthlyLimit,
     updateAdminNote,
   } = useAuth();
+
+  const {
+    confirmDialog,
+  } = useContext(DialogContext) || {};
 
   const {
     planMap,
@@ -499,13 +505,7 @@ function Admin() {
         return;
       }
 
-      const confirmed =
-        window.confirm(
-          selectedUser.plan ===
-            "premium"
-            ? `¿Renovar el plan de ${selectedUser.name}?`
-            : `¿Activar Premium para ${selectedUser.name}?`
-        );
+      const confirmed = await confirmDialog({ title: selectedUser.plan === "premium" ? "Renovar Premium" : "Activar Premium", message: selectedUser.plan === "premium" ? "¿Renovar el plan de " + selectedUser.name + "?" : "¿Activar Premium para " + selectedUser.name + "?", confirmText: selectedUser.plan === "premium" ? "Renovar" : "Activar Premium", cancelText: "Cancelar" });
 
       if (!confirmed) {
         return;
@@ -671,10 +671,7 @@ function Admin() {
         return;
       }
 
-      const confirmed =
-        window.confirm(
-          `¿Quitar el plan Premium de ${selectedUser.name}?`
-        );
+      const confirmed = await confirmDialog({ title: "Quitar Premium", message: "¿Quitar el plan Premium de " + selectedUser.name + "?", confirmText: "Quitar Premium", cancelText: "Cancelar", danger: true });
 
       if (!confirmed) {
         return;
@@ -728,10 +725,7 @@ function Admin() {
           ? "habilitar"
           : "bloquear";
 
-      const confirmed =
-        window.confirm(
-          `¿${action} la cuenta de ${selectedUser.name}?`
-        );
+      const confirmed = await confirmDialog({ title: action === "bloquear" ? "Bloquear cuenta" : "Habilitar cuenta", message: "¿" + action + " la cuenta de " + selectedUser.name + "?", confirmText: action === "bloquear" ? "Bloquear cuenta" : "Habilitar cuenta", cancelText: "Cancelar", danger: action === "bloquear" });
 
       if (!confirmed) {
         return;

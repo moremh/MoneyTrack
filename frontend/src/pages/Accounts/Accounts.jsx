@@ -7,8 +7,10 @@ import {
 
 import { AccountContext } from "../../context/AccountContext";
 import { FinanceContext } from "../../context/FinanceContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
 
 import Card from "../../components/common/Card/Card";
+import Modal from "../../components/common/Modal/Modal";
 
 import {
   formatAmountInput,
@@ -139,10 +141,22 @@ function Accounts() {
   } =
     useContext(FinanceContext);
 
+  const {
+    confirmDialog,
+  } =
+    useContext(
+      DialogContext
+    ) || {};
+
   const [
     editingAccount,
     setEditingAccount,
   ] = useState(null);
+
+  const [
+    showAccountModal,
+    setShowAccountModal,
+  ] = useState(false);
 
   const [name, setName] =
     useState("");
@@ -167,6 +181,11 @@ function Accounts() {
     editingTransfer,
     setEditingTransfer,
   ] = useState(null);
+
+  const [
+    showTransferModal,
+    setShowTransferModal,
+  ] = useState(false);
 
   const [
     fromAccountId,
@@ -906,6 +925,7 @@ function Accounts() {
   const clearAccountForm =
     () => {
       setEditingAccount(null);
+      setShowAccountModal(false);
       setName("");
       setType("wallet");
       setOpeningBalance("");
@@ -914,10 +934,27 @@ function Accounts() {
       setErrorMessage("");
     };
 
+  const startNewAccount =
+    () => {
+      setEditingAccount(null);
+      setName("");
+      setType("wallet");
+      setOpeningBalance("");
+      setNotes("");
+      setIncludeInBalance(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+      setShowAccountModal(true);
+    };
+
   const startEditingAccount =
     (account) => {
       setEditingAccount(
         account
+      );
+
+      setShowAccountModal(
+        true
       );
 
       setName(
@@ -1057,9 +1094,17 @@ function Accounts() {
       setSuccessMessage("");
 
       const confirmed =
-        window.confirm(
-          `¿Eliminar definitivamente la cuenta "${account.name}"? También se eliminarán todos sus movimientos y transferencias asociados. Esta acción no se puede deshacer.`
-        );
+        await confirmDialog({
+          title:
+            "Eliminar cuenta",
+          message:
+            `¿Eliminar definitivamente la cuenta "${account.name}"? También se eliminarán todos sus movimientos y transferencias asociados. Esta acción no se puede deshacer.`,
+          confirmText:
+            "Eliminar cuenta",
+          cancelText:
+            "Cancelar",
+          danger: true,
+        });
 
       if (!confirmed) {
         return;
@@ -1100,6 +1145,7 @@ function Accounts() {
   const resetTransferForm =
     () => {
       setEditingTransfer(null);
+      setShowTransferModal(false);
 
       const first =
         activeAccounts[0]
@@ -1124,6 +1170,7 @@ function Accounts() {
   const startNewTransfer =
     (originAccountId = "") => {
       setEditingTransfer(null);
+      setShowTransferModal(true);
 
       const origin =
         activeAccounts.some(
@@ -1152,24 +1199,16 @@ function Accounts() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      requestAnimationFrame(
-        () => {
-          document
-            .getElementById(
-              "transfer-from"
-            )
-            ?.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-        }
-      );
     };
 
   const startEditingTransfer =
     (transfer) => {
       setEditingTransfer(
         transfer
+      );
+
+      setShowTransferModal(
+        true
       );
 
       setFromAccountId(
@@ -1294,9 +1333,17 @@ function Accounts() {
         "cuenta";
 
       const confirmed =
-        window.confirm(
-          `¿Eliminar la transferencia de ${fromName} a ${toName}?`
-        );
+        await confirmDialog({
+          title:
+            "Eliminar transferencia",
+          message:
+            `¿Eliminar la transferencia de ${fromName} a ${toName}?`,
+          confirmText:
+            "Eliminar transferencia",
+          cancelText:
+            "Cancelar",
+          danger: true,
+        });
 
       if (!confirmed) {
         return;
@@ -1342,327 +1389,8 @@ function Accounts() {
       return "Transferencia";
     };
 
-  return (
-    <div className={styles.page}>
-      <div
-        className={
-          styles.heading
-        }
-      >
-        <div>
-          <h1
-            className={
-              styles.title
-            }
-          >
-            Cuentas
-          </h1>
-
-          <p
-            className={
-              styles.subtitle
-            }
-          >
-            Organizá dónde está tu
-            dinero, asociá ingresos
-            y gastos y mové dinero
-            entre tus propias
-            cuentas sin alterar el
-            balance general.
-          </p>
-        </div>
-      </div>
-
-      <div
-        className={
-          styles.quickActions
-        }
-      >
-        <button
-          type="button"
-          className={
-            styles.quickActionPrimary
-          }
-          onClick={() => {
-            clearAccountForm();
-
-            requestAnimationFrame(
-              () => {
-                document
-                  .getElementById(
-                    "account-name"
-                  )
-                  ?.scrollIntoView({
-                    behavior:
-                      "smooth",
-                    block: "center",
-                  });
-              }
-            );
-          }}
-        >
-          <i className="bi bi-plus-circle"></i>
-          Nueva cuenta
-        </button>
-
-        <button
-          type="button"
-          className={
-            styles.quickActionButton
-          }
-          disabled={
-            activeAccounts.length < 2
-          }
-          onClick={() =>
-            startNewTransfer()
-          }
-        >
-          <i className="bi bi-arrow-left-right"></i>
-          Nueva transferencia
-        </button>
-      </div>
-
-      <section
-        className={
-          styles.periodFilters
-        }
-      >
-        <div
-          className={
-            styles.presetButtons
-          }
-        >
-          <button
-            type="button"
-            className={
-              activePreset ===
-              "month"
-                ? styles.presetActive
-                : ""
-            }
-            onClick={() =>
-              applyPreset(
-                "month"
-              )
-            }
-          >
-            Mes
-          </button>
-
-          <button
-            type="button"
-            className={
-              activePreset ===
-              "quarter"
-                ? styles.presetActive
-                : ""
-            }
-            onClick={() =>
-              applyPreset(
-                "quarter"
-              )
-            }
-          >
-            3 meses
-          </button>
-
-          <button
-            type="button"
-            className={
-              activePreset ===
-              "year"
-                ? styles.presetActive
-                : ""
-            }
-            onClick={() =>
-              applyPreset(
-                "year"
-              )
-            }
-          >
-            Año
-          </button>
-
-          <button
-            type="button"
-            className={
-              activePreset ===
-              "all"
-                ? styles.presetActive
-                : ""
-            }
-            onClick={() =>
-              applyPreset(
-                "all"
-              )
-            }
-          >
-            Todo
-          </button>
-        </div>
-
-        <div
-          className={
-            styles.customDates
-          }
-        >
-          <label>
-            <span>Desde</span>
-
-            <input
-              type="date"
-              value={fromDate}
-              max={
-                toDate ||
-                getLocalToday()
-              }
-              onChange={(
-                event
-              ) =>
-                handleFromDateChange(
-                  event.target
-                    .value
-                )
-              }
-            />
-          </label>
-
-          <label>
-            <span>Hasta</span>
-
-            <input
-              type="date"
-              value={toDate}
-              min={
-                fromDate ||
-                undefined
-              }
-              max={
-                getLocalToday()
-              }
-              onChange={(
-                event
-              ) =>
-                handleToDateChange(
-                  event.target
-                    .value
-                )
-              }
-            />
-          </label>
-        </div>
-      </section>
-
-      <div
-        className={
-          styles.summaryGrid
-        }
-      >
-        <div
-          className={
-            styles.summaryCard
-          }
-        >
-          <span>
-            Saldo del período
-          </span>
-
-          <strong>
-            {formatRegionalCurrency(
-              activeTotal,
-              settings
-            )}
-          </strong>
-
-          <small>
-            {activePreset === "month"
-              ? "Este mes comienza en $0."
-              : activePreset === "all"
-                ? "Incluye saldo inicial y todo el historial."
-                : "Calculado solo con el período seleccionado."}
-          </small>
-        </div>
-
-        <div
-          className={
-            styles.summaryCard
-          }
-        >
-          <span>
-            Cuentas activas
-          </span>
-
-          <strong>
-            {
-              activeAccounts.length
-            }
-          </strong>
-
-          <small>
-            Podés crear todas las
-            que necesites.
-          </small>
-        </div>
-
-        <div
-          className={
-            styles.summaryCard
-          }
-        >
-          <span>
-            Transferencias
-          </span>
-
-          <strong>
-            {transfers.length}
-          </strong>
-
-          <small>
-            No cuentan como ingreso
-            ni gasto.
-          </small>
-        </div>
-      </div>
-
-      {(errorMessage ||
-        loadingErrorMessage) && (
-        <div
-          className={
-            styles.errorMessage
-          }
-          role="alert"
-        >
-          <i className="bi bi-exclamation-circle"></i>
-
-          <span>
-            {errorMessage ||
-              loadingErrorMessage}
-          </span>
-        </div>
-      )}
-
-      {successMessage && (
-        <div
-          className={
-            styles.successMessage
-          }
-          role="status"
-        >
-          <i className="bi bi-check-circle"></i>
-
-          <span>
-            {successMessage}
-          </span>
-        </div>
-      )}
-
-      <Card
-        title={
-          editingAccount
-            ? "Editar cuenta"
-            : "Nueva cuenta"
-        }
-      >
+  const renderAccountForm =
+    () => (
         <form
           className={
             styles.form
@@ -1924,302 +1652,11 @@ function Accounts() {
             )}
           </div>
         </form>
-      </Card>
+    );
 
-      <Card title="Mis cuentas">
-        {loading &&
-        accounts.length === 0 ? (
-          <div
-            className={
-              styles.emptyState
-            }
-          >
-            Cargando cuentas...
-          </div>
-        ) : accounts.length ===
-          0 ? (
-          <div
-            className={
-              styles.emptyState
-            }
-          >
-            <i className="bi bi-wallet2"></i>
-            <strong>
-              Todavía no tenés
-              cuentas.
-            </strong>
-            <span>
-              Creá Mercado Pago,
-              Brubank, Naranja X,
-              efectivo o cualquier
-              otra cuenta que uses.
-            </span>
-          </div>
-        ) : (
-          <div
-            className={
-              styles.accountsGrid
-            }
-          >
-            {accounts.map(
-              (account) => {
-                const typeData =
-                  getTypeData(
-                    account.type
-                  );
 
-                const stats =
-                  periodStats.get(
-                    account.id
-                  ) || {
-                    balance: 0,
-                    transactionCount:
-                      0,
-                    transferCount:
-                      0,
-                  };
-
-                const cumulative =
-                  cumulativeStats.get(
-                    account.id
-                  ) || {
-                    balance: 0,
-                  };
-
-                return (
-                  <article
-                    key={
-                      account.id
-                    }
-                    className={`${styles.accountCard} ${
-                      !account.isActive
-                        ? styles.inactiveCard
-                        : ""
-                    }`}
-                  >
-                    <div
-                      className={
-                        styles.accountHeader
-                      }
-                    >
-                      <div
-                        className={
-                          styles.accountIcon
-                        }
-                      >
-                        <i
-                          className={
-                            typeData.icon
-                          }
-                        ></i>
-                      </div>
-
-                      <div
-                        className={
-                          styles.accountIdentity
-                        }
-                      >
-                        <strong>
-                          {
-                            account.name
-                          }
-                        </strong>
-
-                        <span>
-                          {
-                            typeData.label
-                          }
-                        </span>
-                      </div>
-
-                      <div
-                      className={
-                        styles.accountBadges
-                      }
-                    >
-                      {account.includeInBalance === false && (
-                        <span
-                          className={[
-                            styles.statusBadge,
-                            styles.excludedBadge,
-                          ].join(" ")}
-                        >
-                          Excluida del balance
-                        </span>
-                      )}
-
-                      <span
-                        className={[
-                          styles.statusBadge,
-                          account.isActive
-                            ? styles.activeBadge
-                            : styles.inactiveBadge,
-                        ].join(" ")}
-                      >
-                        {account.isActive
-                          ? "Activa"
-                          : "Inactiva"}
-                      </span>
-                    </div>
-                    </div>
-
-                    <div
-                      className={
-                        styles.balanceBlock
-                      }
-                    >
-                      <span>
-                        Saldo del período
-                      </span>
-
-                      <strong>
-                        {formatRegionalCurrency(
-                          stats.balance,
-                          settings
-                        )}
-                      </strong>
-                    </div>
-
-                    <div
-                      className={
-                        styles.accountMeta
-                      }
-                    >
-                      <span>
-                        Saldo acumulado:{" "}
-                        <strong>
-                          {formatRegionalCurrency(
-                            cumulative.balance,
-                            settings
-                          )}
-                        </strong>
-                      </span>
-
-                      <span>
-                        {
-                          stats.transactionCount
-                        }{" "}
-                        mov. ·{" "}
-                        {
-                          stats.transferCount
-                        }{" "}
-                        transf. en el período
-                      </span>
-                    </div>
-
-                    {account.notes && (
-                      <p
-                        className={
-                          styles.notes
-                        }
-                      >
-                        {
-                          account.notes
-                        }
-                      </p>
-                    )}
-
-                    <div
-                      className={
-                        styles.accountActions
-                      }
-                    >
-                      {account.isActive &&
-                        activeAccounts.length >
-                          1 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              startNewTransfer(
-                                account.id
-                              )
-                            }
-                          >
-                            <i className="bi bi-arrow-left-right"></i>
-                            Transferir
-                          </button>
-                        )}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          startEditingAccount(
-                            account
-                          )
-                        }
-                      >
-                        <i className="bi bi-pencil"></i>
-                        Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleToggleActive(
-                            account
-                          )
-                        }
-                      >
-                        <i
-                          className={
-                            account.isActive
-                              ? "bi bi-archive"
-                              : "bi bi-arrow-counterclockwise"
-                          }
-                        ></i>
-
-                        {account.isActive
-                          ? "Desactivar"
-                          : "Reactivar"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className={
-                          styles.deleteButton
-                        }
-                        onClick={() =>
-                          handleDeleteAccount(
-                            account
-                          )
-                        }
-                      >
-                        <i className="bi bi-trash"></i>
-                        Eliminar
-                      </button>
-                    </div>
-                  </article>
-                );
-              }
-            )}
-          </div>
-        )}
-      </Card>
-
-      <Card
-        title={
-          editingTransfer
-            ? "Editar transferencia"
-            : "Transferir entre cuentas"
-        }
-      >
-        {activeAccounts.length <
-          2 &&
-        !editingTransfer ? (
-          <div
-            className={
-              styles.inlineNotice
-            }
-          >
-            <i className="bi bi-info-circle"></i>
-            <span>
-              Necesitás al menos dos
-              cuentas activas para
-              registrar una
-              transferencia.
-            </span>
-          </div>
-        ) : (
+  const renderTransferForm =
+    () => (
           <form
             className={
               styles.form
@@ -2557,8 +1994,616 @@ function Accounts() {
               )}
             </div>
           </form>
+    );
+
+
+  return (
+    <div className={styles.page}>
+      <div
+        className={
+          styles.heading
+        }
+      >
+        <div>
+          <h1
+            className={
+              styles.title
+            }
+          >
+            Cuentas
+          </h1>
+
+          <p
+            className={
+              styles.subtitle
+            }
+          >
+            Organizá dónde está tu
+            dinero, asociá ingresos
+            y gastos y mové dinero
+            entre tus propias
+            cuentas sin alterar el
+            balance general.
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={
+          styles.quickActions
+        }
+      >
+        <button
+          type="button"
+          className={
+            styles.quickActionPrimary
+          }
+          onClick={
+            startNewAccount
+          }
+        >
+          <i className="bi bi-plus-circle"></i>
+          Nueva cuenta
+        </button>
+
+        <button
+          type="button"
+          className={
+            styles.quickActionButton
+          }
+          disabled={
+            activeAccounts.length < 2
+          }
+          onClick={() =>
+            startNewTransfer()
+          }
+        >
+          <i className="bi bi-arrow-left-right"></i>
+          Nueva transferencia
+        </button>
+      </div>
+
+      <section
+        className={
+          styles.periodFilters
+        }
+      >
+        <div
+          className={
+            styles.presetButtons
+          }
+        >
+          <button
+            type="button"
+            className={
+              activePreset ===
+              "month"
+                ? styles.presetActive
+                : ""
+            }
+            onClick={() =>
+              applyPreset(
+                "month"
+              )
+            }
+          >
+            Mes
+          </button>
+
+          <button
+            type="button"
+            className={
+              activePreset ===
+              "quarter"
+                ? styles.presetActive
+                : ""
+            }
+            onClick={() =>
+              applyPreset(
+                "quarter"
+              )
+            }
+          >
+            3 meses
+          </button>
+
+          <button
+            type="button"
+            className={
+              activePreset ===
+              "year"
+                ? styles.presetActive
+                : ""
+            }
+            onClick={() =>
+              applyPreset(
+                "year"
+              )
+            }
+          >
+            Año
+          </button>
+
+          <button
+            type="button"
+            className={
+              activePreset ===
+              "all"
+                ? styles.presetActive
+                : ""
+            }
+            onClick={() =>
+              applyPreset(
+                "all"
+              )
+            }
+          >
+            Todo
+          </button>
+        </div>
+
+        <div
+          className={
+            styles.customDates
+          }
+        >
+          <label>
+            <span>Desde</span>
+
+            <input
+              type="date"
+              value={fromDate}
+              max={
+                toDate ||
+                getLocalToday()
+              }
+              onChange={(
+                event
+              ) =>
+                handleFromDateChange(
+                  event.target
+                    .value
+                )
+              }
+            />
+          </label>
+
+          <label>
+            <span>Hasta</span>
+
+            <input
+              type="date"
+              value={toDate}
+              min={
+                fromDate ||
+                undefined
+              }
+              max={
+                getLocalToday()
+              }
+              onChange={(
+                event
+              ) =>
+                handleToDateChange(
+                  event.target
+                    .value
+                )
+              }
+            />
+          </label>
+        </div>
+      </section>
+
+      <div
+        className={
+          styles.summaryGrid
+        }
+      >
+        <div
+          className={
+            styles.summaryCard
+          }
+        >
+          <span>
+            Saldo del período
+          </span>
+
+          <strong>
+            {formatRegionalCurrency(
+              activeTotal,
+              settings
+            )}
+          </strong>
+
+          <small>
+            {activePreset === "month"
+              ? "Este mes comienza en $0."
+              : activePreset === "all"
+                ? "Incluye saldo inicial y todo el historial."
+                : "Calculado solo con el período seleccionado."}
+          </small>
+        </div>
+
+        <div
+          className={
+            styles.summaryCard
+          }
+        >
+          <span>
+            Cuentas activas
+          </span>
+
+          <strong>
+            {
+              activeAccounts.length
+            }
+          </strong>
+
+          <small>
+            Podés crear todas las
+            que necesites.
+          </small>
+        </div>
+
+        <div
+          className={
+            styles.summaryCard
+          }
+        >
+          <span>
+            Transferencias
+          </span>
+
+          <strong>
+            {transfers.length}
+          </strong>
+
+          <small>
+            No cuentan como ingreso
+            ni gasto.
+          </small>
+        </div>
+      </div>
+
+      {(errorMessage ||
+        loadingErrorMessage) && (
+        <div
+          className={
+            styles.errorMessage
+          }
+          role="alert"
+        >
+          <i className="bi bi-exclamation-circle"></i>
+
+          <span>
+            {errorMessage ||
+              loadingErrorMessage}
+          </span>
+        </div>
+      )}
+
+      {successMessage && (
+        <div
+          className={
+            styles.successMessage
+          }
+          role="status"
+        >
+          <i className="bi bi-check-circle"></i>
+
+          <span>
+            {successMessage}
+          </span>
+        </div>
+      )}
+
+      {showAccountModal && (
+        <Modal
+          onClose={() => {
+            if (!isSubmitting) {
+              clearAccountForm();
+            }
+          }}
+        >
+          <h2>
+            {editingAccount
+              ? "Editar cuenta"
+              : "Nueva cuenta"}
+          </h2>
+
+          {renderAccountForm()}
+        </Modal>
+      )}
+
+      <Card title="Mis cuentas">
+        {loading &&
+        accounts.length === 0 ? (
+          <div
+            className={
+              styles.emptyState
+            }
+          >
+            Cargando cuentas...
+          </div>
+        ) : accounts.length ===
+          0 ? (
+          <div
+            className={
+              styles.emptyState
+            }
+          >
+            <i className="bi bi-wallet2"></i>
+            <strong>
+              Todavía no tenés
+              cuentas.
+            </strong>
+            <span>
+              Creá Mercado Pago,
+              Brubank, Naranja X,
+              efectivo o cualquier
+              otra cuenta que uses.
+            </span>
+          </div>
+        ) : (
+          <div
+            className={
+              styles.accountsGrid
+            }
+          >
+            {accounts.map(
+              (account) => {
+                const typeData =
+                  getTypeData(
+                    account.type
+                  );
+
+                const stats =
+                  periodStats.get(
+                    account.id
+                  ) || {
+                    balance: 0,
+                    transactionCount:
+                      0,
+                    transferCount:
+                      0,
+                  };
+
+                const cumulative =
+                  cumulativeStats.get(
+                    account.id
+                  ) || {
+                    balance: 0,
+                  };
+
+                return (
+                  <article
+                    key={
+                      account.id
+                    }
+                    className={`${styles.accountCard} ${
+                      !account.isActive
+                        ? styles.inactiveCard
+                        : ""
+                    }`}
+                  >
+                    <div
+                      className={
+                        styles.accountHeader
+                      }
+                    >
+                      <div
+                        className={
+                          styles.accountIcon
+                        }
+                      >
+                        <i
+                          className={
+                            typeData.icon
+                          }
+                        ></i>
+                      </div>
+
+                      <div
+                        className={
+                          styles.accountIdentity
+                        }
+                      >
+                        <strong>
+                          {
+                            account.name
+                          }
+                        </strong>
+
+                        <span>
+                          {
+                            typeData.label
+                          }
+                        </span>
+                      </div>
+
+                      <div
+                      className={
+                        styles.accountBadges
+                      }
+                    >
+                      {account.includeInBalance === false && (
+                        <span
+                          className={[
+                            styles.statusBadge,
+                            styles.excludedBadge,
+                          ].join(" ")}
+                        >
+                          Excluida del balance
+                        </span>
+                      )}
+
+                      <span
+                        className={[
+                          styles.statusBadge,
+                          account.isActive
+                            ? styles.activeBadge
+                            : styles.inactiveBadge,
+                        ].join(" ")}
+                      >
+                        {account.isActive
+                          ? "Activa"
+                          : "Inactiva"}
+                      </span>
+                    </div>
+                    </div>
+
+                    <div
+                      className={
+                        styles.balanceBlock
+                      }
+                    >
+                      <span>
+                        Saldo del período
+                      </span>
+
+                      <strong>
+                        {formatRegionalCurrency(
+                          stats.balance,
+                          settings
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      className={
+                        styles.accountMeta
+                      }
+                    >
+                      <span>
+                        Saldo acumulado:{" "}
+                        <strong>
+                          {formatRegionalCurrency(
+                            cumulative.balance,
+                            settings
+                          )}
+                        </strong>
+                      </span>
+
+                      <span>
+                        {
+                          stats.transactionCount
+                        }{" "}
+                        mov. ·{" "}
+                        {
+                          stats.transferCount
+                        }{" "}
+                        transf. en el período
+                      </span>
+                    </div>
+
+                    {account.notes && (
+                      <p
+                        className={
+                          styles.notes
+                        }
+                      >
+                        {
+                          account.notes
+                        }
+                      </p>
+                    )}
+
+                    <div
+                      className={
+                        styles.accountActions
+                      }
+                    >
+                      {account.isActive &&
+                        activeAccounts.length >
+                          1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              startNewTransfer(
+                                account.id
+                              )
+                            }
+                          >
+                            <i className="bi bi-arrow-left-right"></i>
+                            Transferir
+                          </button>
+                        )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          startEditingAccount(
+                            account
+                          )
+                        }
+                      >
+                        <i className="bi bi-pencil"></i>
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleToggleActive(
+                            account
+                          )
+                        }
+                      >
+                        <i
+                          className={
+                            account.isActive
+                              ? "bi bi-archive"
+                              : "bi bi-arrow-counterclockwise"
+                          }
+                        ></i>
+
+                        {account.isActive
+                          ? "Desactivar"
+                          : "Reactivar"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={
+                          styles.deleteButton
+                        }
+                        onClick={() =>
+                          handleDeleteAccount(
+                            account
+                          )
+                        }
+                      >
+                        <i className="bi bi-trash"></i>
+                        Eliminar
+                      </button>
+                    </div>
+                  </article>
+                );
+              }
+            )}
+          </div>
         )}
       </Card>
+
+      {showTransferModal && (
+        <Modal
+          onClose={() => {
+            if (
+              !isTransferSubmitting
+            ) {
+              resetTransferForm();
+            }
+          }}
+        >
+          <h2>
+            {editingTransfer
+              ? "Editar transferencia"
+              : "Nueva transferencia"}
+          </h2>
+
+          {renderTransferForm()}
+        </Modal>
+      )}
 
       <Card title="Historial de cuentas">
         <div
