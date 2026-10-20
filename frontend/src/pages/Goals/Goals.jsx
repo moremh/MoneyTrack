@@ -6,6 +6,7 @@ import {
 
 import { FinanceContext } from "../../context/FinanceContext";
 import { AccountContext } from "../../context/AccountContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
 import { getLocalToday } from "../../utils/dateUtils";
 
 import {
@@ -142,6 +143,11 @@ function Goals() {
     loading,
     settings,
   } = useContext(FinanceContext);
+
+  const {
+    confirmDialog,
+    alertDialog,
+  } = useContext(DialogContext) || {};
 
   const {
     accounts = [],
@@ -572,9 +578,13 @@ function Goals() {
       "este objetivo";
 
     const confirmed =
-      window.confirm(
-        `¿Seguro que deseas eliminar "${goalName}"? Esta acción no se puede deshacer.`
-      );
+      await confirmDialog({
+        title: "Eliminar objetivo",
+        message: "¿Seguro que deseas eliminar \"" + goalName + "\"? Esta acción no se puede deshacer.",
+        confirmText: "Eliminar objetivo",
+        cancelText: "Cancelar",
+        danger: true,
+      });
 
     if (!confirmed) {
       return {
@@ -590,10 +600,14 @@ function Goals() {
         await deleteGoal(goalId);
 
       if (!result?.success) {
-        window.alert(
-          result?.message ||
-            "No se pudo eliminar el objetivo."
-        );
+        await alertDialog({
+          title: "No se pudo eliminar",
+          message:
+            result?.message ||
+            "No se pudo eliminar el objetivo.",
+          confirmText: "Aceptar",
+          danger: true,
+        });
 
         return (
           result || {
@@ -619,9 +633,13 @@ function Goals() {
         error
       );
 
-      window.alert(
-        "No se pudo eliminar el objetivo. Volvé a intentarlo."
-      );
+      await alertDialog({
+        title: "No se pudo eliminar",
+        message:
+          "No se pudo eliminar el objetivo. Volvé a intentarlo.",
+        confirmText: "Aceptar",
+        danger: true,
+      });
 
       return {
         success: false,
@@ -827,11 +845,14 @@ function Goals() {
         ) || "Objetivo";
 
       const confirmed =
-        window.confirm(
-          `¿Seguro que deseas eliminar este ${movementLabel} de ${formatAmountRegional(
-            movement.amount
-          )} del objetivo "${goalName}"? El saldo del objetivo se recalculará automáticamente.`
-        );
+        await confirmDialog({
+          title: "Eliminar movimiento",
+          message:
+            "¿Seguro que deseas eliminar este " + movementLabel + " de " + formatAmountRegional(movement.amount) + " del objetivo \"" + goalName + "\"? El saldo del objetivo se recalculará automáticamente.",
+          confirmText: "Eliminar movimiento",
+          cancelText: "Cancelar",
+          danger: true,
+        });
 
       if (!confirmed) {
         return;
@@ -848,10 +869,14 @@ function Goals() {
           );
 
         if (!result?.success) {
-          window.alert(
-            result?.message ||
-              "No se pudo eliminar el movimiento de ahorro."
-          );
+          await alertDialog({
+            title: "No se pudo eliminar",
+            message:
+              result?.message ||
+              "No se pudo eliminar el movimiento de ahorro.",
+            confirmText: "Aceptar",
+            danger: true,
+          });
 
           return;
         }
@@ -870,9 +895,13 @@ function Goals() {
           error
         );
 
-        window.alert(
-          "No se pudo eliminar el movimiento de ahorro. Volvé a intentarlo."
-        );
+        await alertDialog({
+          title: "No se pudo eliminar",
+          message:
+            "No se pudo eliminar el movimiento de ahorro. Volvé a intentarlo.",
+          confirmText: "Aceptar",
+          danger: true,
+        });
       } finally {
         setDeletingGoalMovementId(
           null

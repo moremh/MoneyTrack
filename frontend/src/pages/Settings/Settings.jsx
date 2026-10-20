@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import { FinanceContext } from "../../context/FinanceContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
 
 import {
   useReminders,
@@ -33,6 +34,10 @@ function Settings() {
     clearGoals,
     resetAppData,
   } = useContext(FinanceContext);
+
+  const {
+    confirmDialog,
+  } = useContext(DialogContext) || {};
 
   const {
     notificationSupported,
@@ -464,9 +469,13 @@ function Settings() {
       }
 
       const confirmed =
-        window.confirm(
-          "¿Seguro que querés eliminar todos los ingresos? Esta acción no se puede deshacer."
-        );
+        await confirmDialog({
+          title: "Eliminar todos los ingresos",
+          message: "¿Seguro que querés eliminar todos los ingresos? Esta acción no se puede deshacer.",
+          confirmText: "Eliminar ingresos",
+          cancelText: "Cancelar",
+          danger: true,
+        });
 
       if (!confirmed) {
         return;
@@ -508,9 +517,13 @@ function Settings() {
       }
 
       const confirmed =
-        window.confirm(
-          "¿Seguro que querés eliminar todos los gastos? Esta acción no se puede deshacer."
-        );
+        await confirmDialog({
+          title: "Eliminar todos los gastos",
+          message: "¿Seguro que querés eliminar todos los gastos? Esta acción no se puede deshacer.",
+          confirmText: "Eliminar gastos",
+          cancelText: "Cancelar",
+          danger: true,
+        });
 
       if (!confirmed) {
         return;
@@ -552,9 +565,13 @@ function Settings() {
       }
 
       const confirmed =
-        window.confirm(
-          "¿Seguro que querés eliminar todos los objetivos? Esta acción no se puede deshacer."
-        );
+        await confirmDialog({
+          title: "Eliminar todos los objetivos",
+          message: "¿Seguro que querés eliminar todos los objetivos? Esta acción no se puede deshacer.",
+          confirmText: "Eliminar objetivos",
+          cancelText: "Cancelar",
+          danger: true,
+        });
 
       if (!confirmed) {
         return;
@@ -595,10 +612,7 @@ function Settings() {
         return;
       }
 
-      const confirmed =
-        window.confirm(
-          "Esto eliminará tus ingresos, gastos, objetivos y categorías personalizadas. ¿Deseás continuar?"
-        );
+      const confirmed = await confirmDialog({ title: "Reiniciar MoneyTrack", message: "Esto eliminará tus ingresos, gastos, objetivos y categorías personalizadas. ¿Deseás continuar?", confirmText: "Reiniciar aplicación", cancelText: "Cancelar", danger: true });
 
       if (!confirmed) {
         return;

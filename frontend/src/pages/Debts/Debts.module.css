@@ -713,13 +713,14 @@
   }
 
   .modalBackdrop {
-    align-items: flex-end;
-    padding: 7px;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
   }
 
   .modal {
-    max-height: calc(100dvh - 14px);
-    border-radius: 16px 16px 8px 8px;
+    max-height: calc(100dvh - 28px);
+    border-radius: 16px;
   }
 
   .form input,

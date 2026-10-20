@@ -5,6 +5,8 @@ import {
 } from "react";
 
 import { FinanceContext } from "../../context/FinanceContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
+import Modal from "../../components/common/Modal/Modal";
 
 import {
   CATEGORY_ICONS,
@@ -189,6 +191,7 @@ function CategorySection({
   onAdd,
   onUpdate,
   onDelete,
+  confirmDialog,
 }) {
   const [draft, setDraft] = useState(() =>
     createDraft(type)
@@ -438,9 +441,14 @@ function CategorySection({
 
     clearMessages();
 
-    const confirmed = window.confirm(
-      `¿Seguro que deseas eliminar la categoría "${category.name}"? Los movimientos asociados pasarán a la categoría General.`
-    );
+    const confirmed =
+      await confirmDialog({
+        title: "Eliminar categoría",
+        message: "¿Seguro que deseas eliminar la categoría \"" + category.name + "\"? Los movimientos asociados pasarán a la categoría General.",
+        confirmText: "Eliminar categoría",
+        cancelText: "Cancelar",
+        danger: true,
+      });
 
     if (!confirmed) {
       return;
@@ -627,7 +635,8 @@ function CategorySection({
               }`}
             >
               {isEditing && editDraft ? (
-                <div className={styles.editPanel}>
+                <Modal onClose={cancelEdit}>
+                  <div className={styles.editPanel}>
                   <input
                     className={styles.editInput}
                     type="text"
@@ -706,6 +715,7 @@ function CategorySection({
                     </button>
                   </div>
                 </div>
+                </Modal>
               ) : (
                 <>
                   <div className={styles.itemMain}>
@@ -806,6 +816,11 @@ function Categories() {
     updateExpenseCategory,
   } = useContext(FinanceContext);
 
+  const {
+    confirmDialog,
+  } = useContext(DialogContext) || {};
+
+
   const incomeCategoryRecords =
     useMemo(() => {
       const records = categoryRecords.filter(
@@ -870,6 +885,7 @@ function Categories() {
           onAdd={addIncomeCategory}
           onUpdate={updateIncomeCategory}
           onDelete={deleteIncomeCategory}
+          confirmDialog={confirmDialog}
         />
 
         <CategorySection
@@ -879,6 +895,7 @@ function Categories() {
           onAdd={addExpenseCategory}
           onUpdate={updateExpenseCategory}
           onDelete={deleteExpenseCategory}
+          confirmDialog={confirmDialog}
         />
       </div>
     </div>
