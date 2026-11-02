@@ -280,6 +280,12 @@ function Login() {
               </div>
             </div>
 
+            <div className={styles.helpRow}>
+              <Link to="/forgot-password">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+
             {errorMessage && (
               <div
                 className={
