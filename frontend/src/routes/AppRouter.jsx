@@ -12,6 +12,8 @@ import AdminRoute from "./AdminRoute";
 
 import Login from "../pages/Login/Login";
 import Register from "../pages/Register/Register";
+import ForgotPassword from "../pages/Login/ForgotPassword";
+import ResetPassword from "../pages/Login/ResetPassword";
 
 import Dashboard from "../pages/Dashboard/Dashboard";
 import Income from "../pages/Income/Income";
@@ -39,6 +41,16 @@ function AppRouter() {
         <Route
           path="/register"
           element={<Register />}
+        />
+
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
+        />
+
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
         />
 
         <Route

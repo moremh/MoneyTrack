@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 
+// Captura el tipo de enlace antes de que Supabase procese el hash.
+import "./lib/recoveryIntent";
 import App from "./App";
 
 import AuthProvider from "./context/AuthContext";
