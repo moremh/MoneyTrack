@@ -9,11 +9,9 @@ function SavingsGoals({ goals = [] }) {
     );
   }
 
-  const topGoals = goals.slice(0, 3);
-
   return (
     <div className={styles.list}>
-      {topGoals.map((goal) => {
+      {goals.map((goal) => {
         const targetAmount =
           Number(goal.targetAmount) || 0;
 

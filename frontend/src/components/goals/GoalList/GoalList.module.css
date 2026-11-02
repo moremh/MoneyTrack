@@ -137,3 +137,18 @@
 
   font-weight: 700;
 }
+
+/* Orientación mensual cuando el objetivo tiene fecha límite */
+.monthlyInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: var(--text);
+}
+.monthlyLabel { font-size: 0.85rem; color: var(--text-light); }
+.monthlyAmount { font-size: 1.06rem; color: var(--primary); }
+.monthlyInfo small { color: var(--text-light); line-height: 1.45; }

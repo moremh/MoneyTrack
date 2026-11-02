@@ -931,6 +931,7 @@ function Goals() {
       <Card title="Nuevo objetivo">
         <GoalForm
           onSubmit={handleCreateGoal}
+          accountBalances={accountBalances}
         />
       </Card>
 
@@ -1263,6 +1264,8 @@ function Goals() {
 
           <GoalForm
             initialData={editingGoal}
+            accountBalances={accountBalances}
+            originalSavedAmount={goals.find((goal) => goal.id === editingGoal.id)?.currentAmount}
             onSubmit={
               handleUpdateGoal
             }

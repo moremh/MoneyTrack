@@ -432,9 +432,9 @@ function CalculatorModal({
     }
   };
 
-  const useHistoryResult = (
-    result
-  ) => {
+  const handleHistoryResult = (
+  result
+) => {
     const value = Number(result);
 
     if (!Number.isFinite(value)) {
@@ -908,7 +908,7 @@ function CalculatorModal({
                 type="button"
                 className={styles.historyItem}
                 onClick={() =>
-                  useHistoryResult(
+                  handleHistoryResult(
                     item.result
                   )
                 }

@@ -21,6 +21,7 @@ import {
 } from "../../utils/amountUtils";
 
 import { getLocalToday } from "../../utils/dateUtils";
+import { calculateDebtPaymentFromTotal } from "../../utils/debtPaymentMath";
 
 import {
   formatRegionalCurrency,
@@ -69,6 +70,7 @@ const DEBT_FIELDS = `
     payment_date,
     notes,
     transaction_id,
+    fee_amount,
     created_at
   )
 `;
@@ -99,6 +101,7 @@ const EMPTY_FORM = {
 
 const EMPTY_PAYMENT = {
   amount: "",
+  requestId: null,
   paymentDate: "",
   notes: "",
   registerTransaction: true,
@@ -191,6 +194,18 @@ const mapDebt = (row) => {
   const originalAmount = Number(row.original_amount) || 0;
   const paidAmount = Number(row.paid_amount) || 0;
 
+  // El interés registrado pertenece a la cuota donde se abonó.
+  // Nunca se suma al capital ni se traslada a cuotas siguientes.
+  const interestCentsByInstallment = new Map();
+  for (const payment of row.debt_payments || []) {
+    if (!payment.installment_id) continue;
+    const cents = Math.round((Number(payment.fee_amount) || 0) * 100);
+    interestCentsByInstallment.set(
+      payment.installment_id,
+      (interestCentsByInstallment.get(payment.installment_id) || 0) + cents
+    );
+  }
+
   const installments = (row.debt_installments || [])
     .map((item) => {
       const amountDue = Number(item.amount_due) || 0;
@@ -201,6 +216,7 @@ const mapDebt = (row) => {
         number: Number(item.installment_number) || 0,
         amountDue,
         paidAmount: installmentPaid,
+        interestPaid: (interestCentsByInstallment.get(item.id) || 0) / 100,
         outstandingAmount: Math.max(0, amountDue - installmentPaid),
         dueDate: item.due_date,
         status: item.status || "pending",
@@ -213,6 +229,8 @@ const mapDebt = (row) => {
       id: item.id,
       installmentId: item.installment_id || null,
       amount: Number(item.amount) || 0,
+      feeAmount: Number(item.fee_amount) || 0,
+      totalAmount: (Number(item.amount) || 0) + (Number(item.fee_amount) || 0),
       paymentDate: item.payment_date,
       notes: item.notes || "",
       transactionId: item.transaction_id || null,
@@ -233,6 +251,8 @@ const mapDebt = (row) => {
     concept: row.concept || "",
     originalAmount,
     paidAmount,
+    feesPaid: payments.reduce((sum, item) => sum + item.feeAmount, 0),
+    totalDisbursed: payments.reduce((sum, item) => sum + item.totalAmount, 0),
     outstandingAmount: Math.max(0, originalAmount - paidAmount),
     currency: row.currency || "ARS",
     debtDate: row.debt_date,
@@ -257,16 +277,18 @@ function Debts() {
 
   const {
     settings,
-    addIncome,
-    addExpense,
+    loadFinanceData,
+    incomes = [],
+    expenses = [],
     incomeCategories,
     expenseCategories,
   } = useContext(FinanceContext);
 
   const {
+    accounts = [],
     activeAccounts = [],
-  } =
-    useContext(AccountContext) || {};
+    loadAccountData,
+  } = useContext(AccountContext) || {};
 
   const { currentUser } = useAuth();
   const { reminders, loadReminders } = useReminders();
@@ -296,6 +318,9 @@ function Debts() {
     paymentDate: today,
   });
   const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [undoTarget, setUndoTarget] = useState(null);
+  const [undoError, setUndoError] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [actionLoadingId, setActionLoadingId] = useState(null);
@@ -311,7 +336,7 @@ function Debts() {
     if (!currentUserId) {
       setDebts([]);
       setLoading(false);
-      return;
+      return { success: false };
     }
 
     setLoading(true);
@@ -330,11 +355,12 @@ function Debts() {
         "error",
         "No se pudieron cargar las cuentas por cobrar y pagar."
       );
-      return;
+      return { success: false };
     }
 
     setDebts((data || []).map(mapDebt));
     setLoading(false);
+    return { success: true };
   }, [currentUserId, showFeedback]);
 
   useEffect(() => {
@@ -690,10 +716,12 @@ function Debts() {
         : expenseCategories;
 
     setPaymentTarget(debt);
+    setPaymentError("");
     setPaymentInstallment(installment);
     setPaymentForm({
       ...EMPTY_PAYMENT,
       amount: String(maxAmount),
+      requestId: window.crypto.randomUUID(),
       paymentDate: today,
       category: categories?.[0] || "General",
       accountId: "",
@@ -710,118 +738,130 @@ function Debts() {
         type === "checkbox"
           ? checked
           : name === "amount"
-            ? formatAmountInput(value, current.amount, settings)
+            ? formatAmountInput(value, current[name], settings)
             : value,
     }));
   };
 
+  const paymentEnteredAmount = paymentTarget
+    ? parseAmountInput(paymentForm.amount, settings)
+    : Number.NaN;
+  const paymentOutstanding = paymentInstallment
+    ? paymentInstallment.outstandingAmount
+    : paymentTarget?.outstandingAmount ?? 0;
+  // El usuario ingresa el TOTAL abonado: el excedente sobre el pendiente
+  // de una cuota es interés automático, no capital de la cuota siguiente.
+  const paymentPreview = calculateDebtPaymentFromTotal(
+    paymentEnteredAmount,
+    paymentOutstanding,
+    Boolean(paymentInstallment)
+  );
+
+  const refreshAfterPayment = async () => {
+    // Los contextos financieros y de cuentas deben reflejar el mismo movimiento.
+    const results = await Promise.allSettled([
+      loadDebts(), loadReminders(), loadFinanceData(),
+      typeof loadAccountData === "function" ? loadAccountData() : Promise.resolve(),
+    ]);
+    return results.every((result) => result.status === "fulfilled" &&
+      result.value?.success !== false && result.value?.offline !== true);
+  };
+
   const handlePayment = async (event) => {
     event.preventDefault();
+    if (paying || !paymentTarget || !currentUserId) return;
 
-    if (!paymentTarget || !currentUserId) return;
-
-    const amount = parseAmountInput(paymentForm.amount, settings);
-    const maxAmount = paymentInstallment
-      ? paymentInstallment.outstandingAmount
-      : paymentTarget.outstandingAmount;
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showFeedback("error", "Ingresá un monto válido.");
+    const calculation = calculateDebtPaymentFromTotal(
+      parseAmountInput(paymentForm.amount, settings),
+      paymentInstallment
+        ? paymentInstallment.outstandingAmount
+        : paymentTarget.outstandingAmount,
+      Boolean(paymentInstallment)
+    );
+    if (!calculation.valid) {
+      setPaymentError(calculation.reason === "EXCEEDS_BALANCE"
+        ? "El importe supera el saldo pendiente de esta deuda. El cálculo automático de intereses se aplica a las cuotas."
+        : "Ingresá el total realmente pagado o cobrado (mayor a cero y con hasta dos decimales).");
       return;
     }
 
-    if (amount > maxAmount + 0.0001) {
-      showFeedback(
-        "error",
-        "El monto no puede superar el saldo pendiente."
-      );
+    if (!paymentForm.paymentDate || paymentForm.paymentDate > today) {
+      setPaymentError("Seleccioná una fecha válida que no sea futura.");
+      return;
+    }
+
+    if (!navigator.onLine) {
+      setPaymentError("Para evitar pagos duplicados, registrá los cobros/pagos con conexión.");
       return;
     }
 
     setPaying(true);
+    setPaymentError("");
     setFeedback(null);
 
-    const { data: paymentRow, error } = await supabase
-      .from("debt_payments")
-      .insert({
-        user_id: currentUserId,
-        debt_id: paymentTarget.id,
-        installment_id: paymentInstallment?.id || null,
-        amount,
-        payment_date: paymentForm.paymentDate || today,
-        notes: paymentForm.notes.trim() || null,
-      })
-      .select("id,transaction_id")
-      .single();
+    const { error } = await supabase.rpc("register_debt_payment", {
+      p_debt_id: paymentTarget.id,
+      p_installment_id: paymentInstallment?.id || null,
+      p_amount: calculation.principal,
+      p_fee_amount: calculation.fee,
+      p_payment_date: paymentForm.paymentDate,
+      p_notes: paymentForm.notes.trim() || null,
+      p_record_transaction: paymentForm.registerTransaction,
+      p_category_name: paymentForm.category || "General",
+      p_account_id: paymentForm.registerTransaction
+        ? paymentForm.accountId || null
+        : null,
+      p_request_id: paymentForm.requestId,
+    });
 
     if (error) {
       console.error("No se pudo registrar el pago/cobro:", error);
+      const message = String(error.message || "");
+      setPaymentError(
+        message.includes("DEBT_PAYMENT_EXCEEDS")
+          ? "El pago supera el saldo pendiente de la deuda o de la cuota. Actualizá la lista y volvé a intentarlo."
+          : message.includes("PAYMENT_REQUEST_ALREADY_USED")
+            ? "Esta solicitud ya se registró con otros datos. Actualizá y abrí un pago nuevo."
+            : message.includes("LIMIT") || message.includes("limit")
+              ? "No se pudo registrar el movimiento: revisá el límite mensual de tu plan."
+              : error.code === "PGRST202" || message.includes("register_debt_payment")
+                ? "La base todavía no tiene instalada la actualización 025 de Cobros y pagos."
+                : "No pudimos confirmar el pago. Si hubo una falla de conexión, volvé a intentar con este mismo formulario para evitar duplicados.");
       setPaying(false);
-
-      const text = String(error.message || "");
-
-      showFeedback(
-        "error",
-        text.includes("DEBT_PAYMENT_EXCEEDS")
-          ? "El monto supera el saldo pendiente."
-          : text.includes("INSTALLMENT_REQUIRED")
-            ? "Seleccioná la cuota correspondiente."
-            : "No se pudo registrar el pago/cobro."
-      );
       return;
     }
 
-    let transactionWarning = "";
-
-    if (paymentForm.registerTransaction) {
-      const movement = {
-        description:
-          paymentTarget.direction === "receivable"
-            ? `Cobro: ${paymentTarget.concept} - ${paymentTarget.personName}`
-            : `Pago: ${paymentTarget.concept} - ${paymentTarget.personName}`,
-        amount,
-        category: paymentForm.category || "General",
-        accountId:
-          paymentForm.accountId || null,
-        date: paymentForm.paymentDate || today,
-      };
-
-      const movementResult =
-        paymentTarget.direction === "receivable"
-          ? await addIncome(movement)
-          : await addExpense(movement);
-
-      if (movementResult.success) {
-        if (
-          !movementResult.pendingSync &&
-          movementResult.movement?.id &&
-          paymentRow?.id
-        ) {
-          await supabase
-            .from("debt_payments")
-            .update({
-              transaction_id: movementResult.movement.id,
-            })
-            .eq("id", paymentRow.id)
-            .eq("user_id", currentUserId);
-        }
-      } else {
-        transactionWarning =
-          ` El pago/cobro quedó guardado, pero la transacción no pudo crearse: ${movementResult.message}`;
-      }
-    }
-
-    await loadDebts();
-    await loadReminders();
-
+    const refreshed = await refreshAfterPayment();
     setPaying(false);
     setPaymentTarget(null);
     setPaymentInstallment(null);
+    showFeedback(refreshed ? "success" : "error",
+      refreshed
+        ? `Pago/cobro guardado correctamente${calculation.fee > 0 ? " con interés calculado automáticamente" : ""}. ${paymentForm.registerTransaction ? "Ingreso/gasto y cuenta actualizados." : "Sin movimiento financiero (opción desactivada)."}`
+        : "Pago registrado en Supabase, pero no se pudo actualizar toda la información en pantalla. Recargá la página.");
+  };
 
-    showFeedback(
-      transactionWarning ? "error" : "success",
-      `Pago/cobro registrado correctamente.${transactionWarning}`
-    );
+  const undoPayment = async () => {
+    if (!undoTarget || actionLoadingId) return;
+    setUndoError("");
+    if (!navigator.onLine) {
+      setUndoError("Necesitás conexión para deshacer un pago sin dejar movimientos desactualizados.");
+      return;
+    }
+    setActionLoadingId(undoTarget.payment.id);
+    setFeedback(null);
+    const { error } = await supabase.rpc("undo_debt_payment", {
+      p_payment_id: undoTarget.payment.id,
+    });
+    setActionLoadingId(null);
+    if (error) {
+      console.error("No se pudo deshacer el pago:", error);
+      setUndoError("No se pudo deshacer el pago. No se realizaron cambios.");
+      return;
+    }
+    setUndoTarget(null);
+    await refreshAfterPayment();
+    showFeedback("success", "Pago/cobro y su movimiento vinculado eliminados. Saldo y cuotas recalculados.");
   };
 
   const toggleCancelled = async (debt) => {
@@ -859,15 +899,17 @@ function Debts() {
   };
 
   const deleteDebt = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || actionLoadingId) return;
+    if (!navigator.onLine) {
+      showFeedback("error", "Necesitás conexión para eliminar una cuenta con sus movimientos vinculados.");
+      return;
+    }
 
     setActionLoadingId(deleteTarget.id);
 
-    const { error } = await supabase
-      .from("debts")
-      .delete()
-      .eq("id", deleteTarget.id)
-      .eq("user_id", currentUserId);
+    const { error } = await supabase.rpc("delete_debt_with_transactions", {
+      p_debt_id: deleteTarget.id,
+    });
 
     setActionLoadingId(null);
 
@@ -881,9 +923,8 @@ function Debts() {
     }
 
     setDeleteTarget(null);
-    await loadDebts();
-    await loadReminders();
-    showFeedback("success", "Cuenta eliminada correctamente.");
+    await refreshAfterPayment();
+    showFeedback("success", "Cuenta, cuotas y movimientos financieros vinculados eliminados.");
   };
 
   const filteredDebts = useMemo(() => {
@@ -923,6 +964,15 @@ function Debts() {
         .reduce((sum, debt) => sum + debt.outstandingAmount, 0),
     };
   }, [debts]);
+
+  const financialMovementById = useMemo(() =>
+    new Map([...incomes, ...expenses].map((movement) => [movement.id, movement])),
+    [incomes, expenses]
+  );
+  const accountNameById = useMemo(() =>
+    new Map(accounts.map((account) => [account.id, account.name])),
+    [accounts]
+  );
 
   const selectedCategories =
     paymentTarget?.direction === "receivable"
@@ -1119,6 +1169,18 @@ function Debts() {
                         )}
                       </strong>
                     </div>
+                    {debt.feesPaid > 0 && (
+                      <>
+                        <div>
+                          <span>Recargos abonados</span>
+                          <strong>{formatMoney(debt.feesPaid, debt.currency)}</strong>
+                        </div>
+                        <div>
+                          <span>Total abonado (con recargos)</span>
+                          <strong>{formatMoney(debt.totalDisbursed, debt.currency)}</strong>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className={styles.progress}>
@@ -1210,6 +1272,14 @@ function Debts() {
                                   )}
                                 </small>
                               )}
+                              {installment.interestPaid > 0 && (
+                                <small>
+                                  Interés / recargo registrado: {formatMoney(
+                                    installment.interestPaid,
+                                    debt.currency
+                                  )}
+                                </small>
+                              )}
                             </div>
 
                             <span>
@@ -1245,6 +1315,12 @@ function Debts() {
                           const installment = debt.installments.find(
                             (item) => item.id === payment.installmentId
                           );
+                          const movement = payment.transactionId
+                            ? financialMovementById.get(payment.transactionId)
+                            : null;
+                          const accountName = movement?.accountId
+                            ? accountNameById.get(movement.accountId) || "Cuenta eliminada"
+                            : "Sin cuenta asignada";
 
                           return (
                             <li key={payment.id}>
@@ -1258,12 +1334,25 @@ function Debts() {
                                   : ""}
                               </span>
 
-                              <strong>
-                                {formatMoney(
-                                  payment.amount,
-                                  debt.currency
+                              <div className={styles.historyAmounts}>
+                                <strong>{formatMoney(payment.totalAmount, debt.currency)}</strong>
+                                {payment.feeAmount > 0 && (
+                                  <small>Cuota/capital: {formatMoney(payment.amount, debt.currency)}
+                                    {" · "}Interés / recargo: {formatMoney(payment.feeAmount, debt.currency)}
+                                  </small>
                                 )}
-                              </strong>
+                                {payment.transactionId ? (
+                                  <>
+                                    <small>Movimiento financiero vinculado</small>
+                                    {movement && <small>Categoría: {movement.category} · {accountName}</small>}
+                                  </>
+                                ) : <small>Sin movimiento financiero</small>}
+                                {payment.notes && <small>{payment.notes}</small>}
+                                <button type="button" className={styles.undoButton}
+                                  onClick={() => { setUndoError(""); setUndoTarget({ payment, debt }); }}>
+                                  Deshacer pago
+                                </button>
+                              </div>
                             </li>
                           );
                         })}
@@ -1322,6 +1411,30 @@ function Debts() {
           </div>
         )}
       </section>
+
+      {undoTarget && (
+        <div className={styles.modalBackdrop}>
+          <section className={`${styles.modal} ${styles.paymentModal}`} role="dialog" aria-modal="true"
+            aria-label="Confirmar eliminación de pago">
+            <h2>Deshacer pago/cobro</h2>
+            <p>Se eliminará el pago de {formatMoney(undoTarget.payment.totalAmount, undoTarget.debt.currency)}
+              {undoTarget.payment.feeAmount > 0 ? " (incluido el recargo)" : ""}.
+              También se eliminará su ingreso/gasto vinculado, si existe.
+              El saldo pendiente y el estado de la cuota se recalcularán.</p>
+            {undoError && <p role="alert" className={styles.paymentError}>{undoError}</p>}
+            <div className={styles.modalActions}>
+              <button type="button" className={styles.neutralButton}
+                disabled={Boolean(actionLoadingId)} onClick={() => setUndoTarget(null)}>
+                Mantener pago
+              </button>
+              <button type="button" className={styles.dangerButton}
+                disabled={Boolean(actionLoadingId)} onClick={() => void undoPayment()}>
+                {actionLoadingId ? "Eliminando..." : "Sí, deshacer pago"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {formOpen && (
         <div className={styles.modalBackdrop}>
@@ -1685,7 +1798,8 @@ function Debts() {
               <button
                 type="button"
                 className={styles.closeButton}
-                onClick={() => setPaymentTarget(null)}
+                onClick={() => { if (!paying) setPaymentTarget(null); }}
+                disabled={paying}
                 aria-label="Cerrar"
               >
                 <i className="bi bi-x-lg"></i>
@@ -1694,7 +1808,10 @@ function Debts() {
 
             <form className={styles.form} onSubmit={handlePayment}>
               <label>
-                <span>Monto</span>
+                <span>
+                  Importe total realmente {paymentTarget.direction === "receivable" ? "cobrado" : "pagado"}
+                  {paymentInstallment ? ` (cuota ${paymentInstallment.number})` : ""}
+                </span>
                 <input
                   name="amount"
                   inputMode="decimal"
@@ -1703,6 +1820,26 @@ function Debts() {
                   required
                 />
               </label>
+
+              <div className={styles.paymentSummary} aria-live="polite">
+                <span>Capital aplicado a {paymentInstallment ? "esta cuota" : "la deuda"}
+                  <strong>{formatMoney(paymentPreview.valid ? paymentPreview.principal : 0, paymentTarget.currency)}</strong>
+                </span>
+                {paymentInstallment && (
+                  <span>Interés / recargo automático
+                    <strong>{formatMoney(paymentPreview.valid ? paymentPreview.fee : 0, paymentTarget.currency)}</strong>
+                  </span>
+                )}
+                <span className={styles.paymentTotalRow}>Total {paymentTarget.direction === "receivable" ? "cobrado" : "pagado"}
+                  <strong>{formatMoney(paymentPreview.valid ? paymentPreview.total : 0, paymentTarget.currency)}</strong>
+                </span>
+                {paymentPreview.valid && (
+                  <span className={styles.paymentRemaining}>
+                    Saldo pendiente de {paymentInstallment ? "esta cuota" : "la deuda"} después del pago
+                    <strong>{formatMoney(paymentPreview.outstandingAfter, paymentTarget.currency)}</strong>
+                  </span>
+                )}
+              </div>
 
               <label>
                 <span>Fecha</span>
@@ -1786,6 +1923,16 @@ function Debts() {
                 )}
               </div>
 
+              {paymentError && (
+                <p role="alert" className={styles.paymentError}>{paymentError}</p>
+              )}
+
+              {!paymentForm.registerTransaction && (
+                <p className={styles.paymentHint}>
+                  El pago quedará en el historial, pero no modificará el Dashboard ni los saldos de Cuentas.
+                </p>
+              )}
+
               <div className={styles.modalActions}>
                 <button
                   type="button"
@@ -1814,8 +1961,9 @@ function Debts() {
           <section className={`${styles.modal} ${styles.confirmModal}`}>
             <h2>Eliminar cuenta</h2>
             <p>
-              Se eliminarán cuotas, pagos y recordatorios vinculados.
-              Las transacciones financieras ya creadas se conservarán.
+              Se eliminarán esta cuenta, sus cuotas, los pagos/cobros,
+              los recordatorios y los ingresos/gastos asociados a esos pagos.
+              Esta acción no se puede deshacer.
             </p>
 
             <div className={styles.modalActions}>

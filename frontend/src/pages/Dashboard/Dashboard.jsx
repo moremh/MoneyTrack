@@ -1,16 +1,17 @@
-import {
-  useContext,
-  useMemo,
-  useState,
-} from "react";
+import { useContext, useMemo, useState } from "react";
+
+import { FinanceContext } from "../../context/FinanceContext";
+
+import { AccountContext } from "../../context/AccountContext";
 
 import {
-  FinanceContext,
-} from "../../context/FinanceContext";
-
-import {
-  AccountContext,
-} from "../../context/AccountContext";
+  calculatePeriodTotals,
+  getAvailableChanges,
+  calculateSavedTotals,
+  filterSavingsEvents,
+  getSavingsEvents,
+  roundMoney,
+} from "../../utils/dashboardFinance";
 
 import styles from "./Dashboard.module.css";
 
@@ -39,30 +40,19 @@ import {
 function formatLocalDate(date) {
   const year = date.getFullYear();
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
 
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
 
-function formatDisplayDate(
-  dateString
-) {
-  return dateString
-    .split("-")
-    .reverse()
-    .join("/");
+function formatDisplayDate(dateString) {
+  return dateString.split("-").reverse().join("/");
 }
 
 function getToday() {
-  return formatLocalDate(
-    new Date()
-  );
+  return formatLocalDate(new Date());
 }
 
 function getMonthStart() {
@@ -73,17 +63,18 @@ function getMonthStart() {
   return formatLocalDate(date);
 }
 
-function getMonthsAgoStart(
-  monthsAgo
-) {
-  const date = new Date();
+function getMonthsAgoStart(monthsAgo) {
+  const today = new Date();
 
-  date.setDate(1);
+  const date = new Date(today.getFullYear(), today.getMonth() - monthsAgo, 1);
 
-  date.setMonth(
-    date.getMonth() -
-      monthsAgo
-  );
+  const lastDay = new Date(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    0,
+  ).getDate();
+
+  date.setDate(Math.min(today.getDate(), lastDay));
 
   return formatLocalDate(date);
 }
@@ -98,28 +89,21 @@ function getYearStart() {
 }
 
 function formatAmountInput(value) {
-  const cleaned = String(
-    value || ""
-  ).replace(/[^0-9.,]/g, "");
+  const cleaned = String(value || "").replace(/[^0-9.,]/g, "");
 
   if (!cleaned) {
     return "";
   }
 
-  const lastComma =
-    cleaned.lastIndexOf(",");
-  const lastDot =
-    cleaned.lastIndexOf(".");
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
 
   let decimalIndex = -1;
 
   if (lastComma >= 0) {
     decimalIndex = lastComma;
   } else if (lastDot >= 0) {
-    const digitsAfterDot =
-      cleaned.length -
-      lastDot -
-      1;
+    const digitsAfterDot = cleaned.length - lastDot - 1;
 
     if (digitsAfterDot <= 2) {
       decimalIndex = lastDot;
@@ -127,42 +111,29 @@ function formatAmountInput(value) {
   }
 
   const integerSource =
-    decimalIndex >= 0
-      ? cleaned.slice(
-          0,
-          decimalIndex
-        )
-      : cleaned;
+    decimalIndex >= 0 ? cleaned.slice(0, decimalIndex) : cleaned;
 
-  const integerDigits =
-    integerSource.replace(
-      /[.,]/g,
-      ""
-    );
+  const integerDigits = integerSource.replace(/[.,]/g, "");
 
-  const formattedInteger =
-    (integerDigits || "0").replace(
-      /\B(?=(\d{3})+(?!\d))/g,
-      "."
-    );
+  const formattedInteger = (integerDigits || "0").replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ".",
+  );
 
   if (decimalIndex < 0) {
     return formattedInteger;
   }
 
-  const decimalDigits =
-    cleaned
-      .slice(decimalIndex + 1)
-      .replace(/[.,]/g, "")
-      .slice(0, 2);
+  const decimalDigits = cleaned
+    .slice(decimalIndex + 1)
+    .replace(/[.,]/g, "")
+    .slice(0, 2);
 
   return `${formattedInteger},${decimalDigits}`;
 }
 
 function parseAmountInput(value) {
-  const normalized = String(
-    value || ""
-  )
+  const normalized = String(value || "")
     .replace(/\./g, "")
     .replace(",", ".");
 
@@ -180,615 +151,311 @@ function Dashboard() {
     addExpense,
     recordGoalMovement,
     movementUsage,
-  } = useContext(
-    FinanceContext
+  } = useContext(FinanceContext);
+
+  const { accounts = [], transfers = [] } = useContext(AccountContext) || {};
+
+  const [fromDate, setFromDate] = useState(() => getMonthStart());
+
+  const [toDate, setToDate] = useState(() => getToday());
+
+  const [activePreset, setActivePreset] = useState("month");
+
+  const [quickMovementType, setQuickMovementType] = useState(null);
+
+  const [quickMovementAmount, setQuickMovementAmount] = useState("");
+
+  const [showCalculatorModal, setShowCalculatorModal] = useState(false);
+
+  const [showSavingsModal, setShowSavingsModal] = useState(false);
+
+  const [savingsGoalId, setSavingsGoalId] = useState("");
+
+  const [savingsMovementType, setSavingsMovementType] = useState("deposit");
+
+  const [savingsAmount, setSavingsAmount] = useState("");
+
+  const [savingsDescription, setSavingsDescription] = useState("");
+
+  const [savingsDate, setSavingsDate] = useState(() => getToday());
+
+  const [savingsError, setSavingsError] = useState("");
+
+  const [isSavingMovement, setIsSavingMovement] = useState(false);
+
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  const filteredIncomes = useMemo(() => {
+    return incomes.filter((item) => {
+      if (fromDate && item.date < fromDate) {
+        return false;
+      }
+
+      if (toDate && item.date > toDate) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [incomes, fromDate, toDate]);
+
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((item) => {
+      if (fromDate && item.date < fromDate) {
+        return false;
+      }
+
+      if (toDate && item.date > toDate) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [expenses, fromDate, toDate]);
+
+  const includedBalanceAccounts = useMemo(
+    () =>
+      accounts.filter(
+        (account) => account.isActive && account.includeInBalance !== false,
+      ),
+    [accounts],
   );
 
-  const {
-    accounts = [],
-    transfers = [],
-  } =
-    useContext(AccountContext) ||
-    {};
-
-  const [
-    fromDate,
-    setFromDate,
-  ] = useState(() =>
-    getMonthStart()
+  const includedBalanceAccountIds = useMemo(
+    () => new Set(includedBalanceAccounts.map((account) => account.id)),
+    [includedBalanceAccounts],
   );
 
-  const [
-    toDate,
-    setToDate,
-  ] = useState(() =>
-    getToday()
+  const generalAccountBalance = useMemo(() => {
+    let total = includedBalanceAccounts.reduce(
+      (accumulator, account) =>
+        accumulator + Number(account.openingBalance || 0),
+      0,
+    );
+
+    incomes.forEach((movement) => {
+      if (
+        movement.accountId &&
+        includedBalanceAccountIds.has(movement.accountId)
+      ) {
+        total += Number(movement.amount) || 0;
+      }
+    });
+
+    expenses.forEach((movement) => {
+      if (
+        movement.accountId &&
+        includedBalanceAccountIds.has(movement.accountId)
+      ) {
+        total -= Number(movement.amount) || 0;
+      }
+    });
+
+    transfers.forEach((transfer) => {
+      const amount = Number(transfer.amount) || 0;
+
+      if (includedBalanceAccountIds.has(transfer.fromAccountId)) {
+        total -= amount;
+      }
+
+      if (includedBalanceAccountIds.has(transfer.toAccountId)) {
+        total += amount;
+      }
+    });
+
+    return roundMoney(total);
+  }, [
+    includedBalanceAccounts,
+    includedBalanceAccountIds,
+    incomes,
+    expenses,
+    transfers,
+  ]);
+
+  // Mismos eventos y las mismas fechas para tarjetas y gráficos.
+  // Se incluyen movimientos manuales y movimientos de cuentas vinculadas.
+  const savingsEvents = useMemo(
+    () => getSavingsEvents({ goals, goalMovements, transfers, incomes, expenses }),
+    [goals, goalMovements, transfers, incomes, expenses],
   );
 
-  const [
-    activePreset,
-    setActivePreset,
-  ] = useState("month");
+  const filteredSavingsEvents = useMemo(
+    () => filterSavingsEvents(savingsEvents, fromDate, toDate),
+    [savingsEvents, fromDate, toDate],
+  );
 
-  const [
-    quickMovementType,
-    setQuickMovementType,
-  ] = useState(null);
+  const periodTotals = useMemo(
+    () => calculatePeriodTotals(filteredIncomes, filteredExpenses, filteredSavingsEvents),
+    [filteredIncomes, filteredExpenses, filteredSavingsEvents],
+  );
 
-  const [
-    quickMovementAmount,
-    setQuickMovementAmount,
-  ] = useState("");
-
-  const [
-    showCalculatorModal,
-    setShowCalculatorModal,
-  ] = useState(false);
-
-  const [
-    showSavingsModal,
-    setShowSavingsModal,
-  ] = useState(false);
-
-  const [
-    savingsGoalId,
-    setSavingsGoalId,
-  ] = useState("");
-
-  const [
-    savingsMovementType,
-    setSavingsMovementType,
-  ] = useState("deposit");
-
-  const [
-    savingsAmount,
-    setSavingsAmount,
-  ] = useState("");
-
-  const [
-    savingsDescription,
-    setSavingsDescription,
-  ] = useState("");
-
-  const [
-    savingsDate,
-    setSavingsDate,
-  ] = useState(() => getToday());
-
-  const [
-    savingsError,
-    setSavingsError,
-  ] = useState("");
-
-  const [
-    isSavingMovement,
-    setIsSavingMovement,
-  ] = useState(false);
-
-  const [
-    showPremiumModal,
-    setShowPremiumModal,
-  ] = useState(false);
-
-  const filteredIncomes =
-    useMemo(() => {
-      return incomes.filter(
-        (item) => {
-          if (
-            fromDate &&
-            item.date < fromDate
-          ) {
-            return false;
-          }
-
-          if (
-            toDate &&
-            item.date > toDate
-          ) {
-            return false;
-          }
-
-          return true;
-        }
-      );
-    }, [
-      incomes,
-      fromDate,
-      toDate,
-    ]);
-
-  const filteredExpenses =
-    useMemo(() => {
-      return expenses.filter(
-        (item) => {
-          if (
-            fromDate &&
-            item.date < fromDate
-          ) {
-            return false;
-          }
-
-          if (
-            toDate &&
-            item.date > toDate
-          ) {
-            return false;
-          }
-
-          return true;
-        }
-      );
-    }, [
-      expenses,
-      fromDate,
-      toDate,
-    ]);
-
-  const filteredGoalMovements =
-    useMemo(() => {
-      return goalMovements.filter(
-        (item) => {
-          if (
-            fromDate &&
-            item.date < fromDate
-          ) {
-            return false;
-          }
-
-          if (
-            toDate &&
-            item.date > toDate
-          ) {
-            return false;
-          }
-
-          return true;
-        }
-      );
-    }, [
-      goalMovements,
-      fromDate,
-      toDate,
-    ]);
-
-  const includedBalanceAccounts =
-    useMemo(
-      () =>
-        accounts.filter(
-          (account) =>
-            account.isActive &&
-            account.includeInBalance !==
-              false
-        ),
-      [accounts]
-    );
-
-  const includedBalanceAccountIds =
-    useMemo(
-      () =>
-        new Set(
-          includedBalanceAccounts.map(
-            (account) =>
-              account.id
-          )
-        ),
-      [includedBalanceAccounts]
-    );
-
-  const generalAccountBalance =
-    useMemo(() => {
-      let total =
-        includedBalanceAccounts.reduce(
-          (
-            accumulator,
-            account
-          ) =>
-            accumulator +
-            Number(
-              account.openingBalance ||
-                0
-            ),
-          0
-        );
-
-      incomes.forEach(
-        (movement) => {
-          if (
-            movement.accountId &&
-            includedBalanceAccountIds.has(
-              movement.accountId
-            )
-          ) {
-            total +=
-              Number(
-                movement.amount
-              ) || 0;
-          }
-        }
-      );
-
-      expenses.forEach(
-        (movement) => {
-          if (
-            movement.accountId &&
-            includedBalanceAccountIds.has(
-              movement.accountId
-            )
-          ) {
-            total -=
-              Number(
-                movement.amount
-              ) || 0;
-          }
-        }
-      );
-
-      transfers.forEach(
-        (transfer) => {
-          const amount =
-            Number(
-              transfer.amount
-            ) || 0;
-
-          if (
-            includedBalanceAccountIds.has(
-              transfer.fromAccountId
-            )
-          ) {
-            total -= amount;
-          }
-
-          if (
-            includedBalanceAccountIds.has(
-              transfer.toAccountId
-            )
-          ) {
-            total += amount;
-          }
-        }
-      );
-
-      return total;
-    }, [
-      includedBalanceAccounts,
-      includedBalanceAccountIds,
-      incomes,
-      expenses,
-      transfers,
-    ]);
-
-  const totalIncome =
-    filteredIncomes.reduce(
-      (accumulator, item) =>
-        accumulator +
-        Number(item.amount),
-      0
-    );
-
-  const totalExpenses =
-    filteredExpenses.reduce(
-      (accumulator, item) =>
-        accumulator +
-        Number(item.amount),
-      0
-    );
+  const totalIncome = periodTotals.income;
+  const totalExpenses = periodTotals.expenses;
 
   /*
    * Saldo histórico real de cada cuenta.
    * Para objetivos vinculados, este saldo
    * será la fuente del progreso.
    */
-  const accountBalances =
-    useMemo(() => {
-      const balances =
-        new Map(
-          accounts.map(
-            (account) => [
-              account.id,
-              Number(
-                account.openingBalance ||
-                  0
-              ),
-            ]
-          )
+  const accountBalances = useMemo(() => {
+    const balances = new Map(
+      accounts.map((account) => [
+        account.id,
+        Number(account.openingBalance || 0),
+      ]),
+    );
+
+    incomes.forEach((movement) => {
+      if (movement.accountId && balances.has(movement.accountId)) {
+        balances.set(
+          movement.accountId,
+          (balances.get(movement.accountId) || 0) +
+            (Number(movement.amount) || 0),
         );
+      }
+    });
 
-      incomes.forEach(
-        (movement) => {
-          if (
-            movement.accountId &&
-            balances.has(
-              movement.accountId
-            )
-          ) {
-            balances.set(
-              movement.accountId,
-              (
-                balances.get(
-                  movement.accountId
-                ) || 0
-              ) +
-                (
-                  Number(
-                    movement.amount
-                  ) || 0
-                )
-            );
-          }
-        }
-      );
+    expenses.forEach((movement) => {
+      if (movement.accountId && balances.has(movement.accountId)) {
+        balances.set(
+          movement.accountId,
+          (balances.get(movement.accountId) || 0) -
+            (Number(movement.amount) || 0),
+        );
+      }
+    });
 
-      expenses.forEach(
-        (movement) => {
-          if (
-            movement.accountId &&
-            balances.has(
-              movement.accountId
-            )
-          ) {
-            balances.set(
-              movement.accountId,
-              (
-                balances.get(
-                  movement.accountId
-                ) || 0
-              ) -
-                (
-                  Number(
-                    movement.amount
-                  ) || 0
-                )
-            );
-          }
-        }
-      );
+    transfers.forEach((transfer) => {
+      const amount = Number(transfer.amount) || 0;
 
-      transfers.forEach(
-        (transfer) => {
-          const amount =
-            Number(
-              transfer.amount
-            ) || 0;
+      if (balances.has(transfer.fromAccountId)) {
+        balances.set(
+          transfer.fromAccountId,
+          (balances.get(transfer.fromAccountId) || 0) - amount,
+        );
+      }
 
-          if (
-            balances.has(
-              transfer.fromAccountId
-            )
-          ) {
-            balances.set(
-              transfer.fromAccountId,
-              (
-                balances.get(
-                  transfer.fromAccountId
-                ) || 0
-              ) - amount
-            );
-          }
+      if (balances.has(transfer.toAccountId)) {
+        balances.set(
+          transfer.toAccountId,
+          (balances.get(transfer.toAccountId) || 0) + amount,
+        );
+      }
+    });
 
-          if (
-            balances.has(
-              transfer.toAccountId
-            )
-          ) {
-            balances.set(
-              transfer.toAccountId,
-              (
-                balances.get(
-                  transfer.toAccountId
-                ) || 0
-              ) + amount
-            );
-          }
-        }
-      );
-
-      return balances;
-    }, [
-      accounts,
-      incomes,
-      expenses,
-      transfers,
-    ]);
+    return balances;
+  }, [accounts, incomes, expenses, transfers]);
 
   /*
    * Las metas vinculadas usan solamente
    * el saldo real de la cuenta.
    */
-  const dashboardGoals =
-    useMemo(
-      () =>
-        goals.map(
-          (goal) => {
-            if (
-              !goal.accountId ||
-              !accountBalances.has(
-                goal.accountId
-              )
-            ) {
-              return goal;
-            }
+  const dashboardGoals = useMemo(
+    () =>
+      goals.map((goal) => {
+        if (!goal.accountId || !accountBalances.has(goal.accountId)) {
+          return goal;
+        }
 
-            const linkedBalance =
-              Math.max(
-                Number(
-                  accountBalances.get(
-                    goal.accountId
-                  )
-                ) || 0,
-                0
-              );
-
-            return {
-              ...goal,
-              currentAmount:
-                linkedBalance,
-              savedAmount:
-                linkedBalance,
-              saved:
-                linkedBalance,
-            };
-          }
-        ),
-      [
-        goals,
-        accountBalances,
-      ]
-    );
-
-  /*
-   * Este valor representa cuánto dinero
-   * hay ahorrado actualmente en todos
-   * los objetivos. Se muestra aparte y
-   * no se usa directamente para calcular
-   * el balance del período.
-   */
-  const totalGoalSavings =
-    dashboardGoals.reduce(
-      (accumulator, goal) =>
-        accumulator +
-        Number(
-          goal.currentAmount || 0
-        ),
-      0
-    );
-
-  const netSavingsMovement =
-  filteredGoalMovements.reduce(
-    (
-      accumulator,
-      movement
-    ) => {
-      /*
-       * Un saldo inicial representa
-       * dinero que ya estaba ahorrado
-       * antes de tener historial.
-       *
-       * No debe volver a afectar
-       * el balance del período.
-       */
-      if (
-        movement.isOpeningBalance ||
-        movement.description ===
-          "Saldo inicial del objetivo"
-      ) {
-        return accumulator;
-      }
-
-      const amount =
-        Number(
-          movement.amount || 0
+        const linkedBalance = Math.max(
+          Number(accountBalances.get(goal.accountId)) || 0,
+          0,
         );
 
-      return movement.type ===
-        "withdrawal"
-        ? accumulator - amount
-        : accumulator + amount;
-    },
-    0
+        return {
+          ...goal,
+          currentAmount: linkedBalance,
+          savedAmount: linkedBalance,
+          saved: linkedBalance,
+        };
+      }),
+    [goals, accountBalances],
   );
 
-  const balance =
-    generalAccountBalance;
+  // Objetivos vinculados: cada cuenta se reserva UNA sola vez.
+  // Objetivos independientes: se aparta lo declarado como ahorrado.
+  // Los fondos permanecen en el patrimonio, pero dejan de estar disponibles.
+  const savedTotals = useMemo(
+    () => calculateSavedTotals({
+      goals,
+      accountBalances,
+      includedAccountIds: includedBalanceAccountIds,
+    }),
+    [goals, accountBalances, includedBalanceAccountIds],
+  );
+
+  const totalGoalSavings = savedTotals.totalSaved;
+  const spendableBalance = roundMoney(
+    generalAccountBalance - savedTotals.reservedInIncluded,
+  ); // saldo en cuentas incluidas menos dinero reservado
+
+  // Movimientos que cambian el disponible a lo largo de la historia.
+  // Las 4 tarjetas se mantienen: este cálculo alimenta solo la línea azul.
+  const availableChanges = useMemo(
+    () => getAvailableChanges({ accounts, incomes, expenses, transfers, goals, goalMovements }),
+    [accounts, incomes, expenses, transfers, goals, goalMovements],
+  );
 
   /*
    * El contador principal representa
    * ingresos y gastos. Los movimientos
    * de ahorro se muestran por separado.
    */
-  const totalMovements =
-    filteredIncomes.length +
-    filteredExpenses.length;
+  const totalMovements = filteredIncomes.length + filteredExpenses.length;
 
   const movementsLabel =
     fromDate || toDate
-      ? "Movimientos del período"
-      : "Movimientos totales registrados";
+      ? "Ingresos y gastos del período"
+      : "Ingresos y gastos registrados";
 
-  const periodText =
-    useMemo(() => {
-      if (
-        fromDate &&
-        toDate
-      ) {
-        return `Período seleccionado: ${formatRegionalDate(
-          fromDate,
-          settings
-        )} - ${formatRegionalDate(
-          toDate,
-          settings
-        )}`;
-      }
+  const periodText = useMemo(() => {
+    if (fromDate && toDate) {
+      return `Período seleccionado: ${formatRegionalDate(
+        fromDate,
+        settings,
+      )} - ${formatRegionalDate(toDate, settings)}`;
+    }
 
-      if (fromDate) {
-        return `Período desde: ${formatRegionalDate(
-          fromDate,
-          settings
-        )}`;
-      }
+    if (fromDate) {
+      return `Período desde: ${formatRegionalDate(fromDate, settings)}`;
+    }
 
-      if (toDate) {
-        return `Período hasta: ${formatRegionalDate(
-          toDate,
-          settings
-        )}`;
-      }
+    if (toDate) {
+      return `Período hasta: ${formatRegionalDate(toDate, settings)}`;
+    }
 
-      return "Mostrando todos los movimientos cargados.";
-    }, [
-      fromDate,
-      toDate,
-    ]);
+    return "Mostrando todos los movimientos cargados.";
+  }, [fromDate, toDate, settings]);
 
-  const applyPreset = (
-    preset
-  ) => {
-    const today =
-      getToday();
+  const applyPreset = (preset) => {
+    const today = getToday();
 
-    if (
-      preset === "month"
-    ) {
-      setFromDate(
-        getMonthStart()
-      );
+    if (preset === "month") {
+      setFromDate(getMonthStart());
 
       setToDate(today);
 
-      setActivePreset(
-        "month"
-      );
+      setActivePreset("month");
 
       return;
     }
 
-    if (
-      preset === "quarter"
-    ) {
-      setFromDate(
-        getMonthsAgoStart(2)
-      );
+    if (preset === "quarter") {
+      setFromDate(getMonthsAgoStart(3));
 
       setToDate(today);
 
-      setActivePreset(
-        "quarter"
-      );
+      setActivePreset("quarter");
 
       return;
     }
 
-    if (
-      preset === "year"
-    ) {
-      setFromDate(
-        getYearStart()
-      );
+    if (preset === "year") {
+      setFromDate(getYearStart());
 
       setToDate(today);
 
-      setActivePreset(
-        "year"
-      );
+      setActivePreset("year");
 
       return;
     }
@@ -799,59 +466,35 @@ function Dashboard() {
     setActivePreset("all");
   };
 
-  const handleFromDateChange = (
-    value
-  ) => {
+  const handleFromDateChange = (value) => {
     setFromDate(value);
 
-    setActivePreset(
-      "custom"
-    );
+    setActivePreset("custom");
   };
 
-  const handleToDateChange = (
-    value
-  ) => {
+  const handleToDateChange = (value) => {
     setToDate(value);
 
-    setActivePreset(
-      "custom"
-    );
+    setActivePreset("custom");
   };
 
   const openIncomeForm = () => {
     setQuickMovementAmount("");
-    setQuickMovementType(
-      "income"
-    );
+    setQuickMovementType("income");
   };
 
   const openExpenseForm = () => {
     setQuickMovementAmount("");
-    setQuickMovementType(
-      "expense"
-    );
+    setQuickMovementType("expense");
   };
 
-  const prepareSavingsForm = (
-    initialAmount = ""
-  ) => {
-    setSavingsGoalId(
-      goals[0]?.id || ""
-    );
-    setSavingsMovementType(
-      "deposit"
-    );
+  const prepareSavingsForm = (initialAmount = "") => {
+    setSavingsGoalId(goals[0]?.id || "");
+    setSavingsMovementType("deposit");
     setSavingsAmount(
       initialAmount === ""
         ? ""
-        : formatRegionalAmountInput(
-            String(
-              initialAmount
-            ),
-            "",
-            settings
-          )
+        : formatRegionalAmountInput(String(initialAmount), "", settings),
     );
     setSavingsDescription("");
     setSavingsDate(getToday());
@@ -872,14 +515,8 @@ function Dashboard() {
     setShowCalculatorModal(false);
   };
 
-  const handleCalculatorUseResult = (
-    type,
-    amount
-  ) => {
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
+  const handleCalculatorUseResult = (type, amount) => {
+    if (!Number.isFinite(amount) || amount <= 0) {
       return;
     }
 
@@ -890,15 +527,9 @@ function Dashboard() {
       return;
     }
 
-    setQuickMovementAmount(
-      amount
-    );
+    setQuickMovementAmount(amount);
 
-    setQuickMovementType(
-      type === "expense"
-        ? "expense"
-        : "income"
-    );
+    setQuickMovementType(type === "expense" ? "expense" : "income");
   };
 
   const closeSavingsForm = () => {
@@ -911,173 +542,115 @@ function Dashboard() {
   };
 
   const closeQuickForm = () => {
-    setQuickMovementType(
-      null
-    );
+    setQuickMovementType(null);
     setQuickMovementAmount("");
   };
 
-  const handleQuickAddIncome =
-    async (incomeData) => {
-      const result =
-        await addIncome(
-          incomeData
-        );
+  const handleQuickAddIncome = async (incomeData) => {
+    const result = await addIncome(incomeData);
 
-      if (result?.success) {
-        closeQuickForm();
-      }
+    if (result?.success) {
+      closeQuickForm();
+    }
 
-      return result;
-    };
+    return result;
+  };
 
-  const handleQuickAddExpense =
-    async (expenseData) => {
-      const result =
-        await addExpense(
-          expenseData
-        );
+  const handleQuickAddExpense = async (expenseData) => {
+    const result = await addExpense(expenseData);
 
-      if (result?.success) {
-        closeQuickForm();
-      }
+    if (result?.success) {
+      closeQuickForm();
+    }
 
-      return result;
-    };
+    return result;
+  };
 
-  const handleSavingsAmountChange =
-    (value) => {
-      setSavingsAmount(
-        (
-          currentValue
-        ) =>
-          formatRegionalAmountInput(
-            value,
-            currentValue,
-            settings
-          )
+  const handleSavingsAmountChange = (value) => {
+    setSavingsAmount((currentValue) =>
+      formatRegionalAmountInput(value, currentValue, settings),
+    );
+  };
+
+  const handleSavingsSubmit = async (event) => {
+    event.preventDefault();
+
+    if (isSavingMovement) {
+      return;
+    }
+
+    setSavingsError("");
+
+    const numericAmount = parseRegionalAmountInput(savingsAmount, settings);
+
+    if (!savingsGoalId) {
+      setSavingsError("Seleccioná un objetivo de ahorro.");
+      return;
+    }
+
+    const goalForMovement = goals.find((goal) => goal.id === savingsGoalId);
+
+    if (goalForMovement?.accountId) {
+      setSavingsError(
+        `Este objetivo está vinculado a una cuenta y se actualiza automáticamente con su saldo.`,
       );
-    };
+      return;
+    }
 
-  const handleSavingsSubmit =
-    async (event) => {
-      event.preventDefault();
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setSavingsError("El monto debe ser mayor a 0.");
+      return;
+    }
 
-      if (isSavingMovement) {
+    if (!savingsDate) {
+      setSavingsError("Seleccioná una fecha.");
+      return;
+    }
+
+    setIsSavingMovement(true);
+
+    try {
+      const result = await recordGoalMovement({
+        goalId: savingsGoalId,
+        type: savingsMovementType,
+        amount: numericAmount,
+        description: savingsDescription,
+        date: savingsDate,
+      });
+
+      if (!result?.success) {
+        setSavingsError(
+          result?.message || "No se pudo registrar el movimiento de ahorro.",
+        );
         return;
       }
 
+      setShowSavingsModal(false);
       setSavingsError("");
-
-      const numericAmount =
-        parseRegionalAmountInput(
-          savingsAmount,
-          settings
-        );
-
-      if (!savingsGoalId) {
-        setSavingsError(
-          "Seleccioná un objetivo de ahorro."
-        );
-        return;
-      }
-
-      const goalForMovement =
-        goals.find(
-          (goal) =>
-            goal.id ===
-            savingsGoalId
-        );
-
-      if (
-        goalForMovement?.accountId
-      ) {
-        setSavingsError(
-          `Este objetivo está vinculado a una cuenta y se actualiza automáticamente con su saldo.`
-        );
-        return;
-      }
-
-      if (
-        !Number.isFinite(
-          numericAmount
-        ) ||
-        numericAmount <= 0
-      ) {
-        setSavingsError(
-          "El monto debe ser mayor a 0."
-        );
-        return;
-      }
-
-      if (!savingsDate) {
-        setSavingsError(
-          "Seleccioná una fecha."
-        );
-        return;
-      }
-
-      setIsSavingMovement(true);
-
-      try {
-        const result =
-          await recordGoalMovement({
-            goalId:
-              savingsGoalId,
-            type:
-              savingsMovementType,
-            amount:
-              numericAmount,
-            description:
-              savingsDescription,
-            date: savingsDate,
-          });
-
-        if (!result?.success) {
-          setSavingsError(
-            result?.message ||
-              "No se pudo registrar el movimiento de ahorro."
-          );
-          return;
-        }
-
-        setShowSavingsModal(
-          false
-        );
-        setSavingsError("");
-      } finally {
-        setIsSavingMovement(
-          false
-        );
-      }
-    };
+    } finally {
+      setIsSavingMovement(false);
+    }
+  };
 
   const selectedSavingsGoal =
-    dashboardGoals.find(
-      (goal) =>
-        goal.id ===
-        savingsGoalId
-    ) || null;
+    dashboardGoals.find((goal) => goal.id === savingsGoalId) || null;
 
-  const handleLimitReached =
-    () => {
-      closeQuickForm();
+  const handleLimitReached = () => {
+    closeQuickForm();
 
-      setShowPremiumModal(
-        true
-      );
-    };
+    setShowPremiumModal(true);
+  };
 
   const quickFormTitle =
-    quickMovementType ===
-    "expense"
-      ? "Agregar gasto"
-      : "Agregar ingreso";
+    quickMovementType === "expense" ? "Agregar gasto" : "Agregar ingreso";
 
-  const chartMode =
-    activePreset === "month"
-      ? "daily"
-      : "monthly";
+  const customDays = fromDate && toDate
+    ? Math.round((Date.parse(toDate) - Date.parse(fromDate)) / 86400000) + 1
+    : null;
+  const chartMode = activePreset === "month" ||
+    (activePreset === "custom" && customDays > 0 && customDays <= 45)
+    ? "daily"
+    : "monthly";
 
   const chartTitle =
     activePreset === "month"
@@ -1091,127 +664,66 @@ function Dashboard() {
             : "Balance del período seleccionado";
 
   return (
-    <div
-      className={
-        styles.dashboard
-      }
-    >
-      <div
-        className={
-          styles.header
-        }
-      >
-        <h1
-          className={
-            styles.title
-          }
-        >
-          Bienvenido,{" "}
-          {settings.userName} 👋
-        </h1>
+    <div className={styles.dashboard}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Bienvenido, {settings.userName} 👋</h1>
 
-        <p
-          className={
-            styles.subtitle
-          }
-        >
-          Aquí tienes un resumen
-          actualizado de tu
-          actividad financiera.
+        <p className={styles.subtitle}>
+          Aquí tienes un resumen actualizado de tu actividad financiera.
         </p>
       </div>
 
-      <section
-        className={
-          styles.quickActions
-        }
-        aria-label="Acciones rápidas"
-      >
+      <section className={styles.quickActions} aria-label="Acciones rápidas">
         <button
           type="button"
           className={`${styles.quickActionButton} ${styles.incomeAction}`}
-          onClick={
-            openIncomeForm
-          }
+          onClick={openIncomeForm}
         >
           <i className="bi bi-plus-circle"></i>
 
-          <span>
-            Agregar ingreso
-          </span>
+          <span>Agregar ingreso</span>
         </button>
 
         <button
           type="button"
           className={`${styles.quickActionButton} ${styles.expenseAction}`}
-          onClick={
-            openExpenseForm
-          }
+          onClick={openExpenseForm}
         >
           <i className="bi bi-plus-circle"></i>
 
-          <span>
-            Agregar gasto
-          </span>
+          <span>Agregar gasto</span>
         </button>
 
         <button
           type="button"
           className={`${styles.quickActionButton} ${styles.savingsAction}`}
-          onClick={
-            openSavingsForm
-          }
+          onClick={openSavingsForm}
         >
           <i className="bi bi-piggy-bank"></i>
 
-          <span>
-            Agregar ahorro
-          </span>
+          <span>Agregar ahorro</span>
         </button>
 
         <button
           type="button"
           className={`${styles.quickActionButton} ${styles.calculatorAction}`}
-          onClick={
-            openCalculator
-          }
+          onClick={openCalculator}
         >
           <i className="bi bi-calculator"></i>
 
-          <span>
-            Calculadora
-          </span>
+          <span>Calculadora</span>
         </button>
       </section>
 
-      <section
-        className={
-          styles.filtersCard
-        }
-      >
-        <div
-          className={
-            styles.filtersTop
-          }
-        >
-          <div
-            className={
-              styles.quickFilters
-            }
-          >
+      <section className={styles.filtersCard}>
+        <div className={styles.filtersTop}>
+          <div className={styles.quickFilters}>
             <button
               type="button"
               className={`${styles.filterButton} ${
-                activePreset ===
-                "all"
-                  ? styles.activeFilter
-                  : ""
+                activePreset === "all" ? styles.activeFilter : ""
               }`}
-              onClick={() =>
-                applyPreset(
-                  "all"
-                )
-              }
+              onClick={() => applyPreset("all")}
             >
               Todo
             </button>
@@ -1219,16 +731,9 @@ function Dashboard() {
             <button
               type="button"
               className={`${styles.filterButton} ${
-                activePreset ===
-                "month"
-                  ? styles.activeFilter
-                  : ""
+                activePreset === "month" ? styles.activeFilter : ""
               }`}
-              onClick={() =>
-                applyPreset(
-                  "month"
-                )
-              }
+              onClick={() => applyPreset("month")}
             >
               Este mes
             </button>
@@ -1236,16 +741,9 @@ function Dashboard() {
             <button
               type="button"
               className={`${styles.filterButton} ${
-                activePreset ===
-                "quarter"
-                  ? styles.activeFilter
-                  : ""
+                activePreset === "quarter" ? styles.activeFilter : ""
               }`}
-              onClick={() =>
-                applyPreset(
-                  "quarter"
-                )
-              }
+              onClick={() => applyPreset("quarter")}
             >
               Últimos 3 meses
             </button>
@@ -1253,592 +751,297 @@ function Dashboard() {
             <button
               type="button"
               className={`${styles.filterButton} ${
-                activePreset ===
-                "year"
-                  ? styles.activeFilter
-                  : ""
+                activePreset === "year" ? styles.activeFilter : ""
               }`}
-              onClick={() =>
-                applyPreset(
-                  "year"
-                )
-              }
+              onClick={() => applyPreset("year")}
             >
               Este año
             </button>
           </div>
 
-          <div
-            className={
-              styles.dateFilters
-            }
-          >
-            <div
-              className={
-                styles.filterGroup
-              }
-            >
-              <label htmlFor="dashboard-from-date">
-                Desde
-              </label>
+          <div className={styles.dateFilters}>
+            <div className={styles.filterGroup}>
+              <label htmlFor="dashboard-from-date">Desde</label>
 
-              <div
-                className={
-                  styles.dateControl
-                }
-              >
+              <div className={styles.dateControl}>
                 <input
                   id="dashboard-from-date"
-                  className={
-                    styles.filterInput
-                  }
+                  className={styles.filterInput}
                   type="date"
-                  value={
-                    fromDate
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    handleFromDateChange(
-                      event
-                        .target
-                        .value
-                    )
-                  }
+                  value={fromDate}
+                  onChange={(event) => handleFromDateChange(event.target.value)}
                 />
               </div>
             </div>
 
-            <div
-              className={
-                styles.filterGroup
-              }
-            >
-              <label htmlFor="dashboard-to-date">
-                Hasta
-              </label>
+            <div className={styles.filterGroup}>
+              <label htmlFor="dashboard-to-date">Hasta</label>
 
-              <div
-                className={
-                  styles.dateControl
-                }
-              >
+              <div className={styles.dateControl}>
                 <input
                   id="dashboard-to-date"
-                  className={
-                    styles.filterInput
-                  }
+                  className={styles.filterInput}
                   type="date"
                   value={toDate}
-                  onChange={(
-                    event
-                  ) =>
-                    handleToDateChange(
-                      event
-                        .target
-                        .value
-                    )
-                  }
+                  onChange={(event) => handleToDateChange(event.target.value)}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        <p
-          className={
-            styles.periodText
-          }
-        >
-          {periodText}
-        </p>
+        <p className={styles.periodText}>{periodText}</p>
 
-        <p
-          className={
-            styles.movementsText
-          }
-        >
-          {movementsLabel}:{" "}
-          {totalMovements}
+        <p className={styles.movementsText}>
+          {movementsLabel}: {totalMovements}
         </p>
       </section>
 
-      <div
-        className={
-          styles.cardsGrid
-        }
-      >
+      <div className={styles.cardsGrid}>
         <StatCard
           title="Saldo general"
-          value={
-            formatRegionalCurrency(
-              balance,
-              settings
-            )
-          }
+          value={formatRegionalCurrency(spendableBalance, settings)}
           icon="bi bi-wallet2"
           color="#2563eb"
         />
 
         <StatCard
           title="Ingresos"
-          value={
-            formatRegionalCurrency(
-              totalIncome,
-              settings
-            )
-          }
+          value={formatRegionalCurrency(totalIncome, settings)}
           icon="bi bi-arrow-down-circle"
           color="#22c55e"
         />
 
         <StatCard
           title="Gastos"
-          value={
-            formatRegionalCurrency(
-              totalExpenses,
-              settings
-            )
-          }
+          value={formatRegionalCurrency(totalExpenses, settings)}
           icon="bi bi-arrow-up-circle"
           color="#ef4444"
         />
 
         <StatCard
-          title="Ahorros totales"
-          value={
-            formatRegionalCurrency(
-              totalGoalSavings,
-              settings
-            )
-          }
+          title="Ahorros"
+          value={formatRegionalCurrency(totalGoalSavings, settings)}
           icon="bi bi-piggy-bank"
           color="#f59e0b"
         />
       </div>
 
-      <section
-        className={
-          styles.chartSection
-        }
-      >
-        <h2
-          className={
-            styles.chartTitle
-          }
-        >
-          {chartTitle}
-        </h2>
+      <section className={styles.chartSection}>
+        <h2 className={styles.chartTitle}>{chartTitle}</h2>
 
         <BalanceChart
-          incomes={
-            filteredIncomes
-          }
-          expenses={
-            filteredExpenses
-          }
-          goalMovements={
-            filteredGoalMovements
-          }
+          incomes={filteredIncomes}
+          expenses={filteredExpenses}
+          savingsEvents={filteredSavingsEvents}
+          savingsHistory={savingsEvents}
+          currentSavings={totalGoalSavings}
+          availableChanges={availableChanges}
+          currentAvailable={spendableBalance}
           mode={chartMode}
           fromDate={fromDate}
-          toDate={toDate}
-          settings={
-            settings
-          }
+          toDate={toDate || getToday()}
+          settings={settings}
         />
       </section>
 
-      <section
-        className={
-          styles.chartSection
-        }
-      >
-        <h2
-          className={
-            styles.chartTitle
-          }
-        >
-          Gastos por categoría
-        </h2>
+      <section className={styles.chartSection}>
+        <h2 className={styles.chartTitle}>Gastos por categoría</h2>
 
         <ExpenseCategoriesChart
-          expenses={
-            filteredExpenses
-          }
-          settings={
-            settings
-          }
+          expenses={filteredExpenses}
+          settings={settings}
         />
       </section>
 
-      <section
-        className={
-          styles.chartSection
-        }
-      >
-        <h2
-          className={
-            styles.chartTitle
-          }
-        >
-          Objetivos de ahorro
-        </h2>
+      <section className={styles.chartSection}>
+        <h2 className={styles.chartTitle}>Objetivos de ahorro</h2>
 
-        <SavingsGoals
-          goals={dashboardGoals}
-          settings={
-            settings
-          }
-        />
+        <SavingsGoals goals={dashboardGoals} settings={settings} />
       </section>
 
       {showCalculatorModal && (
-        <Modal
-          onClose={
-            closeCalculator
-          }
-        >
-          <CalculatorModal
-            onUseResult={
-              handleCalculatorUseResult
-            }
-          />
+        <Modal onClose={closeCalculator}>
+          <CalculatorModal onUseResult={handleCalculatorUseResult} />
         </Modal>
       )}
 
       {quickMovementType && (
-        <Modal
-          onClose={
-            closeQuickForm
-          }
-        >
-          <h2
-            className={
-              styles.modalTitle
-            }
-          >
-            {quickFormTitle}
-          </h2>
+        <Modal onClose={closeQuickForm}>
+          <h2 className={styles.modalTitle}>{quickFormTitle}</h2>
 
           <IncomeForm
-            type={
-              quickMovementType
-            }
-            initialAmount={
-              quickMovementAmount
-            }
+            type={quickMovementType}
+            initialAmount={quickMovementAmount}
             onAdd={
-              quickMovementType ===
-              "expense"
+              quickMovementType === "expense"
                 ? handleQuickAddExpense
                 : handleQuickAddIncome
             }
-            onLimitReached={
-              handleLimitReached
-            }
+            onLimitReached={handleLimitReached}
           />
         </Modal>
       )}
 
       {showSavingsModal && (
-        <Modal
-          onClose={
-            closeSavingsForm
-          }
-        >
-          <h2
-            className={
-              styles.modalTitle
-            }
-          >
-            Registrar ahorro
-          </h2>
+        <Modal onClose={closeSavingsForm}>
+          <h2 className={styles.modalTitle}>Registrar ahorro</h2>
 
           {goals.length === 0 ? (
-            <div
-              className={
-                styles.savingsEmptyState
-              }
-            >
+            <div className={styles.savingsEmptyState}>
               <i className="bi bi-piggy-bank"></i>
 
-              <p>
-                Primero tenés que crear
-                un objetivo de ahorro.
-              </p>
+              <p>Primero tenés que crear un objetivo de ahorro.</p>
             </div>
           ) : (
-            <form
-              className={
-                styles.savingsForm
-              }
-              onSubmit={
-                handleSavingsSubmit
-              }
-            >
+            <form className={styles.savingsForm} onSubmit={handleSavingsSubmit}>
               {savingsError && (
-                <div
-                  className={
-                    styles.savingsError
-                  }
-                  role="alert"
-                >
+                <div className={styles.savingsError} role="alert">
                   <i className="bi bi-exclamation-circle"></i>
-                  <span>
-                    {savingsError}
-                  </span>
+                  <span>{savingsError}</span>
                 </div>
               )}
 
-              <div
-                className={
-                  styles.savingsField
-                }
-              >
+              <div className={styles.savingsField}>
                 <label htmlFor="dashboard-savings-goal">
                   Objetivo de ahorro
                 </label>
 
                 <select
                   id="dashboard-savings-goal"
-                  className={
-                    styles.savingsInput
-                  }
-                  value={
-                    savingsGoalId
-                  }
-                  onChange={(event) =>
-                    setSavingsGoalId(
-                      event.target.value
-                    )
-                  }
-                  disabled={
-                    isSavingMovement
-                  }
+                  className={styles.savingsInput}
+                  value={savingsGoalId}
+                  onChange={(event) => setSavingsGoalId(event.target.value)}
+                  disabled={isSavingMovement}
                 >
-                  <option value="">
-                    Seleccioná un objetivo
-                  </option>
+                  <option value="">Seleccioná un objetivo</option>
 
-                  {goals.map(
-                    (goal) => (
-                      <option
-                        key={goal.id}
-                        value={goal.id}
-                      >
-                        {goal.name ||
-                          goal.title}
-                      </option>
-                    )
-                  )}
+                  {goals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.name || goal.title}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               {selectedSavingsGoal && (
-                <div
-                  className={
-                    styles.savingsGoalInfo
-                  }
-                >
+                <div className={styles.savingsGoalInfo}>
                   {selectedSavingsGoal.accountId ? (
                     <>
                       <span>
-                        <i className="bi bi-link-45deg"></i>{" "}
-                        Sincronización automática
+                        <i className="bi bi-link-45deg"></i> Sincronización
+                        automática
                       </span>
 
                       <strong>
-                        Este objetivo se actualiza con el saldo de la cuenta vinculada.
+                        Este objetivo se actualiza con el saldo de la cuenta
+                        vinculada.
                       </strong>
                     </>
                   ) : (
                     <>
-                      <span>
-                        Ahorrado actualmente
-                      </span>
+                      <span>Ahorrado actualmente</span>
 
                       <strong>
-                        $ {Number(
-                          selectedSavingsGoal.currentAmount ||
-                            0
-                        ).toLocaleString(
-                          "es-AR"
-                        )}
+                        ${" "}
+                        {Number(
+                          selectedSavingsGoal.currentAmount || 0,
+                        ).toLocaleString("es-AR")}
                       </strong>
                     </>
                   )}
                 </div>
               )}
 
-              <div
-                className={
-                  styles.savingsField
-                }
-              >
+              <div className={styles.savingsField}>
                 <label htmlFor="dashboard-savings-type">
                   Tipo de movimiento
                 </label>
 
                 <select
                   id="dashboard-savings-type"
-                  className={
-                    styles.savingsInput
-                  }
-                  value={
-                    savingsMovementType
-                  }
+                  className={styles.savingsInput}
+                  value={savingsMovementType}
                   onChange={(event) =>
-                    setSavingsMovementType(
-                      event.target.value
-                    )
+                    setSavingsMovementType(event.target.value)
                   }
                   disabled={
-                    isSavingMovement ||
-                    Boolean(
-                      selectedSavingsGoal?.accountId
-                    )
+                    isSavingMovement || Boolean(selectedSavingsGoal?.accountId)
                   }
                 >
-                  <option value="deposit">
-                    Agregar ahorro
-                  </option>
-                  <option value="withdrawal">
-                    Retirar ahorro
-                  </option>
+                  <option value="deposit">Agregar ahorro</option>
+                  <option value="withdrawal">Retirar ahorro</option>
                 </select>
               </div>
 
-              <div
-                className={
-                  styles.savingsField
-                }
-              >
-                <label htmlFor="dashboard-savings-amount">
-                  Monto
-                </label>
+              <div className={styles.savingsField}>
+                <label htmlFor="dashboard-savings-amount">Monto</label>
 
                 <input
                   id="dashboard-savings-amount"
-                  className={
-                    styles.savingsInput
-                  }
+                  className={styles.savingsInput}
                   type="text"
                   inputMode="decimal"
-                  value={
-                    savingsAmount
-                  }
+                  value={savingsAmount}
                   onChange={(event) =>
-                    handleSavingsAmountChange(
-                      event.target.value
-                    )
+                    handleSavingsAmountChange(event.target.value)
                   }
-                  placeholder={`Ej: ${formatStoredAmount(
-                    25000,
-                    settings
-                  )}`}
+                  placeholder={`Ej: ${formatStoredAmount(25000, settings)}`}
                   disabled={
-                    isSavingMovement ||
-                    Boolean(
-                      selectedSavingsGoal?.accountId
-                    )
+                    isSavingMovement || Boolean(selectedSavingsGoal?.accountId)
                   }
                   autoComplete="off"
                 />
               </div>
 
-              <div
-                className={
-                  styles.savingsField
-                }
-              >
+              <div className={styles.savingsField}>
                 <label htmlFor="dashboard-savings-description">
                   Descripción
-                  <span
-                    className={
-                      styles.optionalText
-                    }
-                  >
-                    (opcional)
-                  </span>
+                  <span className={styles.optionalText}>(opcional)</span>
                 </label>
 
                 <textarea
                   id="dashboard-savings-description"
                   className={`${styles.savingsInput} ${styles.savingsTextarea}`}
                   rows="3"
-                  value={
-                    savingsDescription
-                  }
+                  value={savingsDescription}
                   onChange={(event) =>
-                    setSavingsDescription(
-                      event.target.value
-                    )
+                    setSavingsDescription(event.target.value)
                   }
                   placeholder="Ej: Aporte del sueldo"
                   disabled={
-                    isSavingMovement ||
-                    Boolean(
-                      selectedSavingsGoal?.accountId
-                    )
+                    isSavingMovement || Boolean(selectedSavingsGoal?.accountId)
                   }
                 ></textarea>
               </div>
 
-              <div
-                className={
-                  styles.savingsField
-                }
-              >
-                <label htmlFor="dashboard-savings-date">
-                  Fecha
-                </label>
+              <div className={styles.savingsField}>
+                <label htmlFor="dashboard-savings-date">Fecha</label>
 
                 <input
                   id="dashboard-savings-date"
-                  className={
-                    styles.savingsInput
-                  }
+                  className={styles.savingsInput}
                   type="date"
-                  value={
-                    savingsDate
-                  }
+                  value={savingsDate}
                   max={getToday()}
-                  onChange={(event) =>
-                    setSavingsDate(
-                      event.target.value
-                    )
-                  }
+                  onChange={(event) => setSavingsDate(event.target.value)}
                   disabled={
-                    isSavingMovement ||
-                    Boolean(
-                      selectedSavingsGoal?.accountId
-                    )
+                    isSavingMovement || Boolean(selectedSavingsGoal?.accountId)
                   }
                 />
               </div>
 
-              <div
-                className={
-                  styles.savingsActions
-                }
-              >
+              <div className={styles.savingsActions}>
                 <button
                   type="submit"
-                  className={
-                    styles.savingsSubmitButton
-                  }
+                  className={styles.savingsSubmitButton}
                   disabled={
-                    isSavingMovement ||
-                    Boolean(
-                      selectedSavingsGoal?.accountId
-                    )
+                    isSavingMovement || Boolean(selectedSavingsGoal?.accountId)
                   }
                 >
                   {isSavingMovement
                     ? "Guardando..."
-                    : savingsMovementType ===
-                        "withdrawal"
+                    : savingsMovementType === "withdrawal"
                       ? "Registrar retiro"
                       : "Registrar ahorro"}
                 </button>
@@ -1850,14 +1053,8 @@ function Dashboard() {
 
       {showPremiumModal && (
         <PremiumLimitModal
-          usage={
-            movementUsage
-          }
-          onClose={() =>
-            setShowPremiumModal(
-              false
-            )
-          }
+          usage={movementUsage}
+          onClose={() => setShowPremiumModal(false)}
         />
       )}
     </div>

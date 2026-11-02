@@ -1,0 +1,274 @@
+.stack {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+}
+
+.panel {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.panelHeader h3 {
+  margin: 0 0 7px;
+  color: var(--text);
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.panelHeader p {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.legendButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 35px;
+  padding: 6px 11px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.legendButton:hover {
+  border-color: var(--text-light);
+}
+
+.legendButton:focus-visible,
+.scrollArea:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+}
+
+.hiddenSeries {
+  opacity: 0.42;
+}
+
+.greenDot,
+.redDot,
+.yellowDot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.redDot {
+  background: #ef4444;
+}
+
+.yellowDot {
+  background: #f59e0b;
+}
+
+.scrollArea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b transparent;
+  padding-bottom: 8px;
+}
+
+.scrollArea::-webkit-scrollbar {
+  height: 7px;
+}
+
+.scrollArea::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 10px;
+}
+
+.scrollArea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chart {
+  box-sizing: border-box;
+  width: 100%;
+  height: 310px;
+}
+
+.mobileScrollHint {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--text-light);
+  font-size: 0.78rem;
+}
+
+.resultBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 10px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.resultBadge span {
+  color: var(--text-light);
+  font-size: 0.75rem;
+}
+
+.resultBadge strong {
+  font-size: 1.12rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.positive {
+  color: #16a34a;
+}
+
+.negative {
+  color: #ef4444;
+}
+
+.hint {
+  margin: 13px 0 0;
+  color: var(--text-light);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.tooltip {
+  min-width: 215px;
+  max-width: 280px;
+  padding: 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+}
+
+.tooltip > strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.tooltipLine {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.tooltipLine span {
+  color: var(--text-light);
+}
+
+.tooltipLine strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tooltipDivider {
+  height: 1px;
+  margin-top: 11px;
+  background: var(--border);
+}
+
+.incomeLegend::before,
+.expenseLegend::before,
+.savingsLegend::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.expenseLegend::before {
+  background: #ef4444;
+}
+
+.savingsLegend::before {
+  background: #f59e0b;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  gap: 10px;
+  color: var(--text-light);
+  text-align: center;
+}
+
+.empty i {
+  font-size: 2rem;
+}
+
+.empty strong {
+  color: var(--text);
+}
+
+@media (max-width: 650px) {
+  .mobileScrollHint {
+    display: flex;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .panelHeader {
+    margin-bottom: 14px;
+  }
+
+  .chart {
+    height: 270px;
+    min-width: var(--mobile-chart-width, 280px);
+  }
+
+  .resultBadge {
+    align-items: flex-start;
+  }
+}
