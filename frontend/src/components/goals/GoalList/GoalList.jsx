@@ -4,6 +4,8 @@ import {
   getLocale,
 } from "../../../utils/regionalSettings";
 
+import { calculateGoalMonthlySavings, calculateGoalCompletionDate } from "../../../utils/goalMonthlySavings";
+
 import styles from "./GoalList.module.css";
 
 function GoalList({
@@ -77,13 +79,22 @@ function GoalList({
         const goalTitle =
           goal.title || goal.name || "Objetivo";
 
-        const formattedDeadline =
-          goal.deadline
-            ? formatRegionalDate(
-                goal.deadline,
-                settings
-              )
-            : "Sin definir";
+        const formattedDeadline = goal.deadline
+          ? formatRegionalDate(goal.deadline, settings)
+          : null;
+
+        const hasMonthlyPlan = Number(goal.monthlyContribution) > 0;
+        const plan = hasMonthlyPlan
+          ? calculateGoalCompletionDate({
+              targetAmount,
+              currentAmount,
+              monthlyAmount: goal.monthlyContribution,
+            })
+          : calculateGoalMonthlySavings({
+              targetAmount,
+              currentAmount,
+              deadline: goal.deadline,
+            });
 
         return (
           <div
@@ -97,9 +108,11 @@ function GoalList({
                   {goalTitle}
                 </h3>
 
-                <p className={styles.deadline}>
-                  Fecha límite: {formattedDeadline}
-                </p>
+                {formattedDeadline && (
+                  <p className={styles.deadline}>
+                    Fecha límite: {formattedDeadline}
+                  </p>
+                )}
 
                 {goal.linkedAccountName && (
                   <p
@@ -187,6 +200,38 @@ function GoalList({
             <p className={styles.percent}>
               {percentageLabel}% completado
             </p>
+
+            {plan && (
+              <div className={styles.monthlyInfo}>
+                {plan.status === "completed" ? (
+                  <span>¡Objetivo alcanzado!</span>
+                ) : plan.status === "expired" ? (
+                  <span>Fecha límite vencida. Podés actualizarla.</span>
+                ) : plan.status === "too_long" ? (
+                  <span>El aporte mensual es muy bajo para estimar una fecha cercana.</span>
+                ) : hasMonthlyPlan ? (
+                  <>
+                    <span className={styles.monthlyLabel}>Aporte mensual planeado</span>
+                    <strong className={styles.monthlyAmount}>
+                      {formatRegionalCurrency(plan.monthlyAmount, settings)}
+                    </strong>
+                    <small>Fecha estimada: {formatRegionalDate(plan.completionDate, settings)} · {plan.months} {plan.months === 1 ? "aporte" : "aportes"} desde este mes.</small>
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.monthlyLabel}>Necesitás ahorrar por mes</span>
+                    <strong className={styles.monthlyAmount}>
+                      {formatRegionalCurrency(plan.monthlyAmount, settings)}
+                    </strong>
+                    <small>
+                      {plan.months === 1
+                        ? "1 aporte mensual estimado"
+                        : `${plan.months} aportes mensuales estimados`}
+                    </small>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         );
       })}

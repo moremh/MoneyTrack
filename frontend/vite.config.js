@@ -47,6 +47,9 @@ export default defineConfig({
       },
 
       workbox: {
+        // Permitir almacenar archivos de hasta 4 MB en la PWA.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,

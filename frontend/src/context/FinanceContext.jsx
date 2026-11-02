@@ -210,6 +210,7 @@ const GOAL_FIELDS = `
   target_amount,
   current_amount,
   deadline,
+  monthly_contribution,
   status,
   created_at,
   updated_at
@@ -353,6 +354,7 @@ const mapGoal = (goal) => {
 
     deadline: goal.deadline || "",
     date: goal.deadline || "",
+    monthlyContribution: goal.monthly_contribution == null ? null : Number(goal.monthly_contribution),
 
     status: goal.status || "active",
 
@@ -906,6 +908,8 @@ const getGoalPayload = (goal) => {
     target_amount: targetAmount,
     current_amount: currentAmount,
     deadline: deadline || null,
+    monthly_contribution:
+      goal?.monthlyContribution ?? goal?.monthly_contribution ?? null,
     status,
   };
 };
@@ -5794,6 +5798,9 @@ const updateGoal = useCallback(
 
       deadline:
         payload.deadline,
+
+      monthly_contribution:
+        payload.monthly_contribution,
 
       status,
     };
