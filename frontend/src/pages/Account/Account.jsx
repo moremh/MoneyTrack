@@ -13,6 +13,7 @@ import { useCommercialCatalog } from "../../hooks/useCommercialCatalog";
 
 import MovementUsage from "../../components/premium/MovementUsage/MovementUsage";
 import PremiumLimitModal from "../../components/premium/PremiumLimitModal/PremiumLimitModal";
+import ChangePasswordCard from "../../components/account/ChangePasswordCard";
 
 import styles from "./Account.module.css";
 
@@ -608,6 +609,8 @@ function Account() {
           setShowPremiumModal(true)
         }
       />
+
+      <ChangePasswordCard />
 
       <article
         className={
