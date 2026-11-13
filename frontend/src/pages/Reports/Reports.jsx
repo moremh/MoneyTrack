@@ -1,3 +1,5 @@
+import useTransactionAnnotations from "../../hooks/useTransactionAnnotations";
+import { matchesMovement } from "../../utils/movementFilters";
 import { useContext, useMemo, useState } from "react";
 import { FinanceContext } from "../../context/FinanceContext";
 import { AccountContext } from "../../context/AccountContext";
@@ -74,6 +76,18 @@ function Reports() {
   } =
     useContext(AccountContext) || {};
 
+  const { annotations } = useTransactionAnnotations();
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const searchFilters = useMemo(() => ({query, category:categoryFilter, tag:tagFilter,
+    minAmount,maxAmount}),[query,categoryFilter,tagFilter,minAmount,maxAmount]);
+  const allCategories = useMemo(() => [...new Set([...incomes,...expenses]
+    .map(movement=>movement.category||"General"))].sort(),[incomes,expenses]);
+  const allTags = useMemo(() => [...new Set(Object.values(annotations).flatMap(item=>item.tags||[]))].sort(),[annotations]);
+  const accountNames = useMemo(() => new Map(accounts.map(account=>[account.id,account.name])),[accounts]);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [
@@ -101,6 +115,7 @@ function Reports() {
         return false;
       }
 
+      if (!matchesMovement(item, searchFilters, annotations, accountNames.get(item.accountId)||"")) return false;
       return true;
     });
   }, [
@@ -108,6 +123,7 @@ function Reports() {
     fromDate,
     toDate,
     accountFilter,
+    searchFilters, annotations, accountNames,
   ]);
 
   const filteredExpenses = useMemo(() => {
@@ -130,6 +146,7 @@ function Reports() {
         return false;
       }
 
+      if (!matchesMovement(item, searchFilters, annotations, accountNames.get(item.accountId)||"")) return false;
       return true;
     });
   }, [
@@ -137,6 +154,7 @@ function Reports() {
     fromDate,
     toDate,
     accountFilter,
+    searchFilters, annotations, accountNames,
   ]);
 
   const filteredTransfers = useMemo(() => {
@@ -155,7 +173,15 @@ function Reports() {
       ) {
         return false;
       }
-
+      // Las transferencias no tienen categoría ni etiquetas de ingreso/gasto.
+      if (categoryFilter || tagFilter) return false;
+      if (minAmount !== "" && Number(item.amount) < Number(minAmount)) return false;
+      if (maxAmount !== "" && Number(item.amount) > Number(maxAmount)) return false;
+      if (query.trim()) {
+        const searchable = [item.notes, item.fromAccountName, item.toAccountName,
+          Number(item.amount).toLocaleString("es-AR")].join(" ").toLowerCase();
+        if (!searchable.includes(query.toLowerCase())) return false;
+      }
       return true;
     });
   }, [
@@ -163,6 +189,7 @@ function Reports() {
     fromDate,
     toDate,
     accountFilter,
+    categoryFilter, tagFilter, minAmount, maxAmount, query,
   ]);
 
   const totalIncome = filteredIncomes.reduce(
@@ -235,6 +262,8 @@ function Reports() {
     setFromDate("");
     setToDate("");
     setAccountFilter("");
+    setQuery(""); setCategoryFilter(""); setTagFilter("");
+    setMinAmount(""); setMaxAmount("");
   };
 
   const formatCurrency =
@@ -600,6 +629,39 @@ function Reports() {
 
       <section className={styles.filtersCard}>
         <div className={styles.filters}>
+          <div className={styles.filterGroup}>
+            <label htmlFor="report-query">Buscar</label>
+            <input id="report-query" className={styles.filterInput} type="search"
+              placeholder="Comercio, descripción, importe..." value={query}
+              onChange={event=>setQuery(event.target.value)} />
+          </div>
+          <div className={styles.filterGroup}>
+            <label htmlFor="report-category">Categoría</label>
+            <select id="report-category" className={styles.filterInput} value={categoryFilter}
+              onChange={event=>setCategoryFilter(event.target.value)}>
+              <option value="">Todas las categorías</option>
+              {allCategories.map(c=><option value={c} key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className={styles.filterGroup}>
+            <label htmlFor="report-tag">Etiqueta</label>
+            <select id="report-tag" className={styles.filterInput} value={tagFilter}
+              onChange={event=>setTagFilter(event.target.value)}>
+              <option value="">Todas las etiquetas</option>
+              {allTags.map(t=><option value={t} key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className={styles.filterGroup}>
+            <label htmlFor="report-min-amount">Monto desde</label>
+            <input id="report-min-amount" className={styles.filterInput} type="number" min="0" step="0.01"
+              value={minAmount} onChange={event=>setMinAmount(event.target.value)} placeholder="0" />
+          </div>
+          <div className={styles.filterGroup}>
+            <label htmlFor="report-max-amount">Monto hasta</label>
+            <input id="report-max-amount" className={styles.filterInput} type="number" min="0" step="0.01"
+              value={maxAmount} onChange={event=>setMaxAmount(event.target.value)} placeholder="Sin límite" />
+          </div>
+
           <div className={styles.filterGroup}>
             <label>Desde</label>
             <input

@@ -706,10 +706,6 @@ function Debts() {
   };
 
   const openPayment = (debt, installment = null) => {
-    const maxAmount = installment
-      ? installment.outstandingAmount
-      : debt.outstandingAmount;
-
     const categories =
       debt.direction === "receivable"
         ? incomeCategories
@@ -720,7 +716,7 @@ function Debts() {
     setPaymentInstallment(installment);
     setPaymentForm({
       ...EMPTY_PAYMENT,
-      amount: String(maxAmount),
+      amount: "",
       requestId: window.crypto.randomUUID(),
       paymentDate: today,
       category: categories?.[0] || "General",
@@ -1815,6 +1811,8 @@ function Debts() {
                 <input
                   name="amount"
                   inputMode="decimal"
+                  placeholder="0"
+                  aria-label="Importe pagado o cobrado"
                   value={paymentForm.amount}
                   onChange={handlePaymentChange}
                   required

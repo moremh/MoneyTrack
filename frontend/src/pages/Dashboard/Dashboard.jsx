@@ -153,7 +153,7 @@ function Dashboard() {
     movementUsage,
   } = useContext(FinanceContext);
 
-  const { accounts = [], transfers = [] } = useContext(AccountContext) || {};
+  const { accounts = [], transfers = [], archivedAccountOpenings = [] } = useContext(AccountContext) || {};
 
   const [fromDate, setFromDate] = useState(() => getMonthStart());
 
@@ -232,11 +232,11 @@ function Dashboard() {
         accumulator + Number(account.openingBalance || 0),
       0,
     );
+    total += archivedAccountOpenings.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
 
     incomes.forEach((movement) => {
       if (
-        movement.accountId &&
-        includedBalanceAccountIds.has(movement.accountId)
+        (!movement.accountId || includedBalanceAccountIds.has(movement.accountId))
       ) {
         total += Number(movement.amount) || 0;
       }
@@ -244,21 +244,21 @@ function Dashboard() {
 
     expenses.forEach((movement) => {
       if (
-        movement.accountId &&
-        includedBalanceAccountIds.has(movement.accountId)
+        (!movement.accountId || includedBalanceAccountIds.has(movement.accountId))
       ) {
         total -= Number(movement.amount) || 0;
       }
     });
 
+    const trackedIds = new Set([...includedBalanceAccountIds,...archivedAccountOpenings.map(item => item.id)]);
     transfers.forEach((transfer) => {
       const amount = Number(transfer.amount) || 0;
 
-      if (includedBalanceAccountIds.has(transfer.fromAccountId)) {
+      if (trackedIds.has(transfer.fromAccountOriginalId || transfer.fromAccountId)) {
         total -= amount;
       }
 
-      if (includedBalanceAccountIds.has(transfer.toAccountId)) {
+      if (trackedIds.has(transfer.toAccountOriginalId || transfer.toAccountId)) {
         total += amount;
       }
     });
@@ -267,6 +267,7 @@ function Dashboard() {
   }, [
     includedBalanceAccounts,
     includedBalanceAccountIds,
+    archivedAccountOpenings,
     incomes,
     expenses,
     transfers,
@@ -392,8 +393,8 @@ function Dashboard() {
   // Movimientos que cambian el disponible a lo largo de la historia.
   // Las 4 tarjetas se mantienen: este cálculo alimenta solo la línea azul.
   const availableChanges = useMemo(
-    () => getAvailableChanges({ accounts, incomes, expenses, transfers, goals, goalMovements }),
-    [accounts, incomes, expenses, transfers, goals, goalMovements],
+    () => getAvailableChanges({ accounts, archivedAccountOpenings, incomes, expenses, transfers, goals, goalMovements }),
+    [accounts, archivedAccountOpenings, incomes, expenses, transfers, goals, goalMovements],
   );
 
   /*

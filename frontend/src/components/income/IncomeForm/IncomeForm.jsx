@@ -32,6 +32,7 @@ import styles from "./IncomeForm.module.css";
 function IncomeForm({
   onAdd,
   initialData,
+  templateData,
   initialAmount = "",
   type = "income",
   onLimitReached,
@@ -129,28 +130,29 @@ function IncomeForm({
   }
 
   useEffect(() => {
-    if (initialData) {
+    if (initialData || templateData) {
+      const source = initialData || templateData;
       setDescription(
-        initialData.description || ""
+        source.description || ""
       );
 
       setAmount(
         formatStoredAmount(
-          initialData.amount ?? "",
+          source.amount ?? "",
           settings
         )
       );
 
       setCategory(
-        initialData.category || ""
+        source.category || ""
       );
 
       setDate(
-        initialData.date || ""
+        initialData ? source.date || "" : getLocalToday()
       );
 
       setAccountId(
-        initialData.accountId ||
+        source.accountId ||
           ""
       );
     } else {
@@ -178,6 +180,7 @@ function IncomeForm({
     setIsSubmitting(false);
   }, [
     initialData,
+    templateData,
     initialAmount,
   ]);
 

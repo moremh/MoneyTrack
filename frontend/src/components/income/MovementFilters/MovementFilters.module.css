@@ -1,0 +1,6 @@
+.filters {display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:13px;align-items:end;margin:0 0 18px}
+.filters label{display:flex;flex-direction:column;gap:6px;font-size:.86rem;font-weight:650;color:var(--text-light)}
+.filters input,.filters select{width:100%;min-width:0;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit}
+.filters .wide{grid-column:span 2}
+.filters button{padding:11px 14px;border-radius:9px;border:none;background:var(--neutral-button-bg);color:var(--neutral-button-text);font:inherit;font-weight:600;cursor:pointer}
+@media(max-width:520px){.filters{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.filters .wide{grid-column:1/-1}}

@@ -215,17 +215,19 @@ export const formatRegionalCurrency = (value, settings = {}) => {
 export const formatRegionalDateTime = (value, settings = {}) => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-
-  const locale = getLocale(settings.language, settings.region);
   try {
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
+    const parts = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
       timeZone: normalizeTimeZone(settings.timezone),
       hour12: normalizeTimeFormat(settings.timeFormat) === "12h",
-    }).format(date);
+    }).formatToParts(date);
+    const part = type => parts.find(item => item.type === type)?.value || "";
+    const year = part("year");
+    const displayYear = Number(year) < new Date().getFullYear() ? year : year.slice(-2);
+    const period = part("dayPeriod");
+    return `${part("day")}/${part("month")}/${displayYear} ${part("hour")}:${part("minute")}${period ? ` ${period}` : ""}`.trim();
   } catch {
-    return date.toLocaleString(locale);
+    return date.toLocaleString(getLocale(settings.language, settings.region));
   }
 };
 
@@ -298,30 +300,15 @@ export const formatRegionalDate =
       return String(value);
     }
 
-    const locale =
-      getLocale(
-        settings.language,
-        settings.region
-      );
-
-    try {
-      return new Intl.DateTimeFormat(
-        locale,
-        {
-          day:
-            "2-digit",
-          month:
-            options.month ||
-            "short",
-          year:
-            "numeric",
-        }
-      ).format(
-        date
-      );
-    } catch {
-      return String(value);
-    }
+    // Fecha compacta para pantallas: DD/MM/AA.
+    // Los movimientos de años anteriores muestran el año completo.
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const displayedYear = year < new Date().getFullYear()
+      ? String(year)
+      : String(year).slice(-2);
+    return `${day}/${month}/${displayedYear}`;
   };
 
 export const formatRegionalTime =

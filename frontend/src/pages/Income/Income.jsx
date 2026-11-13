@@ -1,5 +1,13 @@
+import { useSearchParams } from "react-router-dom";
+import { AccountContext } from "../../context/AccountContext";
+import { DialogContext } from "../../context/DialogContext/DialogContext";
+import useTransactionAnnotations from "../../hooks/useTransactionAnnotations";
+import { matchesMovement, orderMovements } from "../../utils/movementFilters";
+import MovementFilters, { EMPTY_MOVEMENT_FILTERS } from "../../components/income/MovementFilters/MovementFilters";
+import MovementDetails from "../../components/income/MovementDetails/MovementDetails";
 import {
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -17,12 +25,23 @@ import PremiumLimitModal from "../../components/premium/PremiumLimitModal/Premiu
 import styles from "./Income.module.css";
 
 function Income() {
+  const [searchParams] = useSearchParams();
+  const { accounts = [] } = useContext(AccountContext) || {};
+  const { confirmDialog, alertDialog } = useContext(DialogContext) || {};
+  const { annotations, saveAnnotation } = useTransactionAnnotations();
+  const [detailsMovement, setDetailsMovement] = useState(null);
+  const [duplicateMovement, setDuplicateMovement] = useState(null);
+  const [filters, setFilters] = useState(() => ({...EMPTY_MOVEMENT_FILTERS, query: searchParams.get("q") || ""}));
+  const queryParam = searchParams.get("q") || "";
+  useEffect(() => { setFilters(old => ({...old, query: queryParam})); }, [queryParam]);
+
   const {
     incomes,
     addIncome,
     deleteIncome,
     updateIncome,
     movementUsage,
+    settings,
   } = useContext(FinanceContext);
 
   const [
@@ -35,39 +54,28 @@ function Income() {
     setShowPremiumModal,
   ] = useState(false);
 
-  const [fromDate, setFromDate] =
-    useState("");
 
-  const [toDate, setToDate] =
-    useState("");
 
-  const filteredIncomes = useMemo(() => {
-    return incomes.filter((item) => {
-      if (
-        fromDate &&
-        item.date < fromDate
-      ) {
-        return false;
-      }
+  const categories = useMemo(() => [...new Set(incomes.map(item => item.category || "General"))].sort(), [incomes]);
+  const tags = useMemo(() => [...new Set(Object.values(annotations).flatMap(item => item.tags || []))].sort(), [annotations]);
+  const accountNames = useMemo(() => new Map(accounts.map(account=>[account.id,account.name])),[accounts]);
+  const filteredIncomes = useMemo(() => orderMovements(
+    incomes.filter(item => matchesMovement(item,filters,annotations,accountNames.get(item.accountId)||"")),filters.order
+  ),[incomes,filters,annotations,accountNames]);
 
-      if (
-        toDate &&
-        item.date > toDate
-      ) {
-        return false;
-      }
+  const handleDelete = async movementId => {
+    const item = incomes.find(entry=>entry.id===movementId);
+    if (!item) return;
+    const confirmed = await confirmDialog?.({title:"Eliminar ingreso",message:`¿Eliminar "${item.description}" por $${Number(item.amount).toLocaleString("es-AR")}? Esta acción no se puede deshacer.`,confirmText:"Eliminar",cancelText:"Cancelar",danger:true});
+    if (!confirmed) return;
+    const result = await deleteIncome(movementId);
+    if (result?.success === false) await alertDialog?.({title:"Error al eliminar",message:result.message || "No se pudo eliminar el registro.",danger:true});
+  };
 
-      return true;
-    });
-  }, [
-    incomes,
-    fromDate,
-    toDate,
-  ]);
-
-  const clearFilters = () => {
-    setFromDate("");
-    setToDate("");
+  const handleDuplicate = async movement => {
+    const result = await addIncome(movement);
+    if (result?.success) setDuplicateMovement(null);
+    return result;
   };
 
   const handleUpdateIncome = async (
@@ -139,58 +147,8 @@ function Income() {
       </Card>
 
       <Card title="Lista de ingresos">
-        <div className={styles.filters}>
-  <div className={styles.filterGroup}>
-    <label htmlFor="income-from-date">
-      Desde
-    </label>
-
-    <div className={styles.dateControl}>
-      <input
-        id="income-from-date"
-        className={styles.filterInput}
-        type="date"
-        value={fromDate}
-        onChange={(event) =>
-          setFromDate(
-            event.target.value
-          )
-        }
-      />
-    </div>
-  </div>
-
-  <div className={styles.filterGroup}>
-    <label htmlFor="income-to-date">
-      Hasta
-    </label>
-
-    <div className={styles.dateControl}>
-      <input
-        id="income-to-date"
-        className={styles.filterInput}
-        type="date"
-        value={toDate}
-        onChange={(event) =>
-          setToDate(
-            event.target.value
-          )
-        }
-      />
-    </div>
-  </div>
-
-  <div className={styles.filterActions}>
-    <button
-      type="button"
-      className={styles.clearButton}
-      onClick={clearFilters}
-    >
-      Limpiar filtros
-    </button>
-  </div>
-</div>
-
+        <MovementFilters filters={filters} onChange={setFilters} categories={categories}
+          accounts={accounts} tags={tags} />
         <p className={styles.results}>
           Mostrando{" "}
           {filteredIncomes.length} de{" "}
@@ -199,7 +157,9 @@ function Income() {
 
         <IncomeTable
           incomes={filteredIncomes}
-          onDelete={deleteIncome}
+          onDelete={handleDelete}
+          onDetails={setDetailsMovement}
+          onDuplicate={setDuplicateMovement}
           onEdit={setEditingIncome}
         />
       </Card>
@@ -228,6 +188,16 @@ function Income() {
         </Modal>
       )}
 
+      {detailsMovement && <MovementDetails movement={detailsMovement}
+        accountName={accountNames.get(detailsMovement.accountId)}
+        annotation={annotations[detailsMovement.id]} settings={settings} onSave={saveAnnotation}
+        onClose={() => setDetailsMovement(null)} />}
+      {duplicateMovement && <Modal onClose={() => setDuplicateMovement(null)}>
+        <h2>Duplicar ingreso</h2>
+        <p>Se creará un nuevo movimiento. Podés revisar los datos antes de guardarlo.</p>
+        <IncomeForm type="income" templateData={duplicateMovement} onAdd={handleDuplicate}
+          onLimitReached={() => setShowPremiumModal(true)} />
+      </Modal>}
       {showPremiumModal && (
         <PremiumLimitModal
           usage={movementUsage}

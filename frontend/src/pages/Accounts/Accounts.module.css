@@ -1322,3 +1322,9 @@ body[data-theme="dark"]
       1fr;
   }
 }
+/* Buscador y orden personalizado de cuentas */
+.accountOrganizer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 20px; }
+.accountOrganizer label { font-weight: 600; }
+.accountOrganizer input { flex: 1 1 230px; max-width: 420px; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; }
+.accountOrganizer small { flex-basis: 100%; color: var(--text-light); }
+@media(max-width:600px){.accountOrganizer input { flex-basis: 100%; }}

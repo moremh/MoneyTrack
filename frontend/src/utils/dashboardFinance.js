@@ -273,13 +273,14 @@ export function buildFinanceSeries({
  * Se reconstruye desde el saldo actual para conservar el arrastre entre períodos.
  */
 export function getAvailableChanges({
-  accounts = [], incomes = [], expenses = [], transfers = [],
+  accounts = [], archivedAccountOpenings = [], incomes = [], expenses = [], transfers = [],
   goals = [], goalMovements = [],
 }) {
   const included = new Set(
     accounts.filter(a => a.isActive && a.includeInBalance !== false)
       .map(a => String(a.id))
   );
+  for (const archived of archivedAccountOpenings) included.add(String(archived.id));
   const linked = new Set(goals.filter(g => g.accountId).map(g => String(g.accountId)));
   const goalById = new Map(goals.map(g => [String(g.id), g]));
   const changes = [];
@@ -288,6 +289,9 @@ export function getAvailableChanges({
     if (validDate(date) && cents !== 0) changes.push({ date, amount: cents / 100 });
   }
 
+  for (const oldAccount of archivedAccountOpenings) {
+    add(String(oldAccount.createdAt || "").slice(0,10), oldAccount.amount);
+  }
   for (const account of accounts) {
     if (!included.has(String(account.id))) continue;
     const date = String(account.createdAt || '').slice(0, 10);
@@ -296,18 +300,18 @@ export function getAvailableChanges({
   }
   for (const income of incomes) {
     const id = String(income.accountId);
-    if (!included.has(id)) continue;
+    if (income.accountId && !included.has(id)) continue;
     add(income.date, linked.has(id) ? 0 : income.amount);
   }
   for (const expense of expenses) {
     const id = String(expense.accountId);
-    if (!included.has(id)) continue;
+    if (expense.accountId && !included.has(id)) continue;
     add(expense.date, linked.has(id) ? 0 : -(Number(expense.amount) || 0));
   }
   for (const transfer of transfers) {
     const amount = toCents(transfer.amount) / 100;
-    const source = String(transfer.fromAccountId);
-    const target = String(transfer.toAccountId);
+    const source = String(transfer.fromAccountOriginalId || transfer.fromAccountId);
+    const target = String(transfer.toAccountOriginalId || transfer.toAccountId);
     if (included.has(source) && !linked.has(source)) add(transfer.date, -amount);
     if (included.has(target) && !linked.has(target)) add(transfer.date, amount);
   }

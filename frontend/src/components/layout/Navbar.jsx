@@ -1,3 +1,10 @@
+import { useMemo } from "react";
+import { createPortal } from "react-dom";
+import { AccountContext } from "../../context/AccountContext";
+import useTransactionAnnotations from "../../hooks/useTransactionAnnotations";
+import { matchesMovement } from "../../utils/movementFilters";
+import Modal from "../common/Modal/Modal";
+import { formatRegionalCurrency, formatRegionalDate } from "../../utils/regionalSettings";
 import {
   useContext,
   useEffect,
@@ -91,6 +98,8 @@ function Navbar({
 }) {
   const {
     settings,
+    incomes = [],
+    expenses = [],
     syncStatus,
     pendingSyncCount,
     syncConflictCount,
@@ -118,6 +127,34 @@ function Navbar({
 
   const navigate =
     useNavigate();
+  const {accounts=[]} = useContext(AccountContext) || {};
+  const {annotations} = useTransactionAnnotations();
+  const [searchOpen,setSearchOpen] = useState(false);
+  const [searchQuery,setSearchQuery] = useState("");
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const names = new Map(accounts.map(account=>[account.id,account.name]));
+    return [...incomes,...expenses].filter(item=>matchesMovement(
+      item,{query:searchQuery},annotations,names.get(item.accountId)||""
+    )).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)))
+      .slice(0,30);
+  },[searchQuery,incomes,expenses,accounts,annotations]);
+
+
+  // Modal de búsqueda a nivel del documento y sin desplazamiento de fondo.
+  useEffect(() => {
+    if (!searchOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [searchOpen]);
 
   const [
     notificationsOpen,
@@ -585,7 +622,9 @@ function Navbar({
         <button
           type="button"
           className={`${styles.iconButton} ${styles.searchButton}`}
-          aria-label="Buscar"
+          aria-label="Búsqueda global"
+          title="Buscar movimientos"
+          onClick={() => setSearchOpen(true)}
         >
           <i className="bi bi-search"></i>
         </button>
@@ -746,8 +785,6 @@ function Navbar({
             styles.user
           }
         >
-          <i className="bi bi-person-circle"></i>
-
           <span>
             {displayName}
           </span>
@@ -767,6 +804,30 @@ function Navbar({
           <i className="bi bi-box-arrow-right"></i>
         </button>
       </div>
+      {searchOpen && createPortal(
+        <Modal onClose={() => setSearchOpen(false)}>
+        <h2>Búsqueda global</h2>
+        <label htmlFor="global-movement-search">Buscar ingresos y gastos</label>
+        <input id="global-movement-search" autoFocus type="search" value={searchQuery}
+          onChange={event=>setSearchQuery(event.target.value)}
+          placeholder="Nike, supermercado, 25.000, Facultad..."
+          className={styles.globalSearchInput} />
+        <div className={styles.globalSearchResults}>
+          {!searchQuery.trim() && <p>Buscá por nombre, descripción, categoría, importe, nota o etiqueta.</p>}
+          {searchQuery.trim() && searchResults.length === 0 && <p>No encontramos movimientos que coincidan.</p>}
+          {searchResults.map(item=><button type="button" key={item.id}
+            onClick={() => {
+              navigate(`${item.type === "expense" ? "/expenses" : "/income"}?q=${encodeURIComponent(searchQuery)}`);
+              setSearchOpen(false);
+            }}>
+            <span>{item.description} <small>{formatRegionalDate(item.date,settings)} · {item.type === "expense" ? "Gasto" : "Ingreso"}</small></span>
+            <strong>{formatRegionalCurrency(item.amount,settings)}</strong>
+          </button>)}
+          {searchResults.length===30 && <p>Se muestran los primeros 30 resultados. Refiná la búsqueda.</p>}
+        </div>
+        </Modal>,
+        document.body,
+      )}
     </header>
   );
 }

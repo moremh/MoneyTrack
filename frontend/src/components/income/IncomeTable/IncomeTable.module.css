@@ -125,3 +125,7 @@
   color: var(--text-light);
   font-size: 0.8rem;
 }
+
+.recordedTime {display:block;margin-top:4px;font-size:.74rem;color:var(--text-light);white-space:nowrap;}
+
+.actions button:first-child { white-space: nowrap; font-size: .88rem; display:inline-flex; align-items:center; gap:5px; }

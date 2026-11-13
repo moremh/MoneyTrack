@@ -16,7 +16,7 @@ import {
 
 import styles from "./IncomeTable.module.css";
 
-function IncomeTable({ incomes, onDelete, onEdit }) {
+function IncomeTable({ incomes, onDelete, onEdit, onDetails, onDuplicate }) {
   const financeContext =
     useContext(FinanceContext);
 
@@ -158,16 +158,17 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
                         styles.noAccount
                       }
                     >
-                      Sin cuenta
+                      Saldo general
                     </span>
                   )}
                 </td>
 
                 <td>
-                  {formatRegionalDate(
-                    item.date,
-                    settings
-                  )}
+                  {formatRegionalDate(item.date, settings)}
+                  {item.createdAt && <small className={styles.recordedTime}>
+                    Registrado {new Intl.DateTimeFormat("es-AR", {hour:"2-digit",minute:"2-digit",
+                      timeZone: settings.timezone || "America/Argentina/Buenos_Aires"}).format(new Date(item.createdAt))}
+                  </small>}
                 </td>
 
                 <td className={styles.amount}>
@@ -185,6 +186,14 @@ function IncomeTable({ incomes, onDelete, onEdit }) {
                   <div
                     className={styles.actions}
                   >
+                    <button type="button" onClick={() => onDetails?.(item)}
+                      title="Ver detalles" aria-label={`Detalles de ${item.description}`}>
+                      <i className="bi bi-info-circle" aria-hidden="true"></i> Detalles
+                    </button>
+                    <button type="button" onClick={() => onDuplicate?.(item)}
+                      title="Duplicar movimiento" aria-label={`Duplicar ${item.description}`}>
+                      <i className="bi bi-copy"></i>
+                    </button>
                     <button
                       type="button"
                       onClick={() =>

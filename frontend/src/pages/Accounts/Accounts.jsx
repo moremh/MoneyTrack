@@ -1,3 +1,4 @@
+import { useAuth } from "../../context/AuthContext";
 import {
   useContext,
   useEffect,
@@ -115,6 +116,7 @@ const getYearStart = () => {
 };
 
 function Accounts() {
+  const {currentUser} = useAuth();
   const {
     accounts = [],
     activeAccounts = [],
@@ -257,6 +259,46 @@ function Accounts() {
     isTransferSubmitting,
     setIsTransferSubmitting,
   ] = useState(false);
+
+  // Orden personalizado de cuentas (se mantiene al recargar en este dispositivo).
+  const [accountOrder, setAccountOrder] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`moneytrack:account-order:${currentUser?.id || "anonymous"}`) || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [accountSearch, setAccountSearch] = useState("");
+  useEffect(() => {
+    try { setAccountOrder(JSON.parse(localStorage.getItem(`moneytrack:account-order:${currentUser?.id || "anonymous"}`) || "[]")); }
+    catch { setAccountOrder([]); }
+  }, [currentUser?.id]);
+
+
+  const orderedAccounts = useMemo(() => {
+    const positions = new Map(accountOrder.map((id, index) => [id, index]));
+    return [...accounts].sort((a, b) => {
+      const ai = positions.has(a.id) ? positions.get(a.id) : Number.MAX_SAFE_INTEGER;
+      const bi = positions.has(b.id) ? positions.get(b.id) : Number.MAX_SAFE_INTEGER;
+      return ai - bi || a.name.localeCompare(b.name, "es");
+    });
+  }, [accounts, accountOrder]);
+
+  const visibleAccounts = useMemo(
+    () => orderedAccounts.filter(account => account.name.toLocaleLowerCase("es")
+      .includes(accountSearch.trim().toLocaleLowerCase("es"))),
+    [orderedAccounts, accountSearch]
+  );
+
+  const moveAccount = (accountId, direction) => {
+    const ids = orderedAccounts.map(account => account.id);
+    const index = ids.indexOf(accountId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    setAccountOrder(ids);
+    try { localStorage.setItem(`moneytrack:account-order:${currentUser?.id || "anonymous"}`, JSON.stringify(ids)); } catch {}
+  };
 
   const accountById =
     useMemo(
@@ -726,15 +768,13 @@ function Accounts() {
               accountById.get(
                 transfer
                   .fromAccountId
-              )?.name ||
-              "Cuenta";
+              )?.name || transfer.fromAccountName || "Cuenta eliminada";
 
             const toName =
               accountById.get(
                 transfer
                   .toAccountId
-              )?.name ||
-              "Cuenta";
+              )?.name || transfer.toAccountName || "Cuenta eliminada";
 
             return {
               id:
@@ -1098,7 +1138,7 @@ function Accounts() {
           title:
             "Eliminar cuenta",
           message:
-            `¿Eliminar definitivamente la cuenta "${account.name}"? También se eliminarán todos sus movimientos y transferencias asociados. Esta acción no se puede deshacer.`,
+            `¿Eliminar la cuenta "${account.name}"? Sus ingresos, gastos y transferencias permanecerán en el historial sin esta cuenta. Esta acción no se puede deshacer.`,
           confirmText:
             "Eliminar cuenta",
           cancelText:
@@ -1138,7 +1178,7 @@ function Accounts() {
       }
 
       setSuccessMessage(
-        "Cuenta y movimientos asociados eliminados correctamente."
+        "Cuenta eliminada. Sus movimientos se conservaron en el saldo general."
       );
     };
 
@@ -2316,6 +2356,13 @@ function Accounts() {
       )}
 
       <Card title="Mis cuentas">
+        <div className={styles.accountOrganizer}>
+          <label htmlFor="account-search">Buscar cuenta</label>
+          <input id="account-search" type="search" value={accountSearch}
+            placeholder="Banco, Mercado Pago, efectivo..."
+            onChange={event => setAccountSearch(event.target.value)} />
+          <small>Usá las flechas de cada cuenta para elegir el orden.</small>
+        </div>
         {loading &&
         accounts.length === 0 ? (
           <div
@@ -2350,7 +2397,7 @@ function Accounts() {
               styles.accountsGrid
             }
           >
-            {accounts.map(
+            {visibleAccounts.map(
               (account) => {
                 const typeData =
                   getTypeData(
@@ -2528,6 +2575,21 @@ function Accounts() {
                             Transferir
                           </button>
                         )}
+
+                      <button type="button"
+                        aria-label={`Mover ${account.name} hacia arriba`}
+                        title="Mover arriba"
+                        disabled={accountSearch.trim() !== "" || orderedAccounts[0]?.id === account.id}
+                        onClick={() => moveAccount(account.id, -1)}>
+                        <i className="bi bi-arrow-up"></i> Arriba
+                      </button>
+                      <button type="button"
+                        aria-label={`Mover ${account.name} hacia abajo`}
+                        title="Mover abajo"
+                        disabled={accountSearch.trim() !== "" || orderedAccounts.at(-1)?.id === account.id}
+                        onClick={() => moveAccount(account.id, 1)}>
+                        <i className="bi bi-arrow-down"></i> Abajo
+                      </button>
 
                       <button
                         type="button"

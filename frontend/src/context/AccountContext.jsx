@@ -35,6 +35,10 @@ const TRANSFER_FIELDS = `
   user_id,
   from_account_id,
   to_account_id,
+  from_account_name,
+  to_account_name,
+  from_account_original_id,
+  to_account_original_id,
   amount,
   transfer_date,
   notes,
@@ -73,8 +77,12 @@ const mapTransfer = (transfer) => ({
   userId: transfer.user_id,
   fromAccountId:
     transfer.from_account_id,
+  fromAccountName: transfer.from_account_name || "Cuenta eliminada",
+  fromAccountOriginalId: transfer.from_account_original_id || transfer.from_account_id,
+  toAccountOriginalId: transfer.to_account_original_id || transfer.to_account_id,
   toAccountId:
     transfer.to_account_id,
+  toAccountName: transfer.to_account_name || "Cuenta eliminada",
   amount:
     Number(transfer.amount) || 0,
   date:
@@ -96,6 +104,7 @@ const readCache = (userId) => {
     return {
       accounts: [],
       transfers: [],
+      archivedAccountOpenings: [],
     };
   }
 
@@ -109,6 +118,7 @@ const readCache = (userId) => {
       return {
         accounts: [],
         transfers: [],
+      archivedAccountOpenings: [],
       };
     }
 
@@ -124,6 +134,7 @@ const readCache = (userId) => {
       return {
         accounts: parsed,
         transfers: [],
+      archivedAccountOpenings: [],
       };
     }
 
@@ -140,11 +151,14 @@ const readCache = (userId) => {
         )
           ? parsed.transfers
           : [],
+      archivedAccountOpenings: Array.isArray(parsed?.archivedAccountOpenings)
+        ? parsed.archivedAccountOpenings : [],
     };
   } catch {
     return {
       accounts: [],
       transfers: [],
+      archivedAccountOpenings: [],
     };
   }
 };
@@ -152,7 +166,8 @@ const readCache = (userId) => {
 const writeCache = (
   userId,
   accounts,
-  transfers
+  transfers,
+  archivedAccountOpenings = []
 ) => {
   if (
     !userId ||
@@ -168,6 +183,7 @@ const writeCache = (
       JSON.stringify({
         accounts,
         transfers,
+        archivedAccountOpenings,
       })
     );
   } catch {
@@ -226,6 +242,7 @@ function AccountProvider({
 
   const [accounts, setAccounts] =
     useState([]);
+  const [archivedAccountOpenings, setArchivedAccountOpenings] = useState([]);
 
   const [
     transfers,
@@ -245,6 +262,7 @@ function AccountProvider({
       if (!currentUserId) {
         setAccounts([]);
         setTransfers([]);
+        setArchivedAccountOpenings([]);
         setErrorMessage("");
 
         return {
@@ -263,9 +281,8 @@ function AccountProvider({
         setAccounts(
           cached.accounts
         );
-        setTransfers(
-          cached.transfers
-        );
+        setTransfers(cached.transfers);
+        setArchivedAccountOpenings(cached.archivedAccountOpenings || []);
 
         return {
           success: true,
@@ -280,6 +297,7 @@ function AccountProvider({
         const [
           accountsResult,
           transfersResult,
+          archivedResult,
         ] =
           await Promise.all([
             supabase
@@ -327,11 +345,15 @@ function AccountProvider({
                   ascending: false,
                 }
               ),
+            supabase.from("archived_account_openings")
+              .select("original_account_id, amount, original_created_at")
+              .eq("user_id", currentUserId),
           ]);
 
         const firstError =
           accountsResult.error ||
-          transfersResult.error;
+          transfersResult.error ||
+          archivedResult.error;
 
         if (firstError) {
           if (
@@ -380,11 +402,18 @@ function AccountProvider({
         setTransfers(
           mappedTransfers
         );
+        const archived = (archivedResult.data || []).map(row => ({
+          id: row.original_account_id,
+          amount: Number(row.amount) || 0,
+          createdAt: row.original_created_at,
+        }));
+        setArchivedAccountOpenings(archived);
 
         writeCache(
           currentUserId,
           mappedAccounts,
-          mappedTransfers
+          mappedTransfers,
+          archived
         );
 
         return {
@@ -393,6 +422,7 @@ function AccountProvider({
             mappedAccounts,
           transfers:
             mappedTransfers,
+          archivedAccountOpenings: archived,
         };
       } catch (error) {
         console.error(
@@ -420,6 +450,7 @@ function AccountProvider({
     if (!currentUserId) {
       setAccounts([]);
       setTransfers([]);
+      setArchivedAccountOpenings([]);
       return;
     }
 
@@ -437,9 +468,8 @@ function AccountProvider({
       setAccounts(
         cached.accounts
       );
-      setTransfers(
-        cached.transfers
-      );
+      setTransfers(cached.transfers);
+      setArchivedAccountOpenings(cached.archivedAccountOpenings || []);
     }
 
     void loadAccountData();
@@ -456,11 +486,13 @@ function AccountProvider({
     writeCache(
       currentUserId,
       accounts,
-      transfers
+      transfers,
+      archivedAccountOpenings
     );
   }, [
     accounts,
     transfers,
+    archivedAccountOpenings,
     currentUserId,
   ]);
 
@@ -918,31 +950,13 @@ function AccountProvider({
           };
         }
 
-        setAccounts(
-          (currentAccounts) =>
-            currentAccounts.filter(
-              (account) =>
-                account.id !==
-                accountId
-            )
-        );
-
-        setTransfers(
-          (currentTransfers) =>
-            currentTransfers.filter(
-              (transfer) =>
-                transfer.fromAccountId !==
-                  accountId &&
-                transfer.toAccountId !==
-                  accountId
-            )
-        );
+        await loadAccountData();
 
         return {
           success: true,
         };
       },
-      [currentUserId]
+      [currentUserId, loadAccountData]
     );
 
   const validateTransferInput =
@@ -1355,6 +1369,7 @@ function AccountProvider({
       accounts,
       activeAccounts,
       transfers,
+      archivedAccountOpenings,
       loading,
       errorMessage,
 
@@ -1373,6 +1388,7 @@ function AccountProvider({
       accounts,
       activeAccounts,
       transfers,
+      archivedAccountOpenings,
       loading,
       errorMessage,
       loadAccountData,
