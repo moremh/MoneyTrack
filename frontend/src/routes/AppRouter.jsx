@@ -22,6 +22,7 @@ import Accounts from "../pages/Accounts/Accounts";
 import Categories from "../pages/Categories/Categories";
 import Goals from "../pages/Goals/Goals";
 import Reminders from "../pages/Reminders/Reminders";
+import Subscriptions from "../pages/Subscriptions/Subscriptions";
 import Debts from "../pages/Debts/Debts";
 import Reports from "../pages/Reports/Reports";
 import Settings from "../pages/Settings/Settings";
@@ -104,6 +105,11 @@ function AppRouter() {
               element={
                 <Reminders />
               }
+            />
+
+            <Route
+              path="/subscriptions"
+              element={<Subscriptions />}
             />
 
             <Route

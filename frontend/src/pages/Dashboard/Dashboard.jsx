@@ -387,8 +387,8 @@ function Dashboard() {
 
   const totalGoalSavings = savedTotals.totalSaved;
   const spendableBalance = roundMoney(
-    generalAccountBalance - savedTotals.reservedInIncluded,
-  ); // saldo en cuentas incluidas menos dinero reservado
+  generalAccountBalance - savedTotals.reservedInIncluded,
+  );
 
   // Movimientos que cambian el disponible a lo largo de la historia.
   // Las 4 tarjetas se mantienen: este cálculo alimenta solo la línea azul.
@@ -796,12 +796,13 @@ function Dashboard() {
         <p className={styles.movementsText}>
           {movementsLabel}: {totalMovements}
         </p>
+
       </section>
 
       <div className={styles.cardsGrid}>
         <StatCard
           title="Saldo general"
-          value={formatRegionalCurrency(spendableBalance, settings)}
+          value={formatRegionalCurrency(periodTotals.balance, settings)}
           icon="bi bi-wallet2"
           color="#2563eb"
         />

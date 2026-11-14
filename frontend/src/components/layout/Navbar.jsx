@@ -4,6 +4,7 @@ import { AccountContext } from "../../context/AccountContext";
 import useTransactionAnnotations from "../../hooks/useTransactionAnnotations";
 import { matchesMovement } from "../../utils/movementFilters";
 import Modal from "../common/Modal/Modal";
+import SubscriptionGlobalSearch from "../subscriptions/SubscriptionGlobalSearch";
 import { formatRegionalCurrency, formatRegionalDate } from "../../utils/regionalSettings";
 import {
   useContext,
@@ -823,6 +824,7 @@ function Navbar({
             <span>{item.description} <small>{formatRegionalDate(item.date,settings)} · {item.type === "expense" ? "Gasto" : "Ingreso"}</small></span>
             <strong>{formatRegionalCurrency(item.amount,settings)}</strong>
           </button>)}
+          {searchQuery.trim() && <SubscriptionGlobalSearch query={searchQuery} onSelect={() => setSearchOpen(false)} />}
           {searchResults.length===30 && <p>Se muestran los primeros 30 resultados. Refiná la búsqueda.</p>}
         </div>
         </Modal>,
