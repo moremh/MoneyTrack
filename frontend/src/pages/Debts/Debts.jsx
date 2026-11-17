@@ -53,6 +53,8 @@ const DEBT_FIELDS = `
   paid_at,
   created_at,
   updated_at,
+  initial_transaction_id,
+  initial_account_id,
   debt_installments (
     id,
     installment_number,
@@ -97,6 +99,9 @@ const EMPTY_FORM = {
   notes: "",
   reminderOffsets: [0],
   reminderTime: "09:00",
+  registerInitialMovement: true,
+  initialAccountId: "",
+  requestId: null,
 };
 
 const EMPTY_PAYMENT = {
@@ -245,6 +250,8 @@ const mapDebt = (row) => {
   return {
     id: row.id,
     userId: row.user_id,
+    initialTransactionId: row.initial_transaction_id || null,
+    initialAccountId: row.initial_account_id || "",
     direction: row.direction || "receivable",
     paymentMode: row.payment_mode || "flexible",
     personName: row.person_name || "",
@@ -473,6 +480,7 @@ function Debts() {
       ...EMPTY_FORM,
       direction,
       debtDate: today,
+      requestId: window.crypto.randomUUID(),
     });
     setFeedback(null);
     setFormOpen(true);
@@ -485,6 +493,9 @@ function Debts() {
 
     setForm({
       direction: debt.direction,
+      registerInitialMovement: Boolean(debt.initialTransactionId),
+      initialAccountId: debt.initialAccountId || "",
+      requestId: null,
       paymentMode: debt.paymentMode,
       personName: debt.personName,
       concept: debt.concept,
@@ -657,6 +668,9 @@ function Debts() {
         settings.timezone ||
         currentUser?.timezone ||
         "America/Argentina/Buenos_Aires",
+      ...(editingDebt?.initialTransactionId
+        ? { initial_account_id: form.initialAccountId || null }
+        : {}),
     };
 
     const result = editingDebt
@@ -667,11 +681,17 @@ function Debts() {
           .eq("user_id", currentUserId)
           .select(DEBT_FIELDS)
           .single()
-      : await supabase
-          .from("debts")
-          .insert(payload)
-          .select(DEBT_FIELDS)
-          .single();
+      : form.registerInitialMovement
+        ? await supabase.rpc("create_debt_with_initial_transaction", {
+            p_request_id: form.requestId,
+            p_payload: payload,
+            p_account_id: form.initialAccountId || null,
+          })
+        : await supabase
+            .from("debts")
+            .insert(payload)
+            .select(DEBT_FIELDS)
+            .single();
 
     setSaving(false);
 
@@ -684,13 +704,22 @@ function Debts() {
           "DEBT_PLAN_HAS_PAYMENTS"
         )
           ? "El plan de cuotas no puede cambiarse después de registrar pagos."
-          : "No se pudo guardar la cuenta."
+          : String(result.error.message || "").includes("LOAN_ACCOUNT")
+            ? "La cuenta seleccionada no está disponible para este préstamo."
+            : String(result.error.message || "").includes("LOAN_REQUEST_ALREADY_USED")
+              ? "Esta solicitud ya fue utilizada. Actualizá la página antes de reintentar."
+              : String(result.error.message || "").includes("PGRST202")
+                ? "Falta instalar la migración de préstamos vinculados en Supabase."
+                : "No se pudo guardar la cuenta."
       );
       return;
     }
 
     await loadDebts();
     await loadReminders();
+    // Recarga los movimientos existentes: Dashboard y Cuentas calculan igual que antes.
+    await loadFinanceData();
+    if (typeof loadAccountData === "function") await loadAccountData();
 
     setFormOpen(false);
     setEditingDebt(null);
@@ -719,8 +748,11 @@ function Debts() {
       amount: "",
       requestId: window.crypto.randomUUID(),
       paymentDate: today,
-      category: categories?.[0] || "General",
-      accountId: "",
+      category: debt.initialTransactionId
+        ? debt.direction === "receivable" ? "Cobro de préstamo" : "Devolución de préstamo"
+        : categories?.[0] || "General",
+      accountId: debt.initialAccountId || "",
+      registerTransaction: debt.initialTransactionId ? true : EMPTY_PAYMENT.registerTransaction,
     });
     setFeedback(null);
   };
@@ -1542,6 +1574,52 @@ function Debts() {
                 </label>
               </div>
 
+              <div className={styles.transactionBox}>
+                {!editingDebt ? (
+                  <label className={styles.checkboxRow}>
+                    <input type="checkbox"
+                      checked={Boolean(form.registerInitialMovement)}
+                      onChange={(event) => setForm((current) => ({
+                        ...current, registerInitialMovement: event.target.checked,
+                      }))}
+                    />
+                    Registrar automáticamente {form.direction === "payable"
+                      ? "un ingreso por el préstamo recibido"
+                      : "un gasto por el dinero prestado"}
+                  </label>
+                ) : editingDebt.initialTransactionId ? (
+                  <small>Movimiento inicial vinculado a Ingresos/Gastos.</small>
+                ) : (
+                  <small>Cuenta creada sin movimiento inicial vinculado.</small>
+                )}
+                {(form.registerInitialMovement && !editingDebt || editingDebt?.initialTransactionId) && (
+                  <label>
+                    <span>{form.direction === "payable"
+                      ? "Cuenta donde recibiste el dinero (opcional)"
+                      : "Cuenta desde donde prestaste el dinero (opcional)"}</span>
+                    <select value={form.initialAccountId || ""}
+                      onChange={(event) => setForm((current) => ({
+                        ...current, initialAccountId: event.target.value,
+                      }))}>
+                      <option value="">Sin cuenta</option>
+                      {activeAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>{account.name}</option>
+                      ))}
+                      {form.initialAccountId &&
+                        !activeAccounts.some((account) => account.id === form.initialAccountId) &&
+                        accounts.find((account) => account.id === form.initialAccountId) && (
+                          <option value={form.initialAccountId}>
+                            {accounts.find((account) => account.id === form.initialAccountId).name} (inactiva)
+                          </option>
+                        )}
+                    </select>
+                  </label>
+                )}
+                {!editingDebt && !form.registerInitialMovement && (
+                  <small>No se registrará un ingreso/gasto ni se modificará el Saldo general.</small>
+                )}
+              </div>
+
               <div className={styles.planOptions}>
                 <button
                   type="button"
@@ -1884,7 +1962,8 @@ function Debts() {
                         value={paymentForm.category}
                         onChange={handlePaymentChange}
                       >
-                        {(selectedCategories || ["General"]).map(
+                        {([paymentForm.category, ...(selectedCategories || ["General"])]
+                          .filter((category, index, values) => category && values.indexOf(category) === index)).map(
                           (category) => (
                             <option key={category} value={category}>
                               {category}
@@ -1960,7 +2039,7 @@ function Debts() {
             <h2>Eliminar cuenta</h2>
             <p>
               Se eliminarán esta cuenta, sus cuotas, los pagos/cobros,
-              los recordatorios y los ingresos/gastos asociados a esos pagos.
+              los recordatorios, el movimiento inicial del préstamo y los ingresos/gastos asociados a esos pagos.
               Esta acción no se puede deshacer.
             </p>
 

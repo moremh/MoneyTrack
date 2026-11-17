@@ -1,0 +1,95 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.label {
+  color: var(--text);
+  font-weight: 600;
+}
+.optional, .help, .suggestionsTitle {
+  color: var(--text-light);
+  font-weight: 400;
+  font-size: 0.83rem;
+}
+.selected, .suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 7px 5px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.remove {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 1rem;
+}
+.inputRow {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+.input:focus-visible, .remove:focus-visible, .suggestion:focus-visible, .add:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.add {
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.add:disabled, .remove:disabled, .suggestion:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+.suggestion {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: .82rem;
+  cursor: pointer;
+}
+.error {
+  color: #b91c1c;
+  font-size: .85rem;
+}
+@media (max-width: 420px) {
+  .inputRow { flex-wrap: wrap; }
+  .add { width: 100%; }
+}

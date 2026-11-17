@@ -4,12 +4,6 @@ import { FinanceContext } from "../../../context/FinanceContext";
 import { AccountContext } from "../../../context/AccountContext";
 
 import {
-  getCategoryDisplayColor,
-  getCategoryDisplayIcon,
-  getContrastTextColor,
-} from "../../../utils/categoryCustomization";
-
-import {
   formatRegionalCurrency,
   formatRegionalDate,
 } from "../../../utils/regionalSettings";
@@ -19,9 +13,6 @@ import styles from "./IncomeTable.module.css";
 function IncomeTable({ incomes, onDelete, onEdit, onDetails, onDuplicate }) {
   const financeContext =
     useContext(FinanceContext);
-
-  const categoryRecords =
-    financeContext?.categoryRecords || [];
 
   const settings =
     financeContext?.settings || {};
@@ -48,97 +39,29 @@ function IncomeTable({ incomes, onDelete, onEdit, onDetails, onDuplicate }) {
     );
   };
 
-  const findCategory = (item) => {
-    if (item.categoryId) {
-      const byId = categoryRecords.find(
-        (category) =>
-          category.id === item.categoryId
-      );
-
-      if (byId) {
-        return byId;
-      }
-    }
-
-    return (
-      categoryRecords.find(
-        (category) =>
-          category.type === item.type &&
-          category.name.toLowerCase() ===
-            String(
-              item.category || "General"
-            ).toLowerCase()
-      ) || {
-        name: item.category || "General",
-        type: item.type,
-      }
-    );
-  };
-
   return (
     <div className={styles.tableContainer}>
       <table className={styles.table}>
         <thead className={styles.thead}>
           <tr>
             <th>Descripción</th>
-            <th>Categoría</th>
             <th>Cuenta</th>
             <th>Fecha</th>
             <th>Monto</th>
-            <th></th>
+            <th aria-label="Acciones"></th>
           </tr>
         </thead>
 
         <tbody>
           {incomes.map((item) => {
-            const category =
-              findCategory(item);
-
-            const categoryColor =
-              getCategoryDisplayColor(
-                category
-              );
-
-            const categoryIcon =
-              getCategoryDisplayIcon(
-                category,
-                item.type
-              );
-
             return (
               <tr
                 key={item.id}
                 className={styles.row}
               >
-                <td>{item.description}</td>
+                <td className={styles.descriptionCell}>{item.description}</td>
 
-                <td>
-                  <span
-                    className={
-                      styles.categoryBadge
-                    }
-                    style={{
-                      "--category-color":
-                        categoryColor,
-                      "--category-text":
-                        getContrastTextColor(
-                          categoryColor
-                        ),
-                    }}
-                  >
-                    <i
-                      className={
-                        categoryIcon
-                      }
-                    ></i>
-                    <span>
-                      {item.category ||
-                        "General"}
-                    </span>
-                  </span>
-                </td>
-
-                <td>
+                <td className={styles.accountCell}>
                   {getAccountName(item) ? (
                     <span
                       className={
@@ -163,7 +86,7 @@ function IncomeTable({ incomes, onDelete, onEdit, onDetails, onDuplicate }) {
                   )}
                 </td>
 
-                <td>
+                <td className={styles.dateCell}>
                   {formatRegionalDate(item.date, settings)}
                   {item.createdAt && <small className={styles.recordedTime}>
                     Registrado {new Intl.DateTimeFormat("es-AR", {hour:"2-digit",minute:"2-digit",

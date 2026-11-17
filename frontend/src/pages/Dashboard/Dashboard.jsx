@@ -47,10 +47,6 @@ function formatLocalDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatDisplayDate(dateString) {
-  return dateString.split("-").reverse().join("/");
-}
-
 function getToday() {
   return formatLocalDate(new Date());
 }
@@ -86,58 +82,6 @@ function getYearStart() {
   date.setDate(1);
 
   return formatLocalDate(date);
-}
-
-function formatAmountInput(value) {
-  const cleaned = String(value || "").replace(/[^0-9.,]/g, "");
-
-  if (!cleaned) {
-    return "";
-  }
-
-  const lastComma = cleaned.lastIndexOf(",");
-  const lastDot = cleaned.lastIndexOf(".");
-
-  let decimalIndex = -1;
-
-  if (lastComma >= 0) {
-    decimalIndex = lastComma;
-  } else if (lastDot >= 0) {
-    const digitsAfterDot = cleaned.length - lastDot - 1;
-
-    if (digitsAfterDot <= 2) {
-      decimalIndex = lastDot;
-    }
-  }
-
-  const integerSource =
-    decimalIndex >= 0 ? cleaned.slice(0, decimalIndex) : cleaned;
-
-  const integerDigits = integerSource.replace(/[.,]/g, "");
-
-  const formattedInteger = (integerDigits || "0").replace(
-    /\B(?=(\d{3})+(?!\d))/g,
-    ".",
-  );
-
-  if (decimalIndex < 0) {
-    return formattedInteger;
-  }
-
-  const decimalDigits = cleaned
-    .slice(decimalIndex + 1)
-    .replace(/[.,]/g, "")
-    .slice(0, 2);
-
-  return `${formattedInteger},${decimalDigits}`;
-}
-
-function parseAmountInput(value) {
-  const normalized = String(value || "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-
-  return Number(normalized);
 }
 
 function Dashboard() {
